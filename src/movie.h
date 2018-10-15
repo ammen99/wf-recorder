@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
+#include <map>
 
 extern "C"
 {
@@ -22,7 +23,6 @@ extern "C"
 class MovieWriter
 {
 	const unsigned int width, height;
-	unsigned int iframe;
 
 	SwsContext* swsCtx;
 	AVOutputFormat* fmt;
@@ -34,10 +34,11 @@ class MovieWriter
 	AVFrame *rgbpic, *yuvpic;
 
 	std::vector<uint8_t> pixels;
+	void finish_frame();
 
 public :
 	MovieWriter(const std::string& filename, const unsigned int width, const unsigned int height);
-	void addFrame(const uint8_t* pixels);
+	void addFrame(const uint8_t* pixels, int msec);
 	~MovieWriter();
 };
 

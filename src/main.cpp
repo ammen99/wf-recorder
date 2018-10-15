@@ -2,6 +2,8 @@
 #define _POSIX_C_SOURCE 199309L
 
 #include "movie.h"
+#include <string>
+#include <thread>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -33,11 +35,10 @@ static struct {
 	enum wl_shm_format format;
 	int width, height, stride;
 	bool y_invert;
+    timespec presented;
 } buffer;
 bool buffer_copy_done = false;
 
-// wl_shm_format describes little-endian formats, libpng uses big-endian
-// formats (so Wayland's ABGR is libpng's RGBA).
 static const struct format formats[] = {
 	{WL_SHM_FORMAT_XRGB8888, true},
 	{WL_SHM_FORMAT_ARGB8888, true},
@@ -117,8 +118,10 @@ static void frame_handle_flags(void*, struct zwlr_screencopy_frame_v1 *, uint32_
 	buffer.y_invert = flags & ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT;
 }
 
-static void frame_handle_ready(void *, struct zwlr_screencopy_frame_v1 *, uint32_t, uint32_t, uint32_t) {
+static void frame_handle_ready(void *, struct zwlr_screencopy_frame_v1 *, uint32_t tv_sec_hi, uint32_t tv_sec_low, uint32_t tv_nsec) {
 	buffer_copy_done = true;
+    buffer.presented.tv_sec = ((1ll * tv_sec_hi) << 32ll) | tv_sec_low;
+    buffer.presented.tv_nsec = tv_nsec;
 }
 
 static void frame_handle_failed(void *, struct zwlr_screencopy_frame_v1 *) {
@@ -155,6 +158,63 @@ static const struct wl_registry_listener registry_listener = {
 	.global_remove = handle_global_remove,
 };
 
+static void write_image(const char *filename, enum wl_shm_format wl_fmt, int width,
+		int height, int stride, bool y_invert, png_bytep data) {
+	const struct format *fmt = NULL;
+	for (size_t i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
+		if (formats[i].wl_format == wl_fmt) {
+			fmt = &formats[i];
+			break;
+		}
+	}
+	if (fmt == NULL) {
+		exit(EXIT_FAILURE);
+	}
+
+	FILE *f = fopen(filename, "wb");
+	if (f == NULL) {
+		fprintf(stderr, "failed to open output file\n");
+		exit(EXIT_FAILURE);
+	}
+
+	png_structp png =
+		png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	png_infop info = png_create_info_struct(png);
+
+	png_init_io(png, f);
+
+	png_set_IHDR(png, info, width, height, 8, PNG_COLOR_TYPE_RGBA,
+		PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
+		PNG_FILTER_TYPE_DEFAULT);
+
+	if (fmt->is_bgr) {
+		png_set_bgr(png);
+	}
+
+	png_write_info(png, info);
+
+	for (size_t i = 0; i < (size_t)height; ++i) {
+		png_bytep row;
+		if (y_invert) {
+			row = data + (height - i - 1) * stride;
+		} else {
+			row = data + i * stride;
+		}
+		png_write_row(png, row);
+	}
+
+	png_write_end(png, NULL);
+
+	png_destroy_write_struct(&png, &info);
+
+	fclose(f);
+}
+
+static uint64_t timespec_to_msec (const timespec& ts)
+{
+    return ts.tv_sec * 1000ll + 1ll * ts.tv_nsec / 1000000ll;
+}
+
 int main()
 {
 	struct wl_display * display = wl_display_connect(NULL);
@@ -181,10 +241,16 @@ int main()
 		return EXIT_FAILURE;
 	}
 
-    MovieWriter writer("test.mp4", 1920, 1080);
-    int fr = 0;
+    MovieWriter writer("test", 1920, 1080);
+
+    timespec ts;
+    ts.tv_sec = -1;
+
+    int stop = 500;
     while(true)
     {
+
+        buffer_copy_done = false;
         struct zwlr_screencopy_frame_v1 *frame =
             zwlr_screencopy_manager_v1_capture_output(screencopy_manager, 0, output);
         zwlr_screencopy_frame_v1_add_listener(frame, &frame_listener, NULL);
@@ -193,12 +259,15 @@ int main()
             // This space is intentionally left blank
         }
 
-        writer.addFrame((uint8_t*)buffer.data);
+        if (ts.tv_sec == -1)
+            ts = buffer.presented;
+
+        writer.addFrame((uint8_t*)buffer.data, timespec_to_msec(buffer.presented) - timespec_to_msec(ts));
         zwlr_screencopy_frame_v1_destroy(frame);
 
-        ++fr;
+        if (!(stop--))
+            break;
 
-        if (fr > 200) break;
     }
 
 	return EXIT_SUCCESS;
