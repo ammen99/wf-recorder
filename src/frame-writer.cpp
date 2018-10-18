@@ -1,14 +1,14 @@
 // Adapted from https://stackoverflow.com/questions/34511312/how-to-encode-a-video-from-several-images-generated-in-a-c-program-without-wri
 // (Later) adapted from https://github.com/apc-llc/moviemaker-cpp
 
-#include "movie.h"
+#include "frame-writer.hpp"
 #include <vector>
 
 #define FPS 60
 
 using namespace std;
 
-MovieWriter::MovieWriter(const string& filename_, const unsigned int width_, const unsigned int height_) :
+FrameWriter::FrameWriter(const string& filename_, const unsigned int width_, const unsigned int height_) :
 width(width_), height(height_), pixels(4 * width * height)
 
 {
@@ -73,7 +73,7 @@ width(width_), height(height_), pixels(4 * width * height)
 	// std::vector<uint8_t> B(width*height*3);
 }
 
-void MovieWriter::addFrame(const uint8_t* pixels, int msec)
+void FrameWriter::add_frame(const uint8_t* pixels, int msec)
 {
 	// The AVFrame data will be stored as RGBRGBRGB... row-wise,
 	// from left to right and from top to bottom.
@@ -109,7 +109,7 @@ void MovieWriter::addFrame(const uint8_t* pixels, int msec)
 		finish_frame();
 }
 
-void MovieWriter::finish_frame()
+void FrameWriter::finish_frame()
 {
 	static int iframe = 0;
 	av_packet_rescale_ts(&pkt, (AVRational){ 1, 1000 }, stream->time_base);
@@ -123,12 +123,12 @@ void MovieWriter::finish_frame()
 	fflush(stdout);
 }
 
-MovieWriter::~MovieWriter()
+FrameWriter::~FrameWriter()
 {
 	// Writing the delayed frames:
 	for (int got_output = 1; got_output; )
 	{
-		int ret = avcodec_encode_video2(c, &pkt, NULL, &got_output);
+		avcodec_encode_video2(c, &pkt, NULL, &got_output);
 		if (got_output)
 			finish_frame();
 	}

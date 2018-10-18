@@ -1,14 +1,12 @@
 #define _XOPEN_SOURCE 700
 #define _POSIX_C_SOURCE 199309L
 
-#include "movie.h"
 #include <string>
 #include <thread>
 
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <png.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +16,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <wayland-client-protocol.h>
+
+#include "ipc.hpp"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 
 struct format {
@@ -158,61 +158,21 @@ static const struct wl_registry_listener registry_listener = {
 	.global_remove = handle_global_remove,
 };
 
-static void write_image(const char *filename, enum wl_shm_format wl_fmt, int width,
-		int height, int stride, bool y_invert, png_bytep data) {
-	const struct format *fmt = NULL;
-	for (size_t i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
-		if (formats[i].wl_format == wl_fmt) {
-			fmt = &formats[i];
-			break;
-		}
-	}
-	if (fmt == NULL) {
-		exit(EXIT_FAILURE);
-	}
-
-	FILE *f = fopen(filename, "wb");
-	if (f == NULL) {
-		fprintf(stderr, "failed to open output file\n");
-		exit(EXIT_FAILURE);
-	}
-
-	png_structp png =
-		png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-	png_infop info = png_create_info_struct(png);
-
-	png_init_io(png, f);
-
-	png_set_IHDR(png, info, width, height, 8, PNG_COLOR_TYPE_RGBA,
-		PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
-		PNG_FILTER_TYPE_DEFAULT);
-
-	if (fmt->is_bgr) {
-		png_set_bgr(png);
-	}
-
-	png_write_info(png, info);
-
-	for (size_t i = 0; i < (size_t)height; ++i) {
-		png_bytep row;
-		if (y_invert) {
-			row = data + (height - i - 1) * stride;
-		} else {
-			row = data + i * stride;
-		}
-		png_write_row(png, row);
-	}
-
-	png_write_end(png, NULL);
-
-	png_destroy_write_struct(&png, &info);
-
-	fclose(f);
-}
-
 static uint64_t timespec_to_msec (const timespec& ts)
 {
     return ts.tv_sec * 1000ll + 1ll * ts.tv_nsec / 1000000ll;
+}
+
+static void write_buffer(uint32_t present_msec, int fd)
+{
+    uint8_t header[4];
+    header[0] = present_msec >> 24;
+    header[1] = (present_msec >> 16) & 0xff;
+    header[2] = (present_msec >> 8) & 0xff;
+    header[3] = (present_msec & 0xff);
+
+    write(fd, header, 4);
+    write(fd, buffer.data, buffer.width * buffer.height * 4);
 }
 
 int main()
@@ -241,7 +201,12 @@ int main()
 		return EXIT_FAILURE;
 	}
 
-    MovieWriter writer("test", 1920, 1080);
+    int fd[2];
+    pipe(fd);
+
+    std::thread writer_thread([=] () {
+        write_loop(1920, 1080, 4, fd[0]);
+    });
 
     timespec ts;
     ts.tv_sec = -1;
@@ -262,13 +227,16 @@ int main()
         if (ts.tv_sec == -1)
             ts = buffer.presented;
 
-        writer.addFrame((uint8_t*)buffer.data, timespec_to_msec(buffer.presented) - timespec_to_msec(ts));
+        uint32_t present_msec = timespec_to_msec(buffer.presented)
+            - timespec_to_msec(ts);
+
+        write_buffer(fd[1], present_msec);
         zwlr_screencopy_frame_v1_destroy(frame);
 
         if (!(stop--))
             break;
-
     }
 
+    writer_thread.join();
 	return EXIT_SUCCESS;
 }

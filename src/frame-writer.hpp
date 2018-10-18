@@ -1,10 +1,9 @@
 // Adapted from https://stackoverflow.com/questions/34511312/how-to-encode-a-video-from-several-images-generated-in-a-c-program-without-wri
 // (Later) adapted from https://github.com/apc-llc/moviemaker-cpp
 
-#ifndef MOVIE_H
-#define MOVIE_H
+#ifndef FRAME_WRITER
+#define FRAME_WRITER
 
-#include <cairo/cairo.h>
 #include <stdint.h>
 #include <string>
 #include <vector>
@@ -20,7 +19,7 @@ extern "C"
 	#include <libavutil/opt.h>
 }
 
-class MovieWriter
+class FrameWriter
 {
 	const unsigned int width, height;
 
@@ -37,10 +36,10 @@ class MovieWriter
 	void finish_frame();
 
 public :
-	MovieWriter(const std::string& filename, const unsigned int width, const unsigned int height);
-	void addFrame(const uint8_t* pixels, int msec);
-	~MovieWriter();
+	FrameWriter(const std::string& filename, const unsigned int width, const unsigned int height);
+	void add_frame(const uint8_t* pixels, int msec);
+	~FrameWriter();
 };
 
-#endif // MOVIE_H
+#endif // FRAME_WRITER
 
