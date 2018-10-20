@@ -26,6 +26,6 @@ threads = dependency('threads')
 
 subdir('proto')
 
-executable('wf-recorder', ['src/frame-writer.cpp', 'src/main.cpp', 'src/ipc.cpp'],
+executable('wf-recorder', ['src/frame-writer.cpp', 'src/main.cpp'],
         dependencies: [wayland_client, wayland_protos, libavutil, libavcodec, libavformat, wf_protos, x264, sws, png, threads],
         install: true)

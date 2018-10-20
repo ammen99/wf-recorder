@@ -30,7 +30,7 @@ class FrameWriter
 	AVCodecContext* c;
 	AVPacket pkt;
 
-	AVFrame *rgbpic, *yuvpic;
+	AVFrame *yuvpic;
 
 	std::vector<uint8_t> pixels;
 	void finish_frame();

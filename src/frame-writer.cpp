@@ -3,8 +3,11 @@
 
 #include "frame-writer.hpp"
 #include <vector>
+#include <cstring>
 
 #define FPS 60
+
+#define INPUT_FMT AV_PIX_FMT_BGR0
 
 using namespace std;
 
@@ -14,7 +17,7 @@ width(width_), height(height_), pixels(4 * width * height)
 {
 	// Preparing to convert my generated RGB images to YUV frames.
 	swsCtx = sws_getContext(width, height,
-		AV_PIX_FMT_RGB24, width, height, AV_PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+		INPUT_FMT, width, height, AV_PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL);
 
 	// Preparing the data concerning the format and codec,
 	// in order to write properly the header, frame data and end of file.
@@ -26,8 +29,10 @@ width(width_), height(height_), pixels(4 * width * height)
 	// Setting up the codec.
 	AVCodec* codec = avcodec_find_encoder_by_name("libx264");
 	AVDictionary* opt = NULL;
-	av_dict_set(&opt, "preset", "fast", 0);
+    av_dict_set(&opt, "tune", "zerolatency", 0);
+	av_dict_set(&opt, "preset", "ultrafast", 0);
 	av_dict_set(&opt, "crf", "20", 0);
+
 	stream = avformat_new_stream(fc, codec);
 	c = stream->codec;
 	c->width = width;
@@ -51,15 +56,7 @@ width(width_), height(height_), pixels(4 * width * height)
 	av_dump_format(fc, 0, filename.c_str(), 1);
 	avio_open(&fc->pb, filename.c_str(), AVIO_FLAG_WRITE);
 	int ret = avformat_write_header(fc, &opt);
-	av_dict_free(&opt); 
-
-	// Preparing the containers of the frame data:
-	// Allocating memory for each RGB frame, which will be lately converted to YUV.
-	rgbpic = av_frame_alloc();
-	rgbpic->format = AV_PIX_FMT_RGB24;
-	rgbpic->width = width;
-	rgbpic->height = height;
-	ret = av_frame_get_buffer(rgbpic, 1);
+	av_dict_free(&opt);
 
 	// Allocating memory for each conversion output YUV frame.
 	yuvpic = av_frame_alloc();
@@ -75,23 +72,13 @@ width(width_), height(height_), pixels(4 * width * height)
 
 void FrameWriter::add_frame(const uint8_t* pixels, int msec)
 {
-	// The AVFrame data will be stored as RGBRGBRGB... row-wise,
-	// from left to right and from top to bottom.
-	for (unsigned int j = 0; j < height; j++)
-	{
-        int y = height - j - 1;
-    	for (unsigned int x = 0; x < width; x++)
-    	{
-        	// rgbpic->linesize[0] is equal to width.
-			rgbpic->data[0][y * rgbpic->linesize[0] + 3 * x + 0] = pixels[j * 4 * width + 4 * x + 2];
-			rgbpic->data[0][y * rgbpic->linesize[0] + 3 * x + 1] = pixels[j * 4 * width + 4 * x + 1];
-			rgbpic->data[0][y * rgbpic->linesize[0] + 3 * x + 2] = pixels[j * 4 * width + 4 * x + 0];
-		}
-	}
-
 	// Not actually scaling anything, but just converting
 	// the RGB data to YUV and store it in yuvpic.
-    sws_scale(swsCtx, rgbpic->data, rgbpic->linesize, 0,
+    int stride[] = {int(4 * width)};
+    const uint8_t* flipped_pixels = pixels + stride[0] * (height - 1);
+    stride[0] *= -1;
+
+    sws_scale(swsCtx, &flipped_pixels, stride, 0,
     	height, yuvpic->data, yuvpic->linesize);
 
 	av_init_packet(&pkt);
@@ -143,7 +130,6 @@ FrameWriter::~FrameWriter()
 
 	// Freeing all the allocated memory:
 	sws_freeContext(swsCtx);
-	av_frame_free(&rgbpic);
 	av_frame_free(&yuvpic);
 	avformat_free_context(fc);
 }

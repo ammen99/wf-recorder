@@ -3,6 +3,9 @@
 
 #include <string>
 #include <thread>
+#include <mutex>
+#include <atomic>
+#include <queue>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -17,7 +20,7 @@
 #include <unistd.h>
 #include <wayland-client-protocol.h>
 
-#include "ipc.hpp"
+#include "frame-writer.hpp"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 
 struct format {
@@ -29,16 +32,28 @@ static struct wl_shm *shm = NULL;
 static struct zwlr_screencopy_manager_v1 *screencopy_manager = NULL;
 static struct wl_output *output = NULL;
 
-static struct {
+struct wf_buffer
+{
 	struct wl_buffer *wl_buffer;
 	void *data;
 	enum wl_shm_format format;
 	int width, height, stride;
 	bool y_invert;
-    timespec presented;
-} buffer;
-bool buffer_copy_done = false;
 
+    timespec presented;
+    uint32_t base_msec;
+
+    std::atomic<bool> released{true}; // if the buffer can be used to store new pending frames
+    std::atomic<bool> available{false}; // if the buffer can be used to feed the encoder
+};
+
+std::atomic<bool> exit_main_loop{false};
+
+#define MAX_BUFFERS 32
+wf_buffer buffers[MAX_BUFFERS];
+size_t active_buffer = 0;
+
+bool buffer_copy_done = false;
 static const struct format formats[] = {
 	{WL_SHM_FORMAT_XRGB8888, true},
 	{WL_SHM_FORMAT_ARGB8888, true},
@@ -98,6 +113,8 @@ static struct wl_buffer *create_shm_buffer(uint32_t fmt,
 static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, uint32_t format,
 		uint32_t width, uint32_t height, uint32_t stride)
 {
+    auto& buffer = buffers[active_buffer];
+
 	buffer.format = (wl_shm_format)format;
 	buffer.width = width;
 	buffer.height = height;
@@ -106,6 +123,7 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
         buffer.wl_buffer =
             create_shm_buffer(format, width, height, stride, &buffer.data);
     }
+
 	if (buffer.wl_buffer == NULL) {
 		fprintf(stderr, "failed to create buffer\n");
 		exit(EXIT_FAILURE);
@@ -115,10 +133,13 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
 }
 
 static void frame_handle_flags(void*, struct zwlr_screencopy_frame_v1 *, uint32_t flags) {
-	buffer.y_invert = flags & ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT;
+	buffers[active_buffer].y_invert = flags & ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT;
 }
 
-static void frame_handle_ready(void *, struct zwlr_screencopy_frame_v1 *, uint32_t tv_sec_hi, uint32_t tv_sec_low, uint32_t tv_nsec) {
+static void frame_handle_ready(void *, struct zwlr_screencopy_frame_v1 *,
+    uint32_t tv_sec_hi, uint32_t tv_sec_low, uint32_t tv_nsec) {
+
+    auto& buffer = buffers[active_buffer];
 	buffer_copy_done = true;
     buffer.presented.tv_sec = ((1ll * tv_sec_hi) << 32ll) | tv_sec_low;
     buffer.presented.tv_nsec = tv_nsec;
@@ -163,16 +184,32 @@ static uint64_t timespec_to_msec (const timespec& ts)
     return ts.tv_sec * 1000ll + 1ll * ts.tv_nsec / 1000000ll;
 }
 
-static void write_buffer(uint32_t present_msec, int fd)
+static int next_frame(int frame)
 {
-    uint8_t header[4];
-    header[0] = present_msec >> 24;
-    header[1] = (present_msec >> 16) & 0xff;
-    header[2] = (present_msec >> 8) & 0xff;
-    header[3] = (present_msec & 0xff);
+    return (frame + 1) % MAX_BUFFERS;
+}
 
-    write(fd, header, 4);
-    write(fd, buffer.data, buffer.width * buffer.height * 4);
+static void write_loop(uint32_t width, uint32_t height)
+{
+    FrameWriter writer("test", width, height);
+
+    int last_encoded_frame = 0;
+
+    while(!exit_main_loop)
+    {
+        // wait for frame to become available
+        while(buffers[last_encoded_frame].available != true) {
+            std::this_thread::sleep_for(std::chrono::microseconds(500));
+        }
+
+        auto& buffer = buffers[last_encoded_frame];
+        writer.add_frame((unsigned char*)buffer.data, buffer.base_msec);
+
+        buffer.available = false;
+        buffer.released = true;
+
+        last_encoded_frame = next_frame(last_encoded_frame);
+    }
 }
 
 int main()
@@ -204,16 +241,34 @@ int main()
     int fd[2];
     pipe(fd);
 
-    std::thread writer_thread([=] () {
-        write_loop(1920, 1080, 4, fd[0]);
-    });
-
     timespec ts;
     ts.tv_sec = -1;
 
+    active_buffer = 0;
+    for (auto& buffer : buffers)
+    {
+        buffer.wl_buffer = NULL;
+        buffer.available = false;
+        buffer.released = true;
+    }
+
+    std::thread writer_thread([=] () {
+        write_loop(1920, 1080);
+    });
+
     int stop = 500;
+
+    const int lf = 10;
+    std::deque<int> last_frames;
+
+    sleep(2);
+
     while(true)
     {
+        // wait for a free buffer
+        while(buffers[active_buffer].released != true) {
+            std::this_thread::sleep_for(std::chrono::microseconds(500));
+        }
 
         buffer_copy_done = false;
         struct zwlr_screencopy_frame_v1 *frame =
@@ -224,19 +279,33 @@ int main()
             // This space is intentionally left blank
         }
 
+        auto& buffer = buffers[active_buffer];
+
         if (ts.tv_sec == -1)
             ts = buffer.presented;
 
-        uint32_t present_msec = timespec_to_msec(buffer.presented)
-            - timespec_to_msec(ts);
+        buffer.base_msec = timespec_to_msec(buffer.presented) - timespec_to_msec(ts);
 
-        write_buffer(fd[1], present_msec);
+        if (last_frames.size() == lf)
+            last_frames.pop_front();
+        last_frames.push_back(buffer.base_msec);
+
+        buffer.released = false;
+        buffer.available = true;
+
+        active_buffer = next_frame(active_buffer);
         zwlr_screencopy_frame_v1_destroy(frame);
+
+        if (last_frames.size() > 1)
+            printf ("avg framerate: %d\n", (1000 * int(last_frames.size() - 1))
+                / (last_frames.back() - last_frames.front()));
 
         if (!(stop--))
             break;
     }
 
+    exit_main_loop = true;
     writer_thread.join();
+
 	return EXIT_SUCCESS;
 }
