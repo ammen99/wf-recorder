@@ -5,7 +5,6 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
-#include <queue>
 
 #include <limits.h>
 #include <stdio.h>
@@ -247,11 +246,8 @@ int main()
 		return EXIT_FAILURE;
 	}
 
-    int fd[2];
-    pipe(fd);
-
-    timespec ts;
-    ts.tv_sec = -1;
+    timespec first_frame;
+    first_frame.tv_sec = -1;
 
     active_buffer = 0;
     for (auto& buffer : buffers)
@@ -266,9 +262,6 @@ int main()
     });
 
     signal(SIGINT, handle_sigint);
-
-    const int lf = 10;
-    std::deque<int> last_frames;
 
     sleep(2);
 
@@ -290,24 +283,17 @@ int main()
 
         auto& buffer = buffers[active_buffer];
 
-        if (ts.tv_sec == -1)
-            ts = buffer.presented;
+        if (first_frame.tv_sec == -1)
+            first_frame = buffer.presented;
 
-        buffer.base_msec = timespec_to_msec(buffer.presented) - timespec_to_msec(ts);
-
-        if (last_frames.size() == lf)
-            last_frames.pop_front();
-        last_frames.push_back(buffer.base_msec);
+        buffer.base_msec = timespec_to_msec(buffer.presented)
+            - timespec_to_msec(first_frame);
 
         buffer.released = false;
         buffer.available = true;
 
         active_buffer = next_frame(active_buffer);
         zwlr_screencopy_frame_v1_destroy(frame);
-
-        if (last_frames.size() > 1)
-            printf ("avg framerate: %d\n", (1000 * int(last_frames.size() - 1))
-                / (last_frames.back() - last_frames.front()));
     }
 
     exit_main_loop = true;
