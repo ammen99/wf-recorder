@@ -70,15 +70,20 @@ width(width_), height(height_), pixels(4 * width * height)
 	// std::vector<uint8_t> B(width*height*3);
 }
 
-void FrameWriter::add_frame(const uint8_t* pixels, int msec)
+void FrameWriter::add_frame(const uint8_t* pixels, int msec, bool y_invert)
 {
 	// Not actually scaling anything, but just converting
 	// the RGB data to YUV and store it in yuvpic.
     int stride[] = {int(4 * width)};
-    const uint8_t* flipped_pixels = pixels + stride[0] * (height - 1);
-    stride[0] *= -1;
+    const uint8_t *formatted_pixels = pixels;
 
-    sws_scale(swsCtx, &flipped_pixels, stride, 0,
+    if (y_invert)
+    {
+        formatted_pixels += stride[0] * (height - 1);
+        stride[0] *= -1;
+    }
+
+    sws_scale(swsCtx, &formatted_pixels, stride, 0,
     	height, yuvpic->data, yuvpic->linesize);
 
 	av_init_packet(&pkt);

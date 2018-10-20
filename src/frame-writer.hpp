@@ -37,7 +37,7 @@ class FrameWriter
 
 public :
 	FrameWriter(const std::string& filename, const unsigned int width, const unsigned int height);
-	void add_frame(const uint8_t* pixels, int msec);
+	void add_frame(const uint8_t* pixels, int msec, bool y_invert);
 	~FrameWriter();
 };
 

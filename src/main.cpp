@@ -115,6 +115,7 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
 	buffer.width = width;
 	buffer.height = height;
     buffer.stride = stride;
+
     if (!buffer.wl_buffer) {
         buffer.wl_buffer =
             create_shm_buffer(format, width, height, stride, &buffer.data);
@@ -205,7 +206,8 @@ static void write_loop(uint32_t width, uint32_t height)
         }
 
         auto& buffer = buffers[last_encoded_frame];
-        writer.add_frame((unsigned char*)buffer.data, buffer.base_msec);
+        writer.add_frame((unsigned char*)buffer.data, buffer.base_msec,
+            buffer.y_invert);
 
         buffer.available = false;
         buffer.released = true;
