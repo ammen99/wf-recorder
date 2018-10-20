@@ -7,16 +7,12 @@
 #include <atomic>
 #include <queue>
 
-#include <errno.h>
-#include <fcntl.h>
 #include <limits.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
-#include <sys/param.h>
-#include <sys/wait.h>
+#include <signal.h>
 #include <unistd.h>
 #include <wayland-client-protocol.h>
 
@@ -191,6 +187,12 @@ static int next_frame(int frame)
 
 static void write_loop(uint32_t width, uint32_t height)
 {
+    /* Ignore SIGINT, main loop is responsible for the exit_main_loop signal */
+    sigset_t sigset;
+    sigisemptyset(&sigset);
+    sigaddset(&sigset, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &sigset, NULL);
+
     FrameWriter writer("test", width, height);
 
     int last_encoded_frame = 0;
@@ -210,6 +212,11 @@ static void write_loop(uint32_t width, uint32_t height)
 
         last_encoded_frame = next_frame(last_encoded_frame);
     }
+}
+
+void handle_sigint(int)
+{
+    exit_main_loop = true;
 }
 
 int main()
@@ -256,14 +263,14 @@ int main()
         write_loop(1920, 1080);
     });
 
-    int stop = 500;
+    signal(SIGINT, handle_sigint);
 
     const int lf = 10;
     std::deque<int> last_frames;
 
     sleep(2);
 
-    while(true)
+    while(!exit_main_loop)
     {
         // wait for a free buffer
         while(buffers[active_buffer].released != true) {
@@ -299,9 +306,6 @@ int main()
         if (last_frames.size() > 1)
             printf ("avg framerate: %d\n", (1000 * int(last_frames.size() - 1))
                 / (last_frames.back() - last_frames.front()));
-
-        if (!(stop--))
-            break;
     }
 
     exit_main_loop = true;
