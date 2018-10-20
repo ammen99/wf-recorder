@@ -11,7 +11,7 @@
 
 using namespace std;
 
-FrameWriter::FrameWriter(const string& filename_, const unsigned int width_, const unsigned int height_) :
+FrameWriter::FrameWriter(const string& filename, const unsigned int width_, const unsigned int height_) :
 width(width_), height(height_), pixels(4 * width * height)
 
 {
@@ -21,9 +21,7 @@ width(width_), height(height_), pixels(4 * width * height)
 
 	// Preparing the data concerning the format and codec,
 	// in order to write properly the header, frame data and end of file.
-	const char* fmtext = "mp4";
-	const string filename = filename_ + "." + fmtext;
-	fmt = av_guess_format(fmtext, NULL, NULL);
+	fmt = av_guess_format(NULL, filename.c_str(), NULL);
 	avformat_alloc_output_context2(&fc, NULL, NULL, filename.c_str());
 
 	// Setting up the codec.

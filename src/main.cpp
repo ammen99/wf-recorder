@@ -5,6 +5,7 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <getopt.h>
 
 #include <limits.h>
 #include <stdio.h>
@@ -174,7 +175,7 @@ static int next_frame(int frame)
     return (frame + 1) % MAX_BUFFERS;
 }
 
-static void write_loop(uint32_t width, uint32_t height)
+static void write_loop(std::string name, uint32_t width, uint32_t height)
 {
     /* Ignore SIGINT, main loop is responsible for the exit_main_loop signal */
     sigset_t sigset;
@@ -182,7 +183,7 @@ static void write_loop(uint32_t width, uint32_t height)
     sigaddset(&sigset, SIGINT);
     pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
-    FrameWriter writer("test", width, height);
+    FrameWriter writer(name, width, height);
 
     int last_encoded_frame = 0;
 
@@ -209,8 +210,28 @@ void handle_sigint(int)
     exit_main_loop = true;
 }
 
-int main()
+
+int main(int argc, char *argv[])
 {
+    std::string file = "recording.mp4";
+    struct option opts[] = {
+        { "output",          required_argument, NULL, 'o' },
+        { 0,                 0,                 NULL,  0  }
+    };
+
+    int c, i;
+    while((c = getopt_long(argc, argv, "o:", opts, &i)) != -1)
+    {
+        switch(c)
+        {
+            case 'o':
+                file = optarg;
+                break;
+            default:
+                printf("unsupported command line argument %s\n", optarg);
+        }
+    }
+
 	struct wl_display * display = wl_display_connect(NULL);
 	if (display == NULL) {
 		fprintf(stderr, "failed to create display: %m\n");
@@ -272,7 +293,7 @@ int main()
         {
             int width = buffer.width, height = buffer.height;
             writer_thread = std::thread([=] () {
-                write_loop(width, height);
+                write_loop(file, width, height);
             });
 
             spawned_thread = true;
