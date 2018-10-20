@@ -257,13 +257,10 @@ int main()
         buffer.released = true;
     }
 
-    std::thread writer_thread([=] () {
-        write_loop(1920, 1080);
-    });
+    bool spawned_thread = false;
+    std::thread writer_thread;
 
     signal(SIGINT, handle_sigint);
-
-    sleep(2);
 
     while(!exit_main_loop)
     {
@@ -282,6 +279,15 @@ int main()
         }
 
         auto& buffer = buffers[active_buffer];
+        if (!spawned_thread)
+        {
+            int width = buffer.width, height = buffer.height;
+            writer_thread = std::thread([=] () {
+                write_loop(width, height);
+            });
+
+            spawned_thread = true;
+        }
 
         if (first_frame.tv_sec == -1)
             first_frame = buffer.presented;
@@ -296,8 +302,10 @@ int main()
         zwlr_screencopy_frame_v1_destroy(frame);
     }
 
-    exit_main_loop = true;
     writer_thread.join();
+
+    for (auto& buffer : buffers)
+        wl_buffer_destroy(buffer.wl_buffer);
 
 	return EXIT_SUCCESS;
 }

@@ -64,10 +64,6 @@ width(width_), height(height_), pixels(4 * width * height)
 	yuvpic->width = width;
 	yuvpic->height = height;
 	ret = av_frame_get_buffer(yuvpic, 1);
-
-	// After the format, code and general frame data is set,
-	// we can write the video in the frame generation loop:
-	// std::vector<uint8_t> B(width*height*3);
 }
 
 void FrameWriter::add_frame(const uint8_t* pixels, int msec, bool y_invert)
