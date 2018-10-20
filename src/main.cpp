@@ -18,11 +18,6 @@
 #include "frame-writer.hpp"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 
-struct format {
-	enum wl_shm_format wl_format;
-	bool is_bgr;
-};
-
 static struct wl_shm *shm = NULL;
 static struct zwlr_screencopy_manager_v1 *screencopy_manager = NULL;
 static struct wl_output *output = NULL;
@@ -44,17 +39,11 @@ struct wf_buffer
 
 std::atomic<bool> exit_main_loop{false};
 
-#define MAX_BUFFERS 32
+#define MAX_BUFFERS 16
 wf_buffer buffers[MAX_BUFFERS];
 size_t active_buffer = 0;
 
 bool buffer_copy_done = false;
-static const struct format formats[] = {
-	{WL_SHM_FORMAT_XRGB8888, true},
-	{WL_SHM_FORMAT_ARGB8888, true},
-	{WL_SHM_FORMAT_XBGR8888, false},
-	{WL_SHM_FORMAT_ABGR8888, false},
-};
 
 static int backingfile(off_t size)
 {
