@@ -11,6 +11,17 @@
 
 using namespace std;
 
+class FFmpegInitialize
+{
+public :
+
+	FFmpegInitialize()
+	{
+		// Loads the whole database of available codecs and formats.
+		av_register_all();
+	}
+};
+
 FrameWriter::FrameWriter(const string& filename, const unsigned int width_, const unsigned int height_) :
 width(width_), height(height_), pixels(4 * width * height)
 
