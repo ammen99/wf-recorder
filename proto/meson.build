@@ -1,3 +1,4 @@
+wl_protocol_dir = wayland_protos.get_pkgconfig_variable('pkgdatadir')
 wayland_scanner = find_program('wayland-scanner')
 
 wayland_scanner_code = generator(
@@ -13,6 +14,7 @@ wayland_scanner_client = generator(
 )
 
 client_protocols = [
+    [wl_protocol_dir, 'unstable/xdg-output/xdg-output-unstable-v1.xml'],
     'wlr-screencopy-unstable-v1.xml'
 ]
 

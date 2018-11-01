@@ -18,10 +18,53 @@
 
 #include "frame-writer.hpp"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
+#include "xdg-output-unstable-v1-client-protocol.h"
 
 static struct wl_shm *shm = NULL;
+static struct zxdg_output_manager_v1 *xdg_output_manager = NULL;
 static struct zwlr_screencopy_manager_v1 *screencopy_manager = NULL;
-static struct wl_output *output = NULL;
+
+struct wf_recorder_output
+{
+    wl_output *output;
+    zxdg_output_v1 *zxdg_output;
+    std::string name, description;
+};
+
+std::vector<wf_recorder_output> available_outputs;
+
+static void handle_xdg_output_logical_position(void*, zxdg_output_v1*, int32_t, int32_t) { }
+static void handle_xdg_output_logical_size(void*, zxdg_output_v1*, int32_t, int32_t) { }
+static void handle_xdg_output_done(void*, zxdg_output_v1*) { }
+
+static void handle_xdg_output_name(void*, zxdg_output_v1 *zxdg_output_v1,
+    const char *name)
+{
+    for (auto& wo : available_outputs)
+    {
+        if (wo.zxdg_output == zxdg_output_v1)
+            wo.name = name;
+    }
+}
+
+static void handle_xdg_output_description(void*, zxdg_output_v1 *zxdg_output_v1,
+    const char *description)
+{
+    for (auto& wo : available_outputs)
+    {
+        if (wo.zxdg_output == zxdg_output_v1)
+            wo.description = description;
+    }
+}
+
+
+const zxdg_output_v1_listener xdg_output_implementation = {
+    .logical_position = handle_xdg_output_logical_position,
+    .logical_size = handle_xdg_output_logical_size,
+    .done = handle_xdg_output_done,
+    .name = handle_xdg_output_name,
+    .description = handle_xdg_output_description
+};
 
 struct wf_buffer
 {
@@ -145,15 +188,27 @@ static const struct zwlr_screencopy_frame_v1_listener frame_listener = {
 
 static void handle_global(void*, struct wl_registry *registry,
 		uint32_t name, const char *interface, uint32_t) {
-	if (strcmp(interface, wl_output_interface.name) == 0 && output == NULL) {
-		output = (wl_output*)wl_registry_bind(registry, name, &wl_output_interface, 1);
-	} else if (strcmp(interface, wl_shm_interface.name) == 0) {
+	if (strcmp(interface, wl_output_interface.name) == 0)
+    {
+		auto output = (wl_output*)wl_registry_bind(registry, name, &wl_output_interface, 1);
+        wf_recorder_output wro;
+        wro.output = output;
+        available_outputs.push_back(wro);
+	}
+    else if (strcmp(interface, wl_shm_interface.name) == 0)
+    {
 		shm = (wl_shm*) wl_registry_bind(registry, name, &wl_shm_interface, 1);
-	} else if (strcmp(interface,
-			zwlr_screencopy_manager_v1_interface.name) == 0) {
+	}
+    else if (strcmp(interface, zwlr_screencopy_manager_v1_interface.name) == 0)
+    {
 		screencopy_manager = (zwlr_screencopy_manager_v1*) wl_registry_bind(registry, name,
 			&zwlr_screencopy_manager_v1_interface, 1);
 	}
+    else if (strcmp(interface, zxdg_output_manager_v1_interface.name) == 0)
+    {
+        xdg_output_manager = (zxdg_output_manager_v1*) wl_registry_bind(registry, name,
+            &zxdg_output_manager_v1_interface, 2); // version 2 for name & description, if available
+    }
 }
 
 static void handle_global_remove(void*, struct wl_registry *, uint32_t) {
@@ -210,29 +265,103 @@ void handle_sigint(int)
     exit_main_loop = true;
 }
 
+static void check_has_protos()
+{
+	if (shm == NULL) {
+		fprintf(stderr, "compositor is missing wl_shm\n");
+        exit(EXIT_FAILURE);
+	}
+	if (screencopy_manager == NULL) {
+		fprintf(stderr, "compositor doesn't support wlr-screencopy-unstable-v1\n");
+		exit(EXIT_FAILURE);
+	}
+
+    if (xdg_output_manager == NULL)
+    {
+        fprintf(stderr, "compositor doesn't support xdg-output-unstable-v1\n");
+        exit(EXIT_FAILURE);
+    }
+
+	if (available_outputs.empty())
+    {
+		fprintf(stderr, "no outputs available\n");
+		exit(EXIT_FAILURE);
+	}
+}
+
+wl_display *display = NULL;
+static void sync_wayland()
+{
+	wl_display_dispatch(display);
+	wl_display_roundtrip(display);
+}
+
+
+static void load_output_info()
+{
+    for (auto& wo : available_outputs)
+    {
+        wo.zxdg_output = zxdg_output_manager_v1_get_xdg_output(
+            xdg_output_manager, wo.output);
+        zxdg_output_v1_add_listener(wo.zxdg_output,
+            &xdg_output_implementation, NULL);
+    }
+
+    sync_wayland();
+}
+
+static wl_output *choose_interactive()
+{
+    fprintf(stdout, "Please select an output from the list to capture (enter output no.):\n");
+
+    int i = 1;
+    for (auto& wo : available_outputs)
+    {
+        printf("%d. Name: %s Description: %s\n", i++, wo.name.c_str(),
+            wo.description.c_str());
+    }
+
+    printf("Enter output no.:");
+    fflush(stdout);
+
+    int choice;
+    if (scanf("%d", &choice) != 1 || choice > (int)available_outputs.size() || choice <= 0)
+        return NULL;
+
+    return available_outputs[choice - 1].output;
+}
+
 
 int main(int argc, char *argv[])
 {
     std::string file = "recording.mp4";
+    std::string cmdline_output = "invalid";
+
     struct option opts[] = {
         { "output",          required_argument, NULL, 'o' },
+        { "file",            required_argument, NULL, 'f' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:", opts, &i)) != -1)
     {
         switch(c)
         {
             case 'o':
                 file = optarg;
                 break;
+
+            case 'f':
+                cmdline_output = optarg;
+                break;
+
             default:
                 printf("unsupported command line argument %s\n", optarg);
         }
     }
 
-	struct wl_display * display = wl_display_connect(NULL);
+	display = wl_display_connect(NULL);
 	if (display == NULL) {
 		fprintf(stderr, "failed to create display: %m\n");
 		return EXIT_FAILURE;
@@ -240,21 +369,41 @@ int main(int argc, char *argv[])
 
 	struct wl_registry *registry = wl_display_get_registry(display);
 	wl_registry_add_listener(registry, &registry_listener, NULL);
-	wl_display_dispatch(display);
-	wl_display_roundtrip(display);
+    sync_wayland();
 
-	if (shm == NULL) {
-		fprintf(stderr, "compositor is missing wl_shm\n");
-		return EXIT_FAILURE;
-	}
-	if (screencopy_manager == NULL) {
-		fprintf(stderr, "compositor doesn't support wlr-screencopy-unstable-v1\n");
-		return EXIT_FAILURE;
-	}
-	if (output == NULL) {
-		fprintf(stderr, "no output available\n");
-		return EXIT_FAILURE;
-	}
+    check_has_protos();
+    load_output_info();
+
+    wl_output *chosen_output = NULL;
+    if (available_outputs.size() == 1)
+    {
+        chosen_output = available_outputs[0].output;
+    } else
+    {
+        for (auto& wo : available_outputs)
+        {
+            if (wo.name == cmdline_output)
+                chosen_output = wo.output;
+        }
+
+        if (chosen_output == NULL)
+        {
+            if (cmdline_output != "invalid")
+            {
+                fprintf(stderr, "Couldn't find requested output %s\n",
+                    cmdline_output.c_str());
+            }
+
+            chosen_output = choose_interactive();
+        }
+    }
+
+    if (chosen_output == NULL)
+    {
+        fprintf(stderr, "Failed to select output, exiting\n");
+        return EXIT_FAILURE;
+    }
+
 
     timespec first_frame;
     first_frame.tv_sec = -1;
@@ -281,7 +430,7 @@ int main(int argc, char *argv[])
 
         buffer_copy_done = false;
         struct zwlr_screencopy_frame_v1 *frame =
-            zwlr_screencopy_manager_v1_capture_output(screencopy_manager, 0, output);
+            zwlr_screencopy_manager_v1_capture_output(screencopy_manager, 0, chosen_output);
         zwlr_screencopy_frame_v1_add_listener(frame, &frame_listener, NULL);
 
         while (!buffer_copy_done && wl_display_dispatch(display) != -1) {
