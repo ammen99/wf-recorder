@@ -22,6 +22,8 @@ public :
 	}
 };
 
+static FFmpegInitialize ffmpegInitialize;
+
 FrameWriter::FrameWriter(const string& filename, const unsigned int width_, const unsigned int height_) :
 width(width_), height(height_), pixels(4 * width * height)
 
