@@ -348,11 +348,11 @@ int main(int argc, char *argv[])
     {
         switch(c)
         {
-            case 'o':
+            case 'f':
                 file = optarg;
                 break;
 
-            case 'f':
+            case 'o':
                 cmdline_output = optarg;
                 break;
 
