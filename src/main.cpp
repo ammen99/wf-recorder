@@ -430,7 +430,7 @@ int main(int argc, char *argv[])
 
         buffer_copy_done = false;
         struct zwlr_screencopy_frame_v1 *frame =
-            zwlr_screencopy_manager_v1_capture_output(screencopy_manager, 0, chosen_output);
+            zwlr_screencopy_manager_v1_capture_output(screencopy_manager, 1, chosen_output);
         zwlr_screencopy_frame_v1_add_listener(frame, &frame_listener, NULL);
 
         while (!buffer_copy_done && wl_display_dispatch(display) != -1) {
