@@ -230,7 +230,23 @@ static int next_frame(int frame)
     return (frame + 1) % MAX_BUFFERS;
 }
 
-static void write_loop(std::string name, uint32_t width, uint32_t height)
+static InputFormat get_input_format(wf_buffer& buffer)
+{
+    if (buffer.format == WL_SHM_FORMAT_ARGB8888)
+        return INPUT_FORMAT_BGR0;
+    if (buffer.format == WL_SHM_FORMAT_XRGB8888)
+        return INPUT_FORMAT_BGR0;
+
+    if (buffer.format == WL_SHM_FORMAT_XBGR8888)
+        return INPUT_FORMAT_RGB0;
+    if (buffer.format == WL_SHM_FORMAT_ABGR8888)
+        return INPUT_FORMAT_RGB0;
+
+    fprintf(stderr, "Unsupported buffer format %d, exiting.", buffer.format);
+    std::exit(0);
+}
+
+static void write_loop(std::string name, int32_t width, int32_t height)
 {
     /* Ignore SIGINT, main loop is responsible for the exit_main_loop signal */
     sigset_t sigset;
@@ -238,7 +254,8 @@ static void write_loop(std::string name, uint32_t width, uint32_t height)
     sigaddset(&sigset, SIGINT);
     pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
-    FrameWriter writer(name, width, height);
+    std::unique_ptr<FrameWriter> writer;
+   // FrameWriter writer(name, width, height);
 
     int last_encoded_frame = 0;
 
@@ -250,7 +267,14 @@ static void write_loop(std::string name, uint32_t width, uint32_t height)
         }
 
         auto& buffer = buffers[last_encoded_frame];
-        writer.add_frame((unsigned char*)buffer.data, buffer.base_msec,
+        if (!writer)
+        {
+            writer = std::unique_ptr<FrameWriter> (
+                new FrameWriter(name, width, height,
+                    get_input_format(buffer)));
+        }
+
+        writer->add_frame((unsigned char*)buffer.data, buffer.base_msec,
             buffer.y_invert);
 
         buffer.available = false;

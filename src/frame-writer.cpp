@@ -7,8 +7,6 @@
 
 #define FPS 60
 
-#define INPUT_FMT AV_PIX_FMT_BGR0
-
 using namespace std;
 
 class FFmpegInitialize
@@ -24,13 +22,22 @@ public :
 
 static FFmpegInitialize ffmpegInitialize;
 
-FrameWriter::FrameWriter(const string& filename, const unsigned int width_, const unsigned int height_) :
-width(width_), height(height_), pixels(4 * width * height)
-
+FrameWriter::FrameWriter(const string& filename, int width_, int height_, InputFormat format) :
+    width(width_), height(height_)
 {
-	// Preparing to convert my generated RGB images to YUV frames.
-	swsCtx = sws_getContext(width, height,
-		INPUT_FMT, width, height, AV_PIX_FMT_YUV420P, SWS_FAST_BILINEAR, NULL, NULL, NULL);
+    switch (format)
+    {
+        case INPUT_FORMAT_BGR0:
+            swsCtx = sws_getContext(width, height,
+                AV_PIX_FMT_BGR0, width, height, AV_PIX_FMT_YUV420P,
+                SWS_FAST_BILINEAR, NULL, NULL, NULL);
+            break;
+        case INPUT_FORMAT_RGB0:
+            swsCtx = sws_getContext(width, height,
+                AV_PIX_FMT_RGB0, width, height, AV_PIX_FMT_YUV420P,
+                SWS_FAST_BILINEAR, NULL, NULL, NULL);
+            break;
+    }
 
 	// Preparing the data concerning the format and codec,
 	// in order to write properly the header, frame data and end of file.
@@ -97,9 +104,6 @@ void FrameWriter::add_frame(const uint8_t* pixels, int msec, bool y_invert)
 	pkt.data = NULL;
 	pkt.size = 0;
 
-	// The PTS of the frame are just in a reference unit,
-	// unrelated to the format we are using. We set them,
-	// for instance, as the corresponding frame number.
 	yuvpic->pts = msec;
 
 	int got_output;

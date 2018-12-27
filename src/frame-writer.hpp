@@ -19,6 +19,12 @@ extern "C"
 	#include <libavutil/opt.h>
 }
 
+enum InputFormat
+{
+    INPUT_FORMAT_BGR0,
+    INPUT_FORMAT_RGB0
+};
+
 class FrameWriter
 {
 	const unsigned int width, height;
@@ -31,12 +37,11 @@ class FrameWriter
 	AVPacket pkt;
 
 	AVFrame *yuvpic;
-
-	std::vector<uint8_t> pixels;
 	void finish_frame();
 
 public :
-	FrameWriter(const std::string& filename, const unsigned int width, const unsigned int height);
+	FrameWriter(const std::string& filename,
+        int width, int height, InputFormat format);
 	void add_frame(const uint8_t* pixels, int msec, bool y_invert);
 	~FrameWriter();
 };
