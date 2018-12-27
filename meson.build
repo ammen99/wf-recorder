@@ -21,11 +21,10 @@ libavcodec = dependency('libavcodec')
 libavformat = dependency('libavformat')
 sws = dependency('libswscale')
 x264 = dependency('x264')
-png = dependency('libpng')
 threads = dependency('threads')
 
 subdir('proto')
 
 executable('wf-recorder', ['src/frame-writer.cpp', 'src/main.cpp'],
-        dependencies: [wayland_client, wayland_protos, libavutil, libavcodec, libavformat, wf_protos, x264, sws, png, threads],
+        dependencies: [wayland_client, wayland_protos, libavutil, libavcodec, libavformat, wf_protos, x264, sws, threads],
         install: true)
