@@ -29,12 +29,37 @@ struct wf_recorder_output
     wl_output *output;
     zxdg_output_v1 *zxdg_output;
     std::string name, description;
+    int32_t x, y, width, height;
 };
 
 std::vector<wf_recorder_output> available_outputs;
 
-static void handle_xdg_output_logical_position(void*, zxdg_output_v1*, int32_t, int32_t) { }
-static void handle_xdg_output_logical_size(void*, zxdg_output_v1*, int32_t, int32_t) { }
+static void handle_xdg_output_logical_position(void*,
+    zxdg_output_v1* zxdg_output, int32_t x, int32_t y)
+{
+    for (auto& wo : available_outputs)
+    {
+        if (wo.zxdg_output == zxdg_output)
+        {
+            wo.x = x;
+            wo.y = y;
+        }
+    }
+}
+
+static void handle_xdg_output_logical_size(void*,
+    zxdg_output_v1* zxdg_output, int32_t w, int32_t h)
+{
+    for (auto& wo : available_outputs)
+    {
+        if (wo.zxdg_output == zxdg_output)
+        {
+            wo.width = w;
+            wo.height = h;
+        }
+    }
+}
+
 static void handle_xdg_output_done(void*, zxdg_output_v1*) { }
 
 static void handle_xdg_output_name(void*, zxdg_output_v1 *zxdg_output_v1,
@@ -334,7 +359,7 @@ static void load_output_info()
     sync_wayland();
 }
 
-static wl_output *choose_interactive()
+static wf_recorder_output* choose_interactive()
 {
     fprintf(stdout, "Please select an output from the list to capture (enter output no.):\n");
 
@@ -350,9 +375,9 @@ static wl_output *choose_interactive()
 
     int choice;
     if (scanf("%d", &choice) != 1 || choice > (int)available_outputs.size() || choice <= 0)
-        return NULL;
+        return nullptr;
 
-    return available_outputs[choice - 1].output;
+    return &available_outputs[choice - 1];
 }
 
 struct capture_region
@@ -361,7 +386,10 @@ struct capture_region
     int32_t width, height;
 
     capture_region()
-        : x(0), y(0), width(0), height(0) {}
+        : capture_region(0, 0, 0, 0) {}
+
+    capture_region(int32_t _x, int32_t _y, int32_t _width, int32_t _height)
+        : x(_x), y(_y), width(_width), height(_height) { }
 
     /* Make sure that dimension is even, while trying to keep the segment
      * [coordinate, coordinate+dimension) as good as possible (i.e not going
@@ -383,7 +411,7 @@ struct capture_region
     {
         if (sscanf(geometry_string.c_str(), "%d,%d %dx%d", &x, &y, &width, &height) != 4)
         {
-            fprintf(stderr, "Bad geometry: %s, capturing whole output instead.",
+            fprintf(stderr, "Bad geometry: %s, capturing whole output instead.\n",
                 geometry_string.c_str());
             x = y = width = height = 0;
             return;
@@ -392,7 +420,21 @@ struct capture_region
         /* ffmpeg requires even width and height */
         make_even(x, width);
         make_even(y, height);
-        printf("Adjusted geometry: %d,%d %dx%d", x, y, width, height);
+        printf("Adjusted geometry: %d,%d %dx%d\n", x, y, width, height);
+    }
+
+    bool is_selected()
+    {
+        return width > 0 && height > 0;
+    }
+
+    bool contained_in(const capture_region& output)
+    {
+        return
+            output.x <= x &&
+            output.x + output.width >= x + width &&
+            output.y <= y &&
+            output.y + output.height >= y + height;
     }
 };
 
@@ -400,7 +442,7 @@ int main(int argc, char *argv[])
 {
     std::string file = "recording.mp4";
     std::string cmdline_output = "invalid";
-    capture_region region{};
+    capture_region selected_region{};
 
     struct option opts[] = {
         { "output",          required_argument, NULL, 'o' },
@@ -423,7 +465,7 @@ int main(int argc, char *argv[])
                 break;
 
             case 'g':
-                region.set_from_string(optarg);
+                selected_region.set_from_string(optarg);
                 break;
 
             default:
@@ -444,16 +486,16 @@ int main(int argc, char *argv[])
     check_has_protos();
     load_output_info();
 
-    wl_output *chosen_output = NULL;
+    wf_recorder_output *chosen_output = nullptr;
     if (available_outputs.size() == 1)
     {
-        chosen_output = available_outputs[0].output;
+        chosen_output = &available_outputs[0];
     } else
     {
         for (auto& wo : available_outputs)
         {
             if (wo.name == cmdline_output)
-                chosen_output = wo.output;
+                chosen_output = &wo;
         }
 
         if (chosen_output == NULL)
@@ -468,12 +510,25 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (chosen_output == NULL)
+
+    if (chosen_output == nullptr)
     {
         fprintf(stderr, "Failed to select output, exiting\n");
         return EXIT_FAILURE;
     }
 
+    if (selected_region.is_selected())
+    {
+        if (!selected_region.contained_in({chosen_output->x, chosen_output->y,
+            chosen_output->width, chosen_output->height}))
+        {
+            fprintf(stderr, "Invalid region to capture: must be completely "
+                "inside the output\n");
+            selected_region = capture_region{};
+        }
+    }
+
+    printf("selected region %d %d %d %d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);
 
     timespec first_frame;
     first_frame.tv_sec = -1;
@@ -502,15 +557,17 @@ int main(int argc, char *argv[])
         struct zwlr_screencopy_frame_v1 *frame = NULL;
 
         /* Capture the whole output if the user hasn't provided a good geometry */
-        if (region.width <= 0)
+        if (!selected_region.is_selected())
         {
             frame = zwlr_screencopy_manager_v1_capture_output(
-                screencopy_manager, 1, chosen_output);
+                screencopy_manager, 1, chosen_output->output);
         } else
         {
             frame = zwlr_screencopy_manager_v1_capture_output_region(
-                screencopy_manager, 1, chosen_output,
-                region.x, region.y, region.width, region.height);
+                screencopy_manager, 1, chosen_output->output,
+                selected_region.x - chosen_output->x,
+                selected_region.y - chosen_output->y,
+                selected_region.width, selected_region.height);
         }
 
         zwlr_screencopy_frame_v1_add_listener(frame, &frame_listener, NULL);
