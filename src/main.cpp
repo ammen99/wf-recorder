@@ -176,7 +176,7 @@ static void frame_handle_ready(void *, struct zwlr_screencopy_frame_v1 *,
 
 static void frame_handle_failed(void *, struct zwlr_screencopy_frame_v1 *) {
 	fprintf(stderr, "failed to copy frame\n");
-	exit(EXIT_FAILURE);
+    exit_main_loop = true;
 }
 
 static const struct zwlr_screencopy_frame_v1_listener frame_listener = {
@@ -355,20 +355,62 @@ static wl_output *choose_interactive()
     return available_outputs[choice - 1].output;
 }
 
+struct capture_region
+{
+    int32_t x, y;
+    int32_t width, height;
+
+    capture_region()
+        : x(0), y(0), width(0), height(0) {}
+
+    /* Make sure that dimension is even, while trying to keep the segment
+     * [coordinate, coordinate+dimension) as good as possible (i.e not going
+     * out of the monitor) */
+    void make_even(int32_t& coordinate, int32_t& dimension)
+    {
+        if (dimension % 2 == 0)
+            return;
+
+        /* We need to increase dimension to make it an even number */
+        ++dimension;
+
+        /* Try to decrease coordinate. If coordinate > 0, we can always lower it
+         * by 1 pixel and stay inside the screen. */
+        coordinate = std::max(coordinate - 1, 0);
+    }
+
+    void set_from_string(std::string geometry_string)
+    {
+        if (sscanf(geometry_string.c_str(), "%d,%d %dx%d", &x, &y, &width, &height) != 4)
+        {
+            fprintf(stderr, "Bad geometry: %s, capturing whole output instead.",
+                geometry_string.c_str());
+            x = y = width = height = 0;
+            return;
+        }
+
+        /* ffmpeg requires even width and height */
+        make_even(x, width);
+        make_even(y, height);
+        printf("Adjusted geometry: %d,%d %dx%d", x, y, width, height);
+    }
+};
 
 int main(int argc, char *argv[])
 {
     std::string file = "recording.mp4";
     std::string cmdline_output = "invalid";
+    capture_region region{};
 
     struct option opts[] = {
         { "output",          required_argument, NULL, 'o' },
         { "file",            required_argument, NULL, 'f' },
+        { "geometry",        required_argument, NULL, 'g' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:g:", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -378,6 +420,10 @@ int main(int argc, char *argv[])
 
             case 'o':
                 cmdline_output = optarg;
+                break;
+
+            case 'g':
+                region.set_from_string(optarg);
                 break;
 
             default:
@@ -453,8 +499,20 @@ int main(int argc, char *argv[])
         }
 
         buffer_copy_done = false;
-        struct zwlr_screencopy_frame_v1 *frame =
-            zwlr_screencopy_manager_v1_capture_output(screencopy_manager, 1, chosen_output);
+        struct zwlr_screencopy_frame_v1 *frame = NULL;
+
+        /* Capture the whole output if the user hasn't provided a good geometry */
+        if (region.width <= 0)
+        {
+            frame = zwlr_screencopy_manager_v1_capture_output(
+                screencopy_manager, 1, chosen_output);
+        } else
+        {
+            frame = zwlr_screencopy_manager_v1_capture_output_region(
+                screencopy_manager, 1, chosen_output,
+                region.x, region.y, region.width, region.height);
+        }
+
         zwlr_screencopy_frame_v1_add_listener(frame, &frame_listener, NULL);
 
         while (!buffer_copy_done && wl_display_dispatch(display) != -1) {
