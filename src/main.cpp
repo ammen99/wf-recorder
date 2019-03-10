@@ -275,7 +275,7 @@ static void write_loop(std::string name, int32_t width, int32_t height)
 {
     /* Ignore SIGINT, main loop is responsible for the exit_main_loop signal */
     sigset_t sigset;
-    sigisemptyset(&sigset);
+    sigemptyset(&sigset);
     sigaddset(&sigset, SIGINT);
     pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
