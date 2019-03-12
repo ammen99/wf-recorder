@@ -93,11 +93,11 @@ const zxdg_output_v1_listener xdg_output_implementation = {
 
 struct wf_buffer
 {
-	struct wl_buffer *wl_buffer;
-	void *data;
-	enum wl_shm_format format;
-	int width, height, stride;
-	bool y_invert;
+        struct wl_buffer *wl_buffer;
+        void *data;
+        enum wl_shm_format format;
+        int width, height, stride;
+        bool y_invert;
 
     timespec presented;
     uint32_t base_msec;
@@ -116,61 +116,61 @@ bool buffer_copy_done = false;
 
 static int backingfile(off_t size)
 {
-	char name[] = "/tmp/wf-recorder-shared-XXXXXX";
-	int fd = mkstemp(name);
-	if (fd < 0) {
-		return -1;
-	}
+        char name[] = "/tmp/wf-recorder-shared-XXXXXX";
+        int fd = mkstemp(name);
+        if (fd < 0) {
+                return -1;
+        }
 
-	int ret;
-	while ((ret = ftruncate(fd, size)) == EINTR) {
-		// No-op
-	}
-	if (ret < 0) {
-		close(fd);
-		return -1;
-	}
+        int ret;
+        while ((ret = ftruncate(fd, size)) == EINTR) {
+                // No-op
+        }
+        if (ret < 0) {
+                close(fd);
+                return -1;
+        }
 
-	unlink(name);
-	return fd;
+        unlink(name);
+        return fd;
 }
 
 static struct wl_buffer *create_shm_buffer(uint32_t fmt,
-		int width, int height, int stride, void **data_out)
+                int width, int height, int stride, void **data_out)
 {
-	int size = stride * height;
+        int size = stride * height;
 
-	int fd = backingfile(size);
-	if (fd < 0) {
-		fprintf(stderr, "creating a buffer file for %d B failed: %m\n", size);
-		return NULL;
-	}
+        int fd = backingfile(size);
+        if (fd < 0) {
+                fprintf(stderr, "creating a buffer file for %d B failed: %m\n", size);
+                return NULL;
+        }
 
-	void *data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	if (data == MAP_FAILED) {
-		fprintf(stderr, "mmap failed: %m\n");
-		close(fd);
-		return NULL;
-	}
+        void *data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        if (data == MAP_FAILED) {
+                fprintf(stderr, "mmap failed: %m\n");
+                close(fd);
+                return NULL;
+        }
 
-	struct wl_shm_pool *pool = wl_shm_create_pool(shm, fd, size);
-	close(fd);
-	struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool, 0, width, height,
-		stride, fmt);
-	wl_shm_pool_destroy(pool);
+        struct wl_shm_pool *pool = wl_shm_create_pool(shm, fd, size);
+        close(fd);
+        struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool, 0, width, height,
+                stride, fmt);
+        wl_shm_pool_destroy(pool);
 
-	*data_out = data;
-	return buffer;
+        *data_out = data;
+        return buffer;
 }
 
 static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, uint32_t format,
-		uint32_t width, uint32_t height, uint32_t stride)
+                uint32_t width, uint32_t height, uint32_t stride)
 {
     auto& buffer = buffers[active_buffer];
 
-	buffer.format = (wl_shm_format)format;
-	buffer.width = width;
-	buffer.height = height;
+        buffer.format = (wl_shm_format)format;
+        buffer.width = width;
+        buffer.height = height;
     buffer.stride = stride;
 
     if (!buffer.wl_buffer) {
@@ -178,57 +178,57 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
             create_shm_buffer(format, width, height, stride, &buffer.data);
     }
 
-	if (buffer.wl_buffer == NULL) {
-		fprintf(stderr, "failed to create buffer\n");
-		exit(EXIT_FAILURE);
-	}
+        if (buffer.wl_buffer == NULL) {
+                fprintf(stderr, "failed to create buffer\n");
+                exit(EXIT_FAILURE);
+        }
 
-	zwlr_screencopy_frame_v1_copy(frame, buffer.wl_buffer);
+        zwlr_screencopy_frame_v1_copy(frame, buffer.wl_buffer);
 }
 
 static void frame_handle_flags(void*, struct zwlr_screencopy_frame_v1 *, uint32_t flags) {
-	buffers[active_buffer].y_invert = flags & ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT;
+        buffers[active_buffer].y_invert = flags & ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT;
 }
 
 static void frame_handle_ready(void *, struct zwlr_screencopy_frame_v1 *,
     uint32_t tv_sec_hi, uint32_t tv_sec_low, uint32_t tv_nsec) {
 
     auto& buffer = buffers[active_buffer];
-	buffer_copy_done = true;
+        buffer_copy_done = true;
     buffer.presented.tv_sec = ((1ll * tv_sec_hi) << 32ll) | tv_sec_low;
     buffer.presented.tv_nsec = tv_nsec;
 }
 
 static void frame_handle_failed(void *, struct zwlr_screencopy_frame_v1 *) {
-	fprintf(stderr, "failed to copy frame\n");
+        fprintf(stderr, "failed to copy frame\n");
     exit_main_loop = true;
 }
 
 static const struct zwlr_screencopy_frame_v1_listener frame_listener = {
-	.buffer = frame_handle_buffer,
-	.flags = frame_handle_flags,
-	.ready = frame_handle_ready,
-	.failed = frame_handle_failed,
+        .buffer = frame_handle_buffer,
+        .flags = frame_handle_flags,
+        .ready = frame_handle_ready,
+        .failed = frame_handle_failed,
 };
 
 static void handle_global(void*, struct wl_registry *registry,
-		uint32_t name, const char *interface, uint32_t) {
-	if (strcmp(interface, wl_output_interface.name) == 0)
+                uint32_t name, const char *interface, uint32_t) {
+        if (strcmp(interface, wl_output_interface.name) == 0)
     {
-		auto output = (wl_output*)wl_registry_bind(registry, name, &wl_output_interface, 1);
+                auto output = (wl_output*)wl_registry_bind(registry, name, &wl_output_interface, 1);
         wf_recorder_output wro;
         wro.output = output;
         available_outputs.push_back(wro);
-	}
+        }
     else if (strcmp(interface, wl_shm_interface.name) == 0)
     {
-		shm = (wl_shm*) wl_registry_bind(registry, name, &wl_shm_interface, 1);
-	}
+                shm = (wl_shm*) wl_registry_bind(registry, name, &wl_shm_interface, 1);
+        }
     else if (strcmp(interface, zwlr_screencopy_manager_v1_interface.name) == 0)
     {
-		screencopy_manager = (zwlr_screencopy_manager_v1*) wl_registry_bind(registry, name,
-			&zwlr_screencopy_manager_v1_interface, 1);
-	}
+                screencopy_manager = (zwlr_screencopy_manager_v1*) wl_registry_bind(registry, name,
+                        &zwlr_screencopy_manager_v1_interface, 1);
+        }
     else if (strcmp(interface, zxdg_output_manager_v1_interface.name) == 0)
     {
         xdg_output_manager = (zxdg_output_manager_v1*) wl_registry_bind(registry, name,
@@ -237,12 +237,12 @@ static void handle_global(void*, struct wl_registry *registry,
 }
 
 static void handle_global_remove(void*, struct wl_registry *, uint32_t) {
-	// Who cares?
+        // Who cares?
 }
 
 static const struct wl_registry_listener registry_listener = {
-	.global = handle_global,
-	.global_remove = handle_global_remove,
+        .global = handle_global,
+        .global_remove = handle_global_remove,
 };
 
 static uint64_t timespec_to_msec (const timespec& ts)
@@ -316,14 +316,14 @@ void handle_sigint(int)
 
 static void check_has_protos()
 {
-	if (shm == NULL) {
-		fprintf(stderr, "compositor is missing wl_shm\n");
+        if (shm == NULL) {
+                fprintf(stderr, "compositor is missing wl_shm\n");
         exit(EXIT_FAILURE);
-	}
-	if (screencopy_manager == NULL) {
-		fprintf(stderr, "compositor doesn't support wlr-screencopy-unstable-v1\n");
-		exit(EXIT_FAILURE);
-	}
+        }
+        if (screencopy_manager == NULL) {
+                fprintf(stderr, "compositor doesn't support wlr-screencopy-unstable-v1\n");
+                exit(EXIT_FAILURE);
+        }
 
     if (xdg_output_manager == NULL)
     {
@@ -331,18 +331,18 @@ static void check_has_protos()
         exit(EXIT_FAILURE);
     }
 
-	if (available_outputs.empty())
+        if (available_outputs.empty())
     {
-		fprintf(stderr, "no outputs available\n");
-		exit(EXIT_FAILURE);
-	}
+                fprintf(stderr, "no outputs available\n");
+                exit(EXIT_FAILURE);
+        }
 }
 
 wl_display *display = NULL;
 static void sync_wayland()
 {
-	wl_display_dispatch(display);
-	wl_display_roundtrip(display);
+        wl_display_dispatch(display);
+        wl_display_roundtrip(display);
 }
 
 
@@ -473,14 +473,14 @@ int main(int argc, char *argv[])
         }
     }
 
-	display = wl_display_connect(NULL);
-	if (display == NULL) {
-		fprintf(stderr, "failed to create display: %m\n");
-		return EXIT_FAILURE;
-	}
+        display = wl_display_connect(NULL);
+        if (display == NULL) {
+                fprintf(stderr, "failed to create display: %m\n");
+                return EXIT_FAILURE;
+        }
 
-	struct wl_registry *registry = wl_display_get_registry(display);
-	wl_registry_add_listener(registry, &registry_listener, NULL);
+        struct wl_registry *registry = wl_display_get_registry(display);
+        wl_registry_add_listener(registry, &registry_listener, NULL);
     sync_wayland();
 
     check_has_protos();
@@ -605,5 +605,5 @@ int main(int argc, char *argv[])
     for (auto& buffer : buffers)
         wl_buffer_destroy(buffer.wl_buffer);
 
-	return EXIT_SUCCESS;
+        return EXIT_SUCCESS;
 }

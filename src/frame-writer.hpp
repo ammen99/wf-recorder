@@ -11,12 +11,12 @@
 
 extern "C"
 {
-	#include <x264.h>
-	#include <libswscale/swscale.h>
-	#include <libavcodec/avcodec.h>
-	#include <libavutil/mathematics.h>
-	#include <libavformat/avformat.h>
-	#include <libavutil/opt.h>
+        #include <x264.h>
+        #include <libswscale/swscale.h>
+        #include <libavcodec/avcodec.h>
+        #include <libavutil/mathematics.h>
+        #include <libavformat/avformat.h>
+        #include <libavutil/opt.h>
 }
 
 enum InputFormat
@@ -27,24 +27,23 @@ enum InputFormat
 
 class FrameWriter
 {
-	const unsigned int width, height;
+        const unsigned int width, height;
 
-	SwsContext* swsCtx;
-	AVOutputFormat* fmt;
-	AVStream* stream;
-	AVFormatContext* fc;
-	AVCodecContext* c;
-	AVPacket pkt;
+        SwsContext* swsCtx;
+        AVOutputFormat* fmt;
+        AVStream* stream;
+        AVFormatContext* fc;
+        AVCodecContext* c;
+        AVPacket pkt;
 
-	AVFrame *yuvpic;
-	void finish_frame();
+        AVFrame *yuvpic;
+        void finish_frame();
 
 public :
-	FrameWriter(const std::string& filename,
+        FrameWriter(const std::string& filename,
         int width, int height, InputFormat format);
-	void add_frame(const uint8_t* pixels, int msec, bool y_invert);
-	~FrameWriter();
+        void add_frame(const uint8_t* pixels, int msec, bool y_invert);
+        ~FrameWriter();
 };
 
 #endif // FRAME_WRITER
-
