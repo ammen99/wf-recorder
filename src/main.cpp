@@ -272,7 +272,7 @@ static InputFormat get_input_format(wf_buffer& buffer)
     std::exit(0);
 }
 
-static void write_loop(std::string name, int32_t width, int32_t height)
+static void write_loop(std::string name, std::string codec, int32_t width, int32_t height)
 {
     /* Ignore SIGINT, main loop is responsible for the exit_main_loop signal */
     sigset_t sigset;
@@ -296,7 +296,7 @@ static void write_loop(std::string name, int32_t width, int32_t height)
         if (!writer)
         {
             writer = std::unique_ptr<FrameWriter> (
-                new FrameWriter(name, width, height,
+                new FrameWriter(name, codec, width, height,
                     get_input_format(buffer)));
         }
 
@@ -443,17 +443,19 @@ int main(int argc, char *argv[])
 {
     std::string file = "recording.mp4";
     std::string cmdline_output = "invalid";
+    std::string codec = "libx264";
     capture_region selected_region{};
 
     struct option opts[] = {
         { "output",          required_argument, NULL, 'o' },
         { "file",            required_argument, NULL, 'f' },
         { "geometry",        required_argument, NULL, 'g' },
+        { "codec",           required_argument, NULL, 'c' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:g:", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:g:c:", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -467,6 +469,10 @@ int main(int argc, char *argv[])
 
             case 'g':
                 selected_region.set_from_string(optarg);
+                break;
+
+            case 'c':
+                codec = optarg;
                 break;
 
             default:
@@ -582,7 +588,7 @@ int main(int argc, char *argv[])
         {
             int width = buffer.width, height = buffer.height;
             writer_thread = std::thread([=] () {
-                write_loop(file, width, height);
+                write_loop(file, codec, width, height);
             });
 
             spawned_thread = true;

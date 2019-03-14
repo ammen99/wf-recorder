@@ -40,7 +40,7 @@ class FrameWriter
     void finish_frame();
 
 public :
-    FrameWriter(const std::string& filename,
+    FrameWriter(const std::string& filename, const std::string& codec,
         int width, int height, InputFormat format);
     void add_frame(const uint8_t* pixels, int msec, bool y_invert);
     ~FrameWriter();

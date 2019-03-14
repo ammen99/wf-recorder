@@ -22,7 +22,7 @@ public :
 
 static FFmpegInitialize ffmpegInitialize;
 
-FrameWriter::FrameWriter(const string& filename, int width_, int height_, InputFormat format) :
+FrameWriter::FrameWriter(const string& filename, const std::string& codec_name, int width_, int height_, InputFormat format) :
     width(width_), height(height_)
 {
     switch (format)
@@ -45,11 +45,13 @@ FrameWriter::FrameWriter(const string& filename, int width_, int height_, InputF
     avformat_alloc_output_context2(&fc, NULL, NULL, filename.c_str());
 
     // Setting up the codec.
-    AVCodec* codec = avcodec_find_encoder_by_name("libx264");
+    AVCodec* codec = avcodec_find_encoder_by_name(codec_name.c_str());
     AVDictionary* opt = NULL;
-    av_dict_set(&opt, "tune", "zerolatency", 0);
-    av_dict_set(&opt, "preset", "ultrafast", 0);
-    av_dict_set(&opt, "crf", "20", 0);
+    if (!codec_name.compare("libx264")) {
+        av_dict_set(&opt, "tune", "zerolatency", 0);
+        av_dict_set(&opt, "preset", "ultrafast", 0);
+        av_dict_set(&opt, "crf", "20", 0);
+    }
 
     stream = avformat_new_stream(fc, codec);
     c = stream->codec;
