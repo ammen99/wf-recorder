@@ -16,6 +16,7 @@ extern "C"
     #include <libavcodec/avcodec.h>
     #include <libavutil/mathematics.h>
     #include <libavformat/avformat.h>
+    #include <libavutil/hwcontext.h>
     #include <libavutil/opt.h>
 }
 
@@ -25,23 +26,46 @@ enum InputFormat
      INPUT_FORMAT_RGB0
 };
 
+struct FrameWriterParams
+{
+    std::string file;
+    int width;
+    int height;
+
+    InputFormat format;
+
+    std::string codec;
+    std::string hw_device; // used only if codec contains vaapi
+    std::map<std::string, std::string> codec_options;
+};
+
 class FrameWriter
 {
-    const unsigned int width, height;
+    FrameWriterParams params;
+    void load_codec_options(AVDictionary **dict);
 
     SwsContext* swsCtx;
-    AVOutputFormat* fmt;
+    AVOutputFormat* outputFmt;
     AVStream* stream;
-    AVFormatContext* fc;
-    AVCodecContext* c;
+    AVFormatContext* fmtCtx;
+    AVCodecContext* codecCtx;
     AVPacket pkt;
 
-    AVFrame *yuvpic;
+    AVBufferRef *hw_device_context = NULL;
+    AVBufferRef *hw_frame_context = NULL;
+
+    InputFormat *input_format;
+    void init_hw_accel();
+    void init_sws();
+    void init_codec();
+
+    AVFrame *encoder_frame = NULL;
+    AVFrame *hw_frame = NULL;
+
     void finish_frame();
 
 public :
-    FrameWriter(const std::string& filename, const std::string& codec,
-        int width, int height, InputFormat format);
+    FrameWriter(const FrameWriterParams& params);
     void add_frame(const uint8_t* pixels, int msec, bool y_invert);
     ~FrameWriter();
 };

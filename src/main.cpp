@@ -272,7 +272,7 @@ static InputFormat get_input_format(wf_buffer& buffer)
     std::exit(0);
 }
 
-static void write_loop(std::string name, std::string codec, int32_t width, int32_t height)
+static void write_loop(FrameWriterParams params)
 {
     /* Ignore SIGINT, main loop is responsible for the exit_main_loop signal */
     sigset_t sigset;
@@ -295,9 +295,11 @@ static void write_loop(std::string name, std::string codec, int32_t width, int32
         auto& buffer = buffers[last_encoded_frame];
         if (!writer)
         {
-            writer = std::unique_ptr<FrameWriter> (
-                new FrameWriter(name, codec, width, height,
-                    get_input_format(buffer)));
+            /* This is the first time buffer attributes are available */
+            params.format = get_input_format(buffer);
+            params.width = buffer.width;
+            params.height = buffer.height;
+            writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
         }
 
         writer->add_frame((unsigned char*)buffer.data, buffer.base_msec,
@@ -441,9 +443,11 @@ struct capture_region
 
 int main(int argc, char *argv[])
 {
-    std::string file = "recording.mp4";
+    FrameWriterParams params;
+    params.file = "recording.mp4";
+    params.codec = "libx264";
+
     std::string cmdline_output = "invalid";
-    std::string codec = "libx264";
     capture_region selected_region{};
 
     struct option opts[] = {
@@ -451,16 +455,20 @@ int main(int argc, char *argv[])
         { "file",            required_argument, NULL, 'f' },
         { "geometry",        required_argument, NULL, 'g' },
         { "codec",           required_argument, NULL, 'c' },
+        { "codec-param",     required_argument, NULL, 'p' },
+        { "device",          required_argument, NULL, 'd' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:g:c:", opts, &i)) != -1)
+    std::string param;
+    size_t pos;
+    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:", opts, &i)) != -1)
     {
         switch(c)
         {
             case 'f':
-                file = optarg;
+                params.file = optarg;
                 break;
 
             case 'o':
@@ -472,7 +480,24 @@ int main(int argc, char *argv[])
                 break;
 
             case 'c':
-                codec = optarg;
+                params.codec = optarg;
+                break;
+
+            case 'd':
+                params.hw_device = optarg;
+                break;
+
+            case 'p':
+                pos = param.find("=");
+                if (pos != std::string::npos && pos != param.length() - 1)
+                {
+                    auto optname = param.substr(0, pos);
+                    auto optvalue = param.substr(pos + 1, param.length() - pos - 1);
+                    params.codec_options[optvalue] = optname;
+                } else
+                {
+                    printf("invalid codec option %s\n", optarg);
+                }
                 break;
 
             default:
@@ -586,9 +611,8 @@ int main(int argc, char *argv[])
         auto& buffer = buffers[active_buffer];
         if (!spawned_thread)
         {
-            int width = buffer.width, height = buffer.height;
             writer_thread = std::thread([=] () {
-                write_loop(file, codec, width, height);
+                write_loop(params);
             });
 
             spawned_thread = true;
