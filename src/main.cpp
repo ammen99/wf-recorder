@@ -488,20 +488,21 @@ int main(int argc, char *argv[])
                 break;
 
             case 'p':
+                param = optarg;
                 pos = param.find("=");
                 if (pos != std::string::npos && pos != param.length() - 1)
                 {
                     auto optname = param.substr(0, pos);
                     auto optvalue = param.substr(pos + 1, param.length() - pos - 1);
-                    params.codec_options[optvalue] = optname;
+                    params.codec_options[optname] = optvalue;
                 } else
                 {
-                    printf("invalid codec option %s\n", optarg);
+                    printf("Invalid codec option %s\n", optarg);
                 }
                 break;
 
             default:
-                printf("unsupported command line argument %s\n", optarg);
+                printf("Unsupported command line argument %s\n", optarg);
         }
     }
 

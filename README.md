@@ -29,3 +29,10 @@ To select a specific part of the screen you can either use the `-g <geometry>`, 
 wf-recorder -g "$(slurp)"
 ``` 
 to select and limit the recording to a part of the screen.
+
+To specify a codec, use the `-c <codec>` option. To modify codec parameters, use `-p <option_name>=<option_value>`
+
+To use gpu encoding, use a VAAPI codec (for ex. `h264_vaapi`) and specify a GPU device to use with the `-d` option:
+```
+wf-recorder -f test-vaapi.mkv -c h264_vaapi -d /dev/dri/renderD128
+```

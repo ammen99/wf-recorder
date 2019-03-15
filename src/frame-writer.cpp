@@ -86,7 +86,10 @@ void FrameWriter::load_codec_options(AVDictionary **dict)
     }
 
     for (auto& opt : params.codec_options)
+    {
+        std::cout << "Setting codec option: " << opt.first << "=" << opt.second << std::endl;
         av_dict_set(dict, opt.first.c_str(), opt.second.c_str(), 0);
+    }
 }
 
 void FrameWriter::init_codec()
