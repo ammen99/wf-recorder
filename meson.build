@@ -13,6 +13,8 @@ project(
 	],
 )
 
+add_project_arguments(['-Wno-deprecated-declarations'], language: 'cpp')
+
 wayland_client = dependency('wayland-client')
 wayland_protos = dependency('wayland-protocols')
 
@@ -24,7 +26,6 @@ x264 = dependency('x264')
 threads = dependency('threads')
 
 subdir('proto')
-
 executable('wf-recorder', ['src/frame-writer.cpp', 'src/main.cpp'],
         dependencies: [wayland_client, wayland_protos, libavutil, libavcodec, libavformat, wf_protos, x264, sws, threads],
         install: true)
