@@ -56,7 +56,7 @@ void FrameWriter::init_hw_accel()
     ctx->width = params.width;
     ctx->height = params.height;
     ctx->format = cst->valid_hw_formats[0];
-    ctx->sw_format = AV_PIX_FMT_RGB0;
+    ctx->sw_format = AV_PIX_FMT_NV12;
 
     if (av_hwframe_ctx_init(hw_frame_context))
     {
