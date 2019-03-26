@@ -37,6 +37,8 @@ struct FrameWriterParams
     std::string codec;
     std::string hw_device; // used only if codec contains vaapi
     std::map<std::string, std::string> codec_options;
+
+    bool enable_ffmpeg_debug_output;
 };
 
 class FrameWriter

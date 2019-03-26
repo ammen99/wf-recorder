@@ -446,6 +446,7 @@ int main(int argc, char *argv[])
     FrameWriterParams params;
     params.file = "recording.mp4";
     params.codec = "libx264";
+    params.enable_ffmpeg_debug_output = false;
 
     std::string cmdline_output = "invalid";
     capture_region selected_region{};
@@ -457,13 +458,14 @@ int main(int argc, char *argv[])
         { "codec",           required_argument, NULL, 'c' },
         { "codec-param",     required_argument, NULL, 'p' },
         { "device",          required_argument, NULL, 'd' },
+        { "log",             no_argument,       NULL, 'l' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:l", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -485,6 +487,10 @@ int main(int argc, char *argv[])
 
             case 'd':
                 params.hw_device = optarg;
+                break;
+
+            case 'l':
+                params.enable_ffmpeg_debug_output = true;
                 break;
 
             case 'p':

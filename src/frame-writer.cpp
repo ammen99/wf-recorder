@@ -98,8 +98,19 @@ void FrameWriter::init_codec()
     load_codec_options(&options);
 
     AVCodec* codec = avcodec_find_encoder_by_name(params.codec.c_str());
+    if (!codec)
+    {
+        std::cerr << "Failed to find the given codec" << std::endl;
+        std::exit(-1);
+    }
 
     stream = avformat_new_stream(fmtCtx, codec);
+    if (!stream)
+    {
+        std::cerr << "Failed to open stream" << std::endl;
+        std::exit(-1);
+    }
+
     codecCtx = stream->codec;
     codecCtx->width = params.width;
     codecCtx->height = params.height;
@@ -119,14 +130,23 @@ void FrameWriter::init_codec()
     if (fmtCtx->oformat->flags & AVFMT_GLOBALHEADER)
         codecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
-    avcodec_open2(codecCtx, codec, &options);
+    int err;
+    if ((err = avcodec_open2(codecCtx, codec, &options)) < 0)
+    {
+        std::cerr << "avcodec_open2 failed " << err << std::endl;
+        std::exit(-1);
+    }
     av_dict_free(&options);
 
     // Once the codec is set up, we need to let the container know
     // which codec are the streams using, in this case the only (video) stream.
     stream->time_base = (AVRational){ 1, FPS };
     av_dump_format(fmtCtx, 0, params.file.c_str(), 1);
-    avio_open(&fmtCtx->pb, params.file.c_str(), AVIO_FLAG_WRITE);
+    if (avio_open(&fmtCtx->pb, params.file.c_str(), AVIO_FLAG_WRITE))
+    {
+        std::cerr << "avio_open failed" << std::endl;
+        std::exit(-1);
+    }
 
     AVDictionary *dummy = NULL;
     if (avformat_write_header(fmtCtx, &dummy) != 0)
@@ -150,15 +170,34 @@ void FrameWriter::init_sws()
                 params.width, params.height, PIX_FMT, SWS_FAST_BILINEAR, NULL, NULL, NULL);
             break;
     }
+
+    if (!swsCtx)
+    {
+        std::cerr << "Failed to create sws context" << std::endl;
+        std::exit(-1);
+    }
 }
 
 FrameWriter::FrameWriter(const FrameWriterParams& _params) :
     params(_params)
 {
+    if (params.enable_ffmpeg_debug_output)
+        av_log_set_level(AV_LOG_DEBUG);
+
     // Preparing the data concerning the format and codec,
     // in order to write properly the header, frame data and end of file.
     this->outputFmt = av_guess_format(NULL, params.file.c_str(), NULL);
-    avformat_alloc_output_context2(&this->fmtCtx, NULL, NULL, params.file.c_str());
+    if (!outputFmt)
+    {
+        std::cerr << "Failed to guess output format for file " << params.file << std::endl;
+        std::exit(-1);
+    }
+
+    if (avformat_alloc_output_context2(&this->fmtCtx, NULL, NULL, params.file.c_str()) < 0)
+    {
+        std::cerr << "Failed to allocate output context" << std::endl;
+        std::exit(-1);
+    }
 
     init_codec();
 
