@@ -1,5 +1,6 @@
 #define _XOPEN_SOURCE 700
 #define _POSIX_C_SOURCE 199309L
+#include <iostream>
 
 #include <string>
 #include <thread>
@@ -17,8 +18,12 @@
 #include <wayland-client-protocol.h>
 
 #include "frame-writer.hpp"
+#include "pulse.hpp"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 #include "xdg-output-unstable-v1-client-protocol.h"
+
+std::mutex frame_writer_mutex, frame_writer_pending_mutex;
+std::unique_ptr<FrameWriter> frame_writer;
 
 static struct wl_shm *shm = NULL;
 static struct zxdg_output_manager_v1 *xdg_output_manager = NULL;
@@ -100,7 +105,7 @@ struct wf_buffer
     bool y_invert;
 
     timespec presented;
-    uint32_t base_msec;
+    uint32_t base_usec;
 
     std::atomic<bool> released{true}; // if the buffer can be used to store new pending frames
     std::atomic<bool> available{false}; // if the buffer can be used to feed the encoder
@@ -246,9 +251,9 @@ static const struct wl_registry_listener registry_listener = {
     .global_remove = handle_global_remove,
 };
 
-static uint64_t timespec_to_msec (const timespec& ts)
+static uint64_t timespec_to_usec (const timespec& ts)
 {
-    return ts.tv_sec * 1000ll + 1ll * ts.tv_nsec / 1000000ll;
+    return ts.tv_sec * 1000000ll + 1ll * ts.tv_nsec / 1000ll;
 }
 
 static int next_frame(int frame)
@@ -280,36 +285,53 @@ static void write_loop(FrameWriterParams params)
     sigaddset(&sigset, SIGINT);
     pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
-    std::unique_ptr<FrameWriter> writer;
-    // FrameWriter writer(name, width, height);
-
     int last_encoded_frame = 0;
+    std::unique_ptr<PulseReader> pr;
 
     while(!exit_main_loop)
     {
         // wait for frame to become available
         while(buffers[last_encoded_frame].available != true) {
-            std::this_thread::sleep_for(std::chrono::microseconds(500));
-        }
-
+            std::this_thread::sleep_for(std::chrono::microseconds(1000));
+        } 
         auto& buffer = buffers[last_encoded_frame];
-        if (!writer)
+
+        frame_writer_pending_mutex.lock();
+        frame_writer_mutex.lock();
+        frame_writer_pending_mutex.unlock();
+
+        if (!frame_writer)
         {
             /* This is the first time buffer attributes are available */
             params.format = get_input_format(buffer);
             params.width = buffer.width;
             params.height = buffer.height;
-            writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
+            frame_writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
+
+            if (params.enable_audio)
+            {
+                timespec ts;
+                clock_gettime(CLOCK_MONOTONIC, &ts);
+
+                int64_t delay = timespec_to_usec(ts) - timespec_to_usec(buffer.presented);
+                pr = std::unique_ptr<PulseReader> (new PulseReader(0));
+                pr->run_loop();
+            }
         }
 
-        writer->add_frame((unsigned char*)buffer.data, buffer.base_msec,
+        frame_writer->add_frame((unsigned char*)buffer.data, buffer.base_usec,
             buffer.y_invert);
+
+        frame_writer_mutex.unlock();
 
         buffer.available = false;
         buffer.released = true;
 
         last_encoded_frame = next_frame(last_encoded_frame);
     }
+
+    std::lock_guard<std::mutex> lock(frame_writer_mutex);
+    frame_writer = nullptr;
 }
 
 void handle_sigint(int)
@@ -447,6 +469,7 @@ int main(int argc, char *argv[])
     params.file = "recording.mp4";
     params.codec = "libx264";
     params.enable_ffmpeg_debug_output = false;
+    params.enable_audio = false;
 
     std::string cmdline_output = "invalid";
     capture_region selected_region{};
@@ -459,13 +482,14 @@ int main(int argc, char *argv[])
         { "codec-param",     required_argument, NULL, 'p' },
         { "device",          required_argument, NULL, 'd' },
         { "log",             no_argument,       NULL, 'l' },
+        { "enable-audio",    no_argument,       NULL, 'a' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:l", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -491,6 +515,10 @@ int main(int argc, char *argv[])
 
             case 'l':
                 params.enable_ffmpeg_debug_output = true;
+                break;
+
+            case 'a':
+                params.enable_audio = true;
                 break;
 
             case 'p':
@@ -585,6 +613,8 @@ int main(int argc, char *argv[])
 
     signal(SIGINT, handle_sigint);
 
+    std::cout << "start at " << timespec_to_usec(get_ct()) / 1.0e6<< std::endl;
+
     while(!exit_main_loop)
     {
         // wait for a free buffer
@@ -616,6 +646,8 @@ int main(int argc, char *argv[])
         }
 
         auto& buffer = buffers[active_buffer];
+        //std::cout << "first buffer at " << timespec_to_usec(get_ct()) / 1.0e6<< std::endl;
+
         if (!spawned_thread)
         {
             writer_thread = std::thread([=] () {
@@ -628,8 +660,8 @@ int main(int argc, char *argv[])
         if (first_frame.tv_sec == -1)
             first_frame = buffer.presented;
 
-        buffer.base_msec = timespec_to_msec(buffer.presented)
-            - timespec_to_msec(first_frame);
+        buffer.base_usec = timespec_to_usec(buffer.presented)
+            - timespec_to_usec(first_frame);
 
         buffer.released = false;
         buffer.available = true;

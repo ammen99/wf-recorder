@@ -9,10 +9,13 @@
 #include <vector>
 #include <map>
 
+#define AUDIO_RATE 44100
+
 extern "C"
 {
     #include <x264.h>
     #include <libswscale/swscale.h>
+    #include <libswresample/swresample.h>
     #include <libavcodec/avcodec.h>
     #include <libavutil/mathematics.h>
     #include <libavformat/avformat.h>
@@ -38,6 +41,7 @@ struct FrameWriterParams
     std::string hw_device; // used only if codec contains vaapi
     std::map<std::string, std::string> codec_options;
 
+    bool enable_audio;
     bool enable_ffmpeg_debug_output;
 };
 
@@ -48,10 +52,9 @@ class FrameWriter
 
     SwsContext* swsCtx;
     AVOutputFormat* outputFmt;
-    AVStream* stream;
+    AVStream* videoStream;
+    AVCodecContext* videoCodecCtx;
     AVFormatContext* fmtCtx;
-    AVCodecContext* codecCtx;
-    AVPacket pkt;
 
     AVBufferRef *hw_device_context = NULL;
     AVBufferRef *hw_frame_context = NULL;
@@ -59,17 +62,42 @@ class FrameWriter
     InputFormat *input_format;
     void init_hw_accel();
     void init_sws();
-    void init_codec();
+    void init_codecs();
+    void init_video_stream();
 
     AVFrame *encoder_frame = NULL;
     AVFrame *hw_frame = NULL;
 
-    void finish_frame();
+    SwrContext *swrCtx;
+    AVStream *audioStream;
+    AVCodecContext *audioCodecCtx;
+    void init_swr();
+    void init_audio_stream();
+    void send_audio_pkt(AVFrame *frame);
+
+    void finish_frame(AVPacket& pkt, bool isVideo);
 
 public :
     FrameWriter(const FrameWriterParams& params);
-    void add_frame(const uint8_t* pixels, int msec, bool y_invert);
+    void add_frame(const uint8_t* pixels, int64_t usec, bool y_invert);
+    void add_audio(const void* buffer, size_t size, int64_t usec);
     ~FrameWriter();
 };
+
+#include <memory>
+#include <mutex>
+#include <atomic>
+
+extern std::mutex frame_writer_mutex, frame_writer_pending_mutex;
+extern std::unique_ptr<FrameWriter> frame_writer;
+extern std::atomic<bool> exit_main_loop;
+
+static timespec get_ct()
+{
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    return ts;
+}
 
 #endif // FRAME_WRITER
