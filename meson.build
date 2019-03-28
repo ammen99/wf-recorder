@@ -25,7 +25,7 @@ sws = dependency('libswscale')
 swr = dependency('libswresample')
 x264 = dependency('x264')
 threads = dependency('threads')
-pulse = dependency('libpulse')
+pulse = dependency('libpulse-simple')
 
 subdir('proto')
 executable('wf-recorder', ['src/frame-writer.cpp', 'src/main.cpp', 'src/pulse.cpp'],

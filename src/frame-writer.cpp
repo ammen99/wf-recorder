@@ -402,46 +402,33 @@ void FrameWriter::send_audio_pkt(AVFrame *frame)
       finish_frame(pkt, false);
 }
 
-void FrameWriter::add_audio(const void* buffer, size_t size, int64_t usec)
+size_t FrameWriter::get_audio_buffer_size()
+{
+    return audioCodecCtx->frame_size << 3;
+}
+
+void FrameWriter::add_audio(const void* buffer)
 {
     AVFrame *inputf = av_frame_alloc();
     inputf->sample_rate    = AUDIO_RATE;
     inputf->format         = AV_SAMPLE_FMT_FLT;
     inputf->channel_layout = AV_CH_LAYOUT_STEREO;
-    inputf->nb_samples     = size >> 3;
+    inputf->nb_samples     = audioCodecCtx->frame_size;
 
     av_frame_get_buffer(inputf, 0);
-    memcpy(inputf->data[0], buffer, size);
-    inputf->pts = usec;
-
-    int os = swr_get_out_samples(swrCtx, inputf->nb_samples);
-
-    /* The given data was too small. Queue data and wait for more */
-    if (os < audioCodecCtx->frame_size)
-    {
-        swr_convert_frame(swrCtx, NULL, inputf);
-        av_frame_free(&inputf);
-        return;
-    }
+    memcpy(inputf->data[0], buffer, get_audio_buffer_size());
 
     AVFrame *outputf = av_frame_alloc();
-    outputf->format = audioCodecCtx->sample_fmt;
-    outputf->sample_rate = audioCodecCtx->sample_rate;
+    outputf->format         = audioCodecCtx->sample_fmt;
+    outputf->sample_rate    = audioCodecCtx->sample_rate;
     outputf->channel_layout = audioCodecCtx->channel_layout;
-    outputf->nb_samples = audioCodecCtx->frame_size;
+    outputf->nb_samples     = audioCodecCtx->frame_size;
     av_frame_get_buffer(outputf, 0);
 
-    outputf->pts = conv_audio_pts(swrCtx, inputf->pts);
+    outputf->pts = conv_audio_pts(swrCtx, INT64_MIN);
     swr_convert_frame(swrCtx, outputf, inputf);
 
     send_audio_pkt(outputf);
-
-    while (swr_get_out_samples(swrCtx, 0) >= audioCodecCtx->frame_size)
-    {
-        outputf->pts = conv_audio_pts(swrCtx, INT64_MIN);
-        swr_convert_frame(swrCtx, outputf, NULL);
-        send_audio_pkt(outputf);
-    }
 
     av_frame_free(&inputf);
     av_frame_free(&outputf);

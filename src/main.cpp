@@ -277,7 +277,7 @@ static InputFormat get_input_format(wf_buffer& buffer)
     std::exit(0);
 }
 
-static void write_loop(FrameWriterParams params)
+static void write_loop(FrameWriterParams params, PulseReaderParams pulseParams)
 {
     /* Ignore SIGINT, main loop is responsible for the exit_main_loop signal */
     sigset_t sigset;
@@ -293,7 +293,7 @@ static void write_loop(FrameWriterParams params)
         // wait for frame to become available
         while(buffers[last_encoded_frame].available != true) {
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
-        } 
+        }
         auto& buffer = buffers[last_encoded_frame];
 
         frame_writer_pending_mutex.lock();
@@ -310,8 +310,9 @@ static void write_loop(FrameWriterParams params)
 
             if (params.enable_audio)
             {
-                pr = std::unique_ptr<PulseReader> (new PulseReader(params.audio_sync_offset));
-                pr->run_loop();
+                pulseParams.audio_frame_size = frame_writer->get_audio_buffer_size();
+                pr = std::unique_ptr<PulseReader> (new PulseReader(pulseParams));
+                pr->start();
             }
         }
 
@@ -327,6 +328,9 @@ static void write_loop(FrameWriterParams params)
     }
 
     std::lock_guard<std::mutex> lock(frame_writer_mutex);
+    /* Free the PulseReader connection first. This way it'd flush any remaining
+     * frames to the FrameWriter */
+    pr = nullptr;
     frame_writer = nullptr;
 }
 
@@ -467,6 +471,8 @@ int main(int argc, char *argv[])
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
 
+    PulseReaderParams pulseParams;
+
     std::string cmdline_output = "invalid";
     capture_region selected_region{};
 
@@ -479,7 +485,6 @@ int main(int argc, char *argv[])
         { "device",          required_argument, NULL, 'd' },
         { "log",             no_argument,       NULL, 'l' },
         { "enable-audio",    no_argument,       NULL, 'a' },
-        { "audio-sync-delay",required_argument, NULL, 0x11},
         { 0,                 0,                 NULL,  0  }
     };
 
@@ -517,9 +522,6 @@ int main(int argc, char *argv[])
             case 'a':
                 params.enable_audio = true;
                 break;
-
-            case 0x11:
-                params.audio_sync_offset = 1e6 * std::atof(optarg);
 
             case 'p':
                 param = optarg;
@@ -651,7 +653,7 @@ int main(int argc, char *argv[])
         if (!spawned_thread)
         {
             writer_thread = std::thread([=] () {
-                write_loop(params);
+                write_loop(params, pulseParams);
             });
 
             spawned_thread = true;

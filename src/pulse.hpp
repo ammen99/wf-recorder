@@ -1,20 +1,28 @@
 #ifndef PULSE_HPP
 #define PULSE_HPP
 
-#include <pulse/pulseaudio.h>
+#include <pulse/simple.h>
+#include <pulse/error.h>
+#include <thread>
+
+struct PulseReaderParams
+{
+    size_t audio_frame_size;
+};
 
 class PulseReader
 {
-    public:
-    int64_t audio_delay;
-    pa_sample_spec spec;
-    pa_context *context;
-    pa_threaded_mainloop *mainloop;
-    pa_mainloop_api *api;
+    PulseReaderParams params;
+    pa_simple *pa;
 
-    PulseReader(int64_t audio_delay);
+    bool loop();
+    std::thread read_thread;
+
+    public:
+    PulseReader(PulseReaderParams params);
     ~PulseReader();
-    void run_loop();
+
+    void start();
 };
 
 #endif /* end of include guard: PULSE_HPP */

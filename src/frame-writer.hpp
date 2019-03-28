@@ -82,7 +82,11 @@ class FrameWriter
 public :
     FrameWriter(const FrameWriterParams& params);
     void add_frame(const uint8_t* pixels, int64_t usec, bool y_invert);
-    void add_audio(const void* buffer, size_t size, int64_t usec);
+
+    /* Buffer must have size get_audio_buffer_size() */
+    void add_audio(const void* buffer);
+    size_t get_audio_buffer_size();
+
     ~FrameWriter();
 };
 
