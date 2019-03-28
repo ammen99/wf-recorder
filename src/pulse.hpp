@@ -8,6 +8,8 @@
 struct PulseReaderParams
 {
     size_t audio_frame_size;
+    /* Can be NULL */
+    char *audio_source;
 };
 
 class PulseReader

@@ -30,13 +30,14 @@ PulseReader::PulseReader(PulseReaderParams _p)
     };
 
     int perr;
-    pa = pa_simple_new(NULL, "wf-recorder", PA_STREAM_RECORD, NULL,
-        "wf-recorder", &sample_spec, &map, &attr, &perr);
+    std::cout << "Using PulseAudio device: " << (params.audio_source ?: "default") << std::endl;
+    pa = pa_simple_new(NULL, "wf-recorder3", PA_STREAM_RECORD, params.audio_source,
+        "wf-recorder3", &sample_spec, &map, &attr, &perr);
 
     if (!pa)
     {
-        std::cerr << "Failed to connect to PulseAudio,"
-            << " recording won't have audio" << std::endl;
+        std::cerr << "Failed to connect to PulseAudio: " << pa_strerror(perr)
+            << "\nRecording won't have audio" << std::endl;
     }
 }
 
@@ -48,7 +49,8 @@ bool PulseReader::loop()
     int perr;
     if (pa_simple_read(pa, buffer.data(), buffer.size(), &perr) < 0)
     {
-        std::cerr << "Failed to read from PulseAudio stream!" << std::endl;
+        std::cerr << "Failed to read from PulseAudio stream: "
+            << pa_strerror(perr) << std::endl;
         return false;
     }
 

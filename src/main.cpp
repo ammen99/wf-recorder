@@ -484,14 +484,14 @@ int main(int argc, char *argv[])
         { "codec-param",     required_argument, NULL, 'p' },
         { "device",          required_argument, NULL, 'd' },
         { "log",             no_argument,       NULL, 'l' },
-        { "enable-audio",    no_argument,       NULL, 'a' },
+        { "audio",           optional_argument, NULL, 'a' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la::", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -521,6 +521,7 @@ int main(int argc, char *argv[])
 
             case 'a':
                 params.enable_audio = true;
+                pulseParams.audio_source = optarg ? strdup(optarg) : NULL;
                 break;
 
             case 'p':
