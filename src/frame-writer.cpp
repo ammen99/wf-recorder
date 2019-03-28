@@ -5,6 +5,7 @@
 #include "frame-writer.hpp"
 #include <vector>
 #include <cstring>
+#include "averr.h"
 
 #define FPS 60
 #define PIX_FMT AV_PIX_FMT_YUV420P
@@ -31,7 +32,7 @@ void FrameWriter::init_hw_accel()
 
     if (ret != 0)
     {
-        std::cerr << "Failed to create hw encoding device " << params.hw_device << std::endl;
+        std::cerr << "Failed to create hw encoding device " << params.hw_device << ": " << averr(ret) << std::endl;
         std::exit(-1);
     }
 
@@ -58,9 +59,9 @@ void FrameWriter::init_hw_accel()
     ctx->format = cst->valid_hw_formats[0];
     ctx->sw_format = AV_PIX_FMT_NV12;
 
-    if (av_hwframe_ctx_init(hw_frame_context))
+    if ((ret = av_hwframe_ctx_init(hw_frame_context)))
     {
-        std::cerr << "Failed to initialize hwframe context" << std::endl;
+        std::cerr << "Failed to initialize hwframe context: " << averr(ret) << std::endl;
         av_buffer_unref(&hw_device_context);
         av_buffer_unref(&hw_frame_context);
         std::exit(-1);
@@ -133,7 +134,7 @@ void FrameWriter::init_codec()
     int err;
     if ((err = avcodec_open2(codecCtx, codec, &options)) < 0)
     {
-        std::cerr << "avcodec_open2 failed " << err << std::endl;
+        std::cerr << "avcodec_open2 failed: " << averr(err) << std::endl;
         std::exit(-1);
     }
     av_dict_free(&options);
