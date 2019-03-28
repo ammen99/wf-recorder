@@ -310,11 +310,7 @@ static void write_loop(FrameWriterParams params)
 
             if (params.enable_audio)
             {
-                timespec ts;
-                clock_gettime(CLOCK_MONOTONIC, &ts);
-
-                int64_t delay = timespec_to_usec(ts) - timespec_to_usec(buffer.presented);
-                pr = std::unique_ptr<PulseReader> (new PulseReader(0));
+                pr = std::unique_ptr<PulseReader> (new PulseReader(params.audio_sync_offset));
                 pr->run_loop();
             }
         }
@@ -483,6 +479,7 @@ int main(int argc, char *argv[])
         { "device",          required_argument, NULL, 'd' },
         { "log",             no_argument,       NULL, 'l' },
         { "enable-audio",    no_argument,       NULL, 'a' },
+        { "audio-sync-delay",required_argument, NULL, 0x11},
         { 0,                 0,                 NULL,  0  }
     };
 
@@ -520,6 +517,9 @@ int main(int argc, char *argv[])
             case 'a':
                 params.enable_audio = true;
                 break;
+
+            case 0x11:
+                params.audio_sync_offset = 1e6 * std::atof(optarg);
 
             case 'p':
                 param = optarg;

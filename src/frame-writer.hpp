@@ -41,6 +41,8 @@ struct FrameWriterParams
     std::string hw_device; // used only if codec contains vaapi
     std::map<std::string, std::string> codec_options;
 
+    int64_t audio_sync_offset;
+
     bool enable_audio;
     bool enable_ffmpeg_debug_output;
 };

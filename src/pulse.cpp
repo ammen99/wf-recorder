@@ -23,19 +23,19 @@ static void pulse_stream_read_cb(pa_stream *stream, size_t size, void *data)
     pa_usec_t pts, delay;
     if (!pa_stream_get_time(stream, &pts) && !pa_stream_get_latency(stream, &delay, &delay_neg))
     {
-        std::cout << "packet: " << pts << " " << delay << " " << delay_neg << std::endl;
+        //std::cout << "packet: " << pts << " " << delay << " " << delay_neg << std::endl;
         time = pts;
         time -= delay_neg ? -delay : delay;
     } else
     {
-        std::cout << "got shit" << std::endl;
+        //std::cout << "got shit" << std::endl;
         time = INT64_MIN;
     }
 
     time += reader->audio_delay;
 
 //    std::cout << "time is " << timespec_to_usec(get_ct()) << std::endl;
- //   std::cout << "audio fr: " << time / 1000000.0 << std::endl;
+    std::cout << "audio fr: " << time / 1000000.0 << std::endl;
 
     frame_writer_pending_mutex.unlock();
     if (frame_writer)
@@ -188,8 +188,6 @@ PulseReader::PulseReader(int64_t ab)
 void PulseReader::run_loop()
 {
     pa_threaded_mainloop_start(mainloop);
-    /* Wait for mainloop to start */
-    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
 }
 
 PulseReader::~PulseReader()
