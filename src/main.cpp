@@ -616,8 +616,6 @@ int main(int argc, char *argv[])
 
     signal(SIGINT, handle_sigint);
 
-    std::cout << "start at " << timespec_to_usec(get_ct()) / 1.0e6<< std::endl;
-
     while(!exit_main_loop)
     {
         // wait for a free buffer

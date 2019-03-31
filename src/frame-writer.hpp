@@ -98,12 +98,4 @@ extern std::mutex frame_writer_mutex, frame_writer_pending_mutex;
 extern std::unique_ptr<FrameWriter> frame_writer;
 extern std::atomic<bool> exit_main_loop;
 
-static timespec get_ct()
-{
-    timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-
-    return ts;
-}
-
 #endif // FRAME_WRITER
