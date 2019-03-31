@@ -5,11 +5,6 @@
 #include <cstring>
 #include <thread>
 
-static uint64_t timespec_to_usec (const timespec& ts)
-{
-    return ts.tv_sec * 1000000ll + 1ll * ts.tv_nsec / 1000ll;
-}
-
 PulseReader::PulseReader(PulseReaderParams _p)
     : params(_p)
 {

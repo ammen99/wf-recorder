@@ -436,8 +436,6 @@ void FrameWriter::add_audio(const void* buffer)
 
 void FrameWriter::finish_frame(AVPacket& pkt, bool is_video)
 {
-    static int iframe = 0;
-
     static std::mutex fmt_mutex, pending_mutex;
 
     if (is_video)
@@ -465,9 +463,6 @@ void FrameWriter::finish_frame(AVPacket& pkt, bool is_video)
 
     if (params.enable_audio)
         fmt_mutex.unlock();
-
-   // printf("Wrote frame %d, video?: %d\n", iframe++, is_video);
-   // fflush(stdout);
 }
 
 FrameWriter::~FrameWriter()
