@@ -453,7 +453,7 @@ struct capture_region
         return width > 0 && height > 0;
     }
 
-    bool contained_in(const capture_region& output)
+    bool contained_in(const capture_region& output) const
     {
         return
             output.x <= x &&
@@ -462,6 +462,22 @@ struct capture_region
             output.y + output.height >= y + height;
     }
 };
+
+static wf_recorder_output* detect_output_from_region(const capture_region& region)
+{
+    for (auto& wo : available_outputs)
+    {
+        const capture_region output_region{wo.x, wo.y, wo.width, wo.height};
+        if (region.contained_in(output_region))
+        {
+            std::cout << "Detected output based on geometry: " << wo.name << std::endl;
+            return &wo;
+        }
+    }
+
+    std::cerr << "Failed to detect output based on geometry (is your geometry overlapping outputs?)" << std::endl;
+    return nullptr;
+}
 
 int main(int argc, char *argv[])
 {
@@ -576,7 +592,14 @@ int main(int argc, char *argv[])
                     cmdline_output.c_str());
             }
 
-            chosen_output = choose_interactive();
+            if (selected_region.is_selected())
+            {
+                chosen_output = detect_output_from_region(selected_region);
+            }
+            else
+            {
+                chosen_output = choose_interactive();
+            }
         }
     }
 
