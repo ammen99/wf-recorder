@@ -489,7 +489,9 @@ int main(int argc, char *argv[])
 
     PulseReaderParams pulseParams;
 
-    std::string cmdline_output = "invalid";
+    constexpr const char* default_cmdline_output = "interactive";
+    std::string cmdline_output = default_cmdline_output;
+
     capture_region selected_region{};
 
     struct option opts[] = {
@@ -576,6 +578,13 @@ int main(int argc, char *argv[])
     if (available_outputs.size() == 1)
     {
         chosen_output = &available_outputs[0];
+        if (chosen_output->name != cmdline_output &&
+            cmdline_output != default_cmdline_output)
+        {
+            std::cerr << "Couldn't find requested output "
+                << cmdline_output << std::endl;
+            return EXIT_FAILURE;
+        }
     } else
     {
         for (auto& wo : available_outputs)
@@ -586,10 +595,11 @@ int main(int argc, char *argv[])
 
         if (chosen_output == NULL)
         {
-            if (cmdline_output != "invalid")
+            if (cmdline_output != default_cmdline_output)
             {
-                fprintf(stderr, "Couldn't find requested output %s\n",
-                    cmdline_output.c_str());
+                std::cerr << "Couldn't find requested output "
+                    << cmdline_output.c_str() << std::endl;
+                return EXIT_FAILURE;
             }
 
             if (selected_region.is_selected())
