@@ -8,12 +8,10 @@
 #include <vector>
 #include <queue>
 #include <cstring>
+#include "averr.h"
 
 #define FPS 60
-#define PIX_FMT AV_PIX_FMT_YUV420P
 #define AUDIO_RATE 44100
-
-using namespace std;
 
 class FFmpegInitialize
 {
@@ -35,7 +33,7 @@ void FrameWriter::init_hw_accel()
 
     if (ret != 0)
     {
-        std::cerr << "Failed to create hw encoding device " << params.hw_device << std::endl;
+        std::cerr << "Failed to create hw encoding device " << params.hw_device << ": " << averr(ret) << std::endl;
         std::exit(-1);
     }
 
@@ -62,9 +60,9 @@ void FrameWriter::init_hw_accel()
     ctx->format = cst->valid_hw_formats[0];
     ctx->sw_format = AV_PIX_FMT_NV12;
 
-    if (av_hwframe_ctx_init(hw_frame_context))
+    if ((ret = av_hwframe_ctx_init(hw_frame_context)))
     {
-        std::cerr << "Failed to initialize hwframe context" << std::endl;
+        std::cerr << "Failed to initialize hwframe context: " << averr(ret) << std::endl;
         av_buffer_unref(&hw_device_context);
         av_buffer_unref(&hw_frame_context);
         std::exit(-1);
@@ -79,7 +77,8 @@ void FrameWriter::load_codec_options(AVDictionary **dict)
         {"crf", "20"},
     };
 
-    if (!params.codec.compare("libx264") || !params.codec.compare("libx265"))
+    if (params.codec.find("libx264") != std::string::npos ||
+        params.codec.find("libx265") != std::string::npos)
     {
         for (const auto& param : default_x264_options)
         {
@@ -93,6 +92,39 @@ void FrameWriter::load_codec_options(AVDictionary **dict)
         std::cout << "Setting codec option: " << opt.first << "=" << opt.second << std::endl;
         av_dict_set(dict, opt.first.c_str(), opt.second.c_str(), 0);
     }
+}
+
+bool is_fmt_supported(AVPixelFormat fmt, const AVPixelFormat *supported)
+{
+    for (int i = 0; supported[i] != AV_PIX_FMT_NONE; i++)
+    {
+        if (supported[i] == fmt)
+            return true;
+    }
+
+    return false;
+}
+
+AVPixelFormat FrameWriter::get_input_format()
+{
+    return params.format == INPUT_FORMAT_BGR0 ?
+        AV_PIX_FMT_BGR0 : AV_PIX_FMT_RGB0;
+}
+
+AVPixelFormat FrameWriter::choose_sw_format(AVCodec *codec)
+{
+    /* First case: if the codec supports getting the appropriate RGB format
+     * directly, we want to use it since we don't have to convert data */
+    auto in_fmt = get_input_format();
+    if (is_fmt_supported(in_fmt, codec->pix_fmts))
+        return in_fmt;
+
+    /* Otherwise, try to use the already tested YUV420p */
+    if (is_fmt_supported(AV_PIX_FMT_YUV420P, codec->pix_fmts))
+        return AV_PIX_FMT_YUV420P;
+
+    /* Lastly, use the first supported format */
+    return codec->pix_fmts[0];
 }
 
 void FrameWriter::init_video_stream()
@@ -126,7 +158,9 @@ void FrameWriter::init_video_stream()
         videoCodecCtx->hw_frames_ctx = av_buffer_ref(hw_frame_context);
     } else
     {
-        videoCodecCtx->pix_fmt = PIX_FMT;
+        videoCodecCtx->pix_fmt = choose_sw_format(codec);
+        std::cout << "Choosing pixel format " <<
+            av_get_pix_fmt_name(videoCodecCtx->pix_fmt) << std::endl;
         init_sws();
     }
 
@@ -136,7 +170,7 @@ void FrameWriter::init_video_stream()
     int err;
     if ((err = avcodec_open2(videoCodecCtx, codec, &options)) < 0)
     {
-        std::cerr << "avcodec_open2 failed " << err << std::endl;
+        std::cerr << "avcodec_open2 failed: " << averr(err) << std::endl;
         std::exit(-1);
     }
     av_dict_free(&options);
@@ -252,17 +286,9 @@ void FrameWriter::init_codecs()
 
 void FrameWriter::init_sws()
 {
-    switch (params.format)
-    {
-        case INPUT_FORMAT_BGR0:
-            swsCtx = sws_getContext(params.width, params.height, AV_PIX_FMT_BGR0,
-                params.width, params.height, PIX_FMT, SWS_FAST_BILINEAR, NULL, NULL, NULL);
-            break;
-        case INPUT_FORMAT_RGB0:
-            swsCtx = sws_getContext(params.width, params.height, AV_PIX_FMT_RGB0,
-                params.width, params.height, PIX_FMT, SWS_FAST_BILINEAR, NULL, NULL, NULL);
-            break;
-    }
+    swsCtx = sws_getContext(params.width, params.height, get_input_format(),
+        params.width, params.height, videoCodecCtx->pix_fmt,
+        SWS_FAST_BILINEAR, NULL, NULL, NULL);
 
     if (!swsCtx)
     {
@@ -294,13 +320,11 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
 
     init_codecs();
 
-    // Allocating memory for each conversion output YUV frame.
     encoder_frame = av_frame_alloc();
     if (hw_device_context) {
-        encoder_frame->format = params.format == INPUT_FORMAT_RGB0 ?
-            AV_PIX_FMT_RGB0 : AV_PIX_FMT_BGR0;
+        encoder_frame->format = get_input_format();
     } else {
-        encoder_frame->format = PIX_FMT;
+        encoder_frame->format = videoCodecCtx->pix_fmt;
     }
     encoder_frame->width = params.width;
     encoder_frame->height = params.height;
@@ -339,6 +363,8 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
     }
 
     AVFrame **output_frame;
+    AVBufferRef *saved_buf0 = NULL;
+
     if (hw_device_context)
     {
         encoder_frame->data[0] = (uint8_t*)formatted_pixels;
@@ -351,11 +377,21 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
         }
 
         output_frame = &hw_frame;
+    } else if(get_input_format() == videoCodecCtx->pix_fmt)
+    {
+        output_frame = &encoder_frame;
+        encoder_frame->data[0] = (uint8_t*)formatted_pixels;
+        encoder_frame->linesize[0] = stride[0];
+        /* Force ffmpeg to create a copy of the frame, if the codec needs it */
+        saved_buf0 = encoder_frame->buf[0];
+        encoder_frame->buf[0] = NULL;
     } else
     {
         sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
             encoder_frame->data, encoder_frame->linesize);
-
+        /* Force ffmpeg to create a copy of the frame, if the codec needs it */
+        saved_buf0 = encoder_frame->buf[0];
+        encoder_frame->buf[0] = NULL;
         output_frame = &encoder_frame;
     }
 
@@ -368,6 +404,11 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 
     int got_output;
     avcodec_encode_video2(videoCodecCtx, &pkt, *output_frame, &got_output);
+
+    /* Restore frame buffer, so that it can be properly freed in the end */
+    if (saved_buf0)
+        encoder_frame->buf[0] = saved_buf0;
+
     if (got_output)
       finish_frame(pkt, true);
 }

@@ -19,6 +19,7 @@ extern "C"
     #include <libavcodec/avcodec.h>
     #include <libavutil/mathematics.h>
     #include <libavformat/avformat.h>
+    #include <libavutil/pixdesc.h>
     #include <libavutil/hwcontext.h>
     #include <libavutil/opt.h>
 }
@@ -61,7 +62,8 @@ class FrameWriter
     AVBufferRef *hw_device_context = NULL;
     AVBufferRef *hw_frame_context = NULL;
 
-    InputFormat *input_format;
+    AVPixelFormat choose_sw_format(AVCodec *codec);
+    AVPixelFormat get_input_format();
     void init_hw_accel();
     void init_sws();
     void init_codecs();
