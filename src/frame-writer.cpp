@@ -244,7 +244,7 @@ void FrameWriter::init_audio_stream()
     swrCtx = swr_alloc();
     if (!swrCtx)
     {
-        std::cerr << "Faild to allocate swr context" << std::endl;
+        std::cerr << "Failed to allocate swr context" << std::endl;
         std::exit(-1);
     }
 
