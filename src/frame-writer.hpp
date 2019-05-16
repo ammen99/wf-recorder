@@ -13,7 +13,6 @@
 
 extern "C"
 {
-    #include <x264.h>
     #include <libswscale/swscale.h>
     #include <libswresample/swresample.h>
     #include <libavcodec/avcodec.h>
