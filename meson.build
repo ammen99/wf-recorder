@@ -13,6 +13,16 @@ project(
 	],
 )
 
+conf_data = configuration_data()
+
+conf_data.set('default_codec', get_option('default_codec'))
+
+configure_file(input: 'config.h.in',
+               output: 'config.h',
+               configuration: conf_data)
+
+include_directories(['.'])
+
 add_project_arguments(['-Wno-deprecated-declarations'], language: 'cpp')
 
 wayland_client = dependency('wayland-client')
