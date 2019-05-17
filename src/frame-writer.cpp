@@ -135,7 +135,7 @@ void FrameWriter::init_video_stream()
     AVCodec* codec = avcodec_find_encoder_by_name(params.codec.c_str());
     if (!codec)
     {
-        std::cerr << "Failed to find the given codec" << std::endl;
+        std::cerr << "Failed to find the given codec: " << params.codec << std::endl;
         std::exit(-1);
     }
 

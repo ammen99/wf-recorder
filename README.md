@@ -19,9 +19,11 @@ git clone https://github.com/ammen99/wf-recorder && cd wf-recorder
 meson build --prefix=/usr --buildtype=release
 ninja -C build
 ```
-Now you can just run `./build/wf-recorder` or install it with `sudo ninja -C build install`.
+Optionally configure with `-Ddefault_codec='codec'`. The default is libx264. Now you can just run `./build/wf-recorder` or install it with `sudo ninja -C build install`.
 
 # usage
+In it's simplest form, run `wf-recorder` to start recording and use Ctrl+C to stop. This will create a file called recording.mp4 in the current working directory using the default codec.
+
 Use `-f <filename>` to specify the output file. In case of multiple outputs, you'll first be prompted to select the output you want to record. If you know the output name beforehand, you can use the `-o <output name>` option. 
 
 To select a specific part of the screen you can either use the `-g <geometry>`, or use [slurp](https://github.com/emersion/slurp) for interactive selection of the area

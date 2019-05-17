@@ -22,6 +22,8 @@
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 #include "xdg-output-unstable-v1-client-protocol.h"
 
+#include "config.h"
+
 std::mutex frame_writer_mutex, frame_writer_pending_mutex;
 std::unique_ptr<FrameWriter> frame_writer;
 
@@ -483,7 +485,7 @@ int main(int argc, char *argv[])
 {
     FrameWriterParams params;
     params.file = "recording.mp4";
-    params.codec = "libx264";
+    params.codec = DEFAULT_CODEC;
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
 

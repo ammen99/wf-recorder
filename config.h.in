@@ -1,0 +1,3 @@
+#pragma once
+
+#define DEFAULT_CODEC "@default_codec@"

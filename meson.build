@@ -13,6 +13,16 @@ project(
 	],
 )
 
+conf_data = configuration_data()
+
+conf_data.set('default_codec', get_option('default_codec'))
+
+configure_file(input: 'config.h.in',
+               output: 'config.h',
+               configuration: conf_data)
+
+include_directories(['.'])
+
 add_project_arguments(['-Wno-deprecated-declarations'], language: 'cpp')
 
 wayland_client = dependency('wayland-client')
@@ -23,11 +33,10 @@ libavcodec = dependency('libavcodec')
 libavformat = dependency('libavformat')
 sws = dependency('libswscale')
 swr = dependency('libswresample')
-x264 = dependency('x264')
 threads = dependency('threads')
 pulse = dependency('libpulse-simple')
 
 subdir('proto')
 executable('wf-recorder', ['src/frame-writer.cpp', 'src/main.cpp', 'src/pulse.cpp', 'src/averr.c'],
-        dependencies: [wayland_client, wayland_protos, libavutil, libavcodec, libavformat, wf_protos, x264, sws, threads, pulse, swr],
+        dependencies: [wayland_client, wayland_protos, libavutil, libavcodec, libavformat, wf_protos, sws, threads, pulse, swr],
         install: true)
