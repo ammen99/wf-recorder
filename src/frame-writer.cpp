@@ -10,6 +10,14 @@
 #include <cstring>
 #include "averr.h"
 
+#include "config.h"
+
+#ifdef HAVE_OPENCL
+#include "opencl.hpp"
+
+std::unique_ptr<OpenCL> opencl;
+#endif
+
 #define FPS 60
 #define AUDIO_RATE 44100
 
@@ -156,6 +164,11 @@ void FrameWriter::init_video_stream()
         videoCodecCtx->pix_fmt = AV_PIX_FMT_VAAPI;
         init_hw_accel();
         videoCodecCtx->hw_frames_ctx = av_buffer_ref(hw_frame_context);
+
+#ifdef HAVE_OPENCL
+        if (params.to_yuv)
+            opencl = std::unique_ptr<OpenCL> (new OpenCL(params.width, params.height));
+#endif
         if (params.to_yuv)
             init_sws(AV_PIX_FMT_NV12);
     } else
@@ -371,14 +384,23 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 
     if (hw_device_context)
     {
-        encoder_frame->data[0] = (uint8_t*)formatted_pixels;
-        encoder_frame->linesize[0] = stride[0];
+#ifdef HAVE_OPENCL
+        uint32_t *local_yuv_buffer = NULL;
+        if (params.to_yuv)
+        {
+            int ret = opencl->do_frame(pixels, &local_yuv_buffer, encoder_frame, get_input_format(), y_invert);
 
+            if (ret)
+                sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
+                    encoder_frame->data, encoder_frame->linesize);
+        }
+#else
         if (params.to_yuv)
         {
             sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
                 encoder_frame->data, encoder_frame->linesize);
         }
+#endif
 
         if (av_hwframe_transfer_data(hw_frame, encoder_frame, 0))
         {
@@ -387,6 +409,10 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
         }
 
         output_frame = &hw_frame;
+
+#ifdef HAVE_OPENCL
+	free(local_yuv_buffer);
+#endif
     } else if(get_input_format() == videoCodecCtx->pix_fmt)
     {
         output_frame = &encoder_frame;
