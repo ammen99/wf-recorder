@@ -1,3 +1,5 @@
+/* Copyright 2019 Scott Moreau */
+
 #pragma once
 
 #define CL_TARGET_OPENCL_VERSION 220

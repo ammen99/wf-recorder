@@ -1,6 +1,13 @@
+/*
+ * Adapted from an example found here https://stackoverflow.com/questions/4979504/fast-rgb-yuv-conversion-in-opencl
+ * Copyright 2019 Scott Moreau
+ *
+ */
+
 #include <iostream>
 
 #include "opencl.hpp"
+
 
 static char const *cl_source_str = "									\n\
 __kernel void rgbx_2_yuv (__global  unsigned int *sourceImage,						\n\
