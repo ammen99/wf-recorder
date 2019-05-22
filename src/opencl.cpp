@@ -89,7 +89,7 @@ OpenCL::OpenCL(int _width, int _height)
     cl_uint ret_num_devices;
     cl_uint ret_num_platforms;
     cl_int ret = clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
-    ret = clGetDeviceIDs( platform_id, CL_DEVICE_TYPE_DEFAULT, 1,
+    ret = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_DEFAULT, 1,
         &device_id, &ret_num_devices);
     if (ret)
     {
@@ -98,7 +98,7 @@ OpenCL::OpenCL(int _width, int _height)
     }
 
     // Create an OpenCL context
-    context = clCreateContext( NULL, 1, &device_id, NULL, NULL, &ret);
+    context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
     if (ret)
     {
         std::cerr << "clCreateContext failed!" << std::endl;
@@ -151,7 +151,7 @@ OpenCL::OpenCL(int _width, int _height)
 
     nv12Stride = width >> 2; // since we pack 4 RGBs into "one" YYYY
 
-    nv12_buffer = clCreateBuffer ( context, CL_MEM_WRITE_ONLY, nv12Size * sizeof(uint32_t), 0, &ret );
+    nv12_buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, nv12Size * sizeof(uint32_t), 0, &ret);
     if (ret)
     {
         std::cerr << "clCreateBuffer (nv12) failure!" << std::endl;
@@ -175,7 +175,7 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
     if (ret)
         return ret;
 
-    rgb_buffer = clCreateBuffer ( context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, argbSize, (void *) pixels, &ret );
+    rgb_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, argbSize, (void *) pixels, &ret);
     if (ret)
     {
         std::cerr << "clCreateBuffer (rgb) failed!" << std::endl;
@@ -194,7 +194,7 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
     }
 
     const size_t global_ws[] = { nv12Stride + (nv12Stride >> 1), size_t(height) };
-    ret |= clEnqueueNDRangeKernel ( command_queue, kernel, 2, NULL, global_ws, NULL, 0, NULL, NULL );
+    ret |= clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL, global_ws, NULL, 0, NULL, NULL);
     if (ret)
     {
         std::cerr << "clEnqueueNDRangeKernel failed!" << std::endl;
