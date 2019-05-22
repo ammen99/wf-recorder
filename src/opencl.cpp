@@ -65,9 +65,9 @@ __kernel void rgbx_2_yuv (__global  unsigned int *sourceImage,						\n\
         }												\n\
     }													\n\
 													\n\
-    destImage [(posY * yuvStride) + posX] = Y;								\n\
+    destImage[(posY * yuvStride) + posX] = Y;								\n\
     if (!(posY % 2))											\n\
-        destImage [(yuvStride * srcHeight) + ((posY >> 1) * yuvStride) + posX] = UV;			\n\
+        destImage[(yuvStride * srcHeight) + ((posY >> 1) * yuvStride) + posX] = UV;			\n\
     return;												\n\
 }													\n\
 ";

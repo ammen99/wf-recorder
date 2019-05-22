@@ -121,9 +121,11 @@ AVPixelFormat FrameWriter::get_input_format()
 
 AVPixelFormat FrameWriter::choose_sw_format(AVCodec *codec)
 {
+#ifdef HAVE_OPENCL
     /* First case: the user preference is to convert the rgb data to yuv */
     if (params.to_yuv && is_fmt_supported(AV_PIX_FMT_NV12, codec->pix_fmts))
         return AV_PIX_FMT_NV12;
+#endif
     /* Second case: if the codec supports getting the appropriate RGB format
      * directly, we want to use it since we don't have to convert data */
     auto in_fmt = get_input_format();
@@ -340,10 +342,8 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
     init_codecs();
 
     encoder_frame = av_frame_alloc();
-    if (hw_device_context && params.to_yuv) {
-        encoder_frame->format = AV_PIX_FMT_NV12;
-    } else if (hw_device_context) {
-        encoder_frame->format = get_input_format();
+    if (hw_device_context) {
+        encoder_frame->format = params.to_yuv ? AV_PIX_FMT_NV12 : get_input_format();
     } else {
         encoder_frame->format = videoCodecCtx->pix_fmt;
     }
@@ -392,8 +392,11 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
         if (params.to_yuv)
         {
             if (opencl->do_frame(pixels, encoder_frame, get_input_format(), y_invert))
+            {
+                encoder_frame->format = AV_PIX_FMT_YUV420P;
                 sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
                     encoder_frame->data, encoder_frame->linesize);
+            }
         }
 #else
         if (params.to_yuv)
@@ -425,6 +428,7 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
         {
             if (opencl->do_frame(pixels, encoder_frame, get_input_format(), y_invert))
             {
+                encoder_frame->format = AV_PIX_FMT_YUV420P;
                 sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
                     encoder_frame->data, encoder_frame->linesize);
             }
