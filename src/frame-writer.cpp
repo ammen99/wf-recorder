@@ -429,10 +429,12 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
                     encoder_frame->data, encoder_frame->linesize);
             }
         }
-#else
-        sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
-            encoder_frame->data, encoder_frame->linesize);
+        else
 #endif
+        {
+            sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
+                encoder_frame->data, encoder_frame->linesize);
+        }
         /* Force ffmpeg to create a copy of the frame, if the codec needs it */
         saved_buf0 = encoder_frame->buf[0];
         encoder_frame->buf[0] = NULL;
