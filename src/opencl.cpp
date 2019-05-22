@@ -3,8 +3,8 @@
 #include "opencl.hpp"
 
 static char const *cl_source_str = "									\n\
-__kernel void rgbx_2_yuv (__global  unsigned int * sourceImage,						\n\
-                          __global unsigned int * destImage,						\n\
+__kernel void rgbx_2_yuv (__global  unsigned int *sourceImage,						\n\
+                          __global unsigned int *destImage,						\n\
                           unsigned int srcWidth,							\n\
                           unsigned int srcHeight,							\n\
                           short rgb0)									\n\
@@ -23,10 +23,10 @@ __kernel void rgbx_2_yuv (__global  unsigned int * sourceImage,						\n\
 													\n\
     posSrc = (posY * srcWidth) + (posX * 4);								\n\
 													\n\
-    pixels[0] = sourceImage [posSrc + 0];								\n\
-    pixels[1] = sourceImage [posSrc + 1];								\n\
-    pixels[2] = sourceImage [posSrc + 2];								\n\
-    pixels[3] = sourceImage [posSrc + 3];								\n\
+    pixels[0] = sourceImage[posSrc + 0];								\n\
+    pixels[1] = sourceImage[posSrc + 1];								\n\
+    pixels[2] = sourceImage[posSrc + 2];								\n\
+    pixels[3] = sourceImage[posSrc + 3];								\n\
 													\n\
     for (i = 0; i < 4; i++)										\n\
     {													\n\
@@ -69,6 +69,12 @@ OpenCL::OpenCL(int _width, int _height)
 {
     width = _width;
     height = _height;
+
+    if (width % 4)
+        std::cerr << "OpenCL WARN: width (" << width << ") not evenly divisible by 4. This might not work." << std::endl;
+
+    if (height % 2)
+        std::cerr << "OpenCL WARN: height (" << height << ") not evenly divisible by 2. This might not work." << std::endl;
 
     // Get platform and device information
     cl_platform_id platform_id = NULL;
