@@ -38,3 +38,17 @@ To use gpu encoding, use a VAAPI codec (for ex. `h264_vaapi`) and specify a GPU 
 ```
 wf-recorder -f test-vaapi.mkv -c h264_vaapi -d /dev/dri/renderD128
 ```
+
+## with [Sway](https://swaywm.org/)
+
+In your Sway config file, add those key bindings to start and stop wf-recorder :
+
+```
+bindsym Ctrl+Print exec wf-recorder -f ~/recording_$(date +"%Y-%m-%d_%H:%M:%S.mp4")
+bindsym Ctrl+Shift+Print exec wf-recorder -g "$$(slurp)" -f ~/recording_$(date +"%Y-%m-%d_%H:%M:%S.mp4")
+bindsym Ctrl+Shift+BackSpace exec killall -s SIGINT wf-recorder
+```
+
+* `Ctrl+Print` will start recording the whole screen
+* `Ctrl+Shift+Print` will let you select an area to record and start recording
+* `Ctrl+Shift+BackSpace` will stop all recordings
