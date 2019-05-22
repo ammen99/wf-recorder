@@ -555,7 +555,7 @@ int main(int argc, char *argv[])
     params.codec = DEFAULT_CODEC;
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
-    params.to_yuv = false;
+    params.to_nv12 = false;
 
     PulseReaderParams pulseParams;
 
@@ -573,8 +573,8 @@ int main(int argc, char *argv[])
         { "device",          required_argument, NULL, 'd' },
         { "log",             no_argument,       NULL, 'l' },
         { "audio",           optional_argument, NULL, 'a' },
-        { "to-yuv",          no_argument,       NULL, 't' },
         { "help",            no_argument,       NULL, 'h' },
+        { "to-nv12",         no_argument,       NULL, 't' },
         { 0,                 0,                 NULL,  0  }
     };
 
@@ -615,7 +615,7 @@ int main(int argc, char *argv[])
                 break;
 
             case 't':
-                params.to_yuv = true;
+                params.to_nv12 = true;
                 break;
 
             case 'h':

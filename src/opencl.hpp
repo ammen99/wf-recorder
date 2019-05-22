@@ -9,14 +9,14 @@
 
 class OpenCL
 {
-    cl_mem yuv_buffer, rgb_buffer;
-    unsigned int argbSize, yuvSize, yuvStride, width, height;
+    cl_mem nv12_buffer, rgb_buffer;
+    unsigned int argbSize, nv12Size, nv12Stride, width, height;
     cl_kernel kernel;
     cl_context context;
     cl_command_queue command_queue;
     cl_program program;
     cl_int ret = 0;
-    uint32_t *local_yuv_buffer;
+    uint32_t *local_nv12_buffer;
 
     public:
 

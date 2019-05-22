@@ -10,11 +10,11 @@
 
 
 static char const *cl_source_str = "									\n\
-__kernel void rgbx_2_yuv (__global  unsigned int *sourceImage,						\n\
-                          __global unsigned int *destImage,						\n\
-                          unsigned int srcWidth,							\n\
-                          unsigned int srcHeight,							\n\
-                          short rgb0)									\n\
+__kernel void rgbx_2_nv12 (__global  unsigned int *sourceImage,						\n\
+                           __global unsigned int *destImage,						\n\
+                           unsigned int srcWidth,							\n\
+                           unsigned int srcHeight,							\n\
+                           short rgb0)									\n\
 {													\n\
     int i,j;												\n\
     unsigned int pixels[4];										\n\
@@ -23,9 +23,9 @@ __kernel void rgbx_2_yuv (__global  unsigned int *sourceImage,						\n\
 													\n\
     unsigned int posX = get_global_id(0);								\n\
     unsigned int posY = get_global_id(1);								\n\
-    unsigned int yuvStride = srcWidth >> 2;								\n\
+    unsigned int nv12Stride = srcWidth >> 2;								\n\
 													\n\
-    if (posX >= yuvStride || posY >= srcHeight)								\n\
+    if (posX >= nv12Stride || posY >= srcHeight)							\n\
         return;												\n\
 													\n\
     posSrc = (posY * srcWidth) + (posX * 4);								\n\
@@ -54,7 +54,7 @@ __kernel void rgbx_2_yuv (__global  unsigned int *sourceImage,						\n\
         Y |= (ValueY << (i * 8));									\n\
 													\n\
         // UV plane - pack 1 * 8-bit U and 1 * 8-bit V for each sampled pixel				\n\
-        // In this case the target is nv12/yuv420 which means we only sample				\n\
+        // In this case the target is nv12 which means we only sample					\n\
         // every other row and every other pixel in each row						\n\
         if (!(posY % 2) && !(i % 2))									\n\
         {												\n\
@@ -65,9 +65,9 @@ __kernel void rgbx_2_yuv (__global  unsigned int *sourceImage,						\n\
         }												\n\
     }													\n\
 													\n\
-    destImage[(posY * yuvStride) + posX] = Y;								\n\
+    destImage[(posY * nv12Stride) + posX] = Y;								\n\
     if (!(posY % 2))											\n\
-        destImage[(yuvStride * srcHeight) + ((posY >> 1) * yuvStride) + posX] = UV;			\n\
+        destImage[(nv12Stride * srcHeight) + ((posY >> 1) * nv12Stride) + posX] = UV;			\n\
     return;												\n\
 }													\n\
 ";
@@ -137,7 +137,7 @@ OpenCL::OpenCL(int _width, int _height)
     }
 
     // Create the OpenCL kernel
-    kernel = clCreateKernel(program, "rgbx_2_yuv", &ret);
+    kernel = clCreateKernel(program, "rgbx_2_nv12", &ret);
     if (ret)
     {
         std::cerr << "clCreateKernel failed!" << std::endl;
@@ -147,23 +147,23 @@ OpenCL::OpenCL(int _width, int _height)
     unsigned int frameSize = width * height;
     argbSize = frameSize * 4; // ARGB pixels
 
-    yuvSize = frameSize + (frameSize >> 1); // Y+UV planes
+    nv12Size = frameSize + (frameSize >> 1); // Y+UV planes
 
-    yuvStride = width >> 2; // since we pack 4 RGBs into "one" YYYY
+    nv12Stride = width >> 2; // since we pack 4 RGBs into "one" YYYY
 
-    yuv_buffer = clCreateBuffer ( context, CL_MEM_WRITE_ONLY, yuvSize * sizeof(uint32_t), 0, &ret );
+    nv12_buffer = clCreateBuffer ( context, CL_MEM_WRITE_ONLY, nv12Size * sizeof(uint32_t), 0, &ret );
     if (ret)
     {
-        std::cerr << "clCreateBuffer (yuv) failure!" << std::endl;
+        std::cerr << "clCreateBuffer (nv12) failure!" << std::endl;
         return;
     }
 
-    local_yuv_buffer = (uint32_t *) malloc(yuvSize * sizeof(uint32_t));
+    local_nv12_buffer = (uint32_t *) malloc(nv12Size * sizeof(uint32_t));
 
-    if (!local_yuv_buffer)
+    if (!local_nv12_buffer)
         std::cerr << "malloc failure!" << std::endl;
 
-    std::cout << "Using OpenCL for accelerated RGB to YUV conversion" << std::endl;
+    std::cout << "Using OpenCL for accelerated RGB to NV12 conversion" << std::endl;
 }
 
 int
@@ -183,7 +183,7 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
     }
 
     ret |= clSetKernelArg ( kernel, 0, sizeof(cl_mem), &rgb_buffer );
-    ret |= clSetKernelArg ( kernel, 1, sizeof(cl_mem), &yuv_buffer );
+    ret |= clSetKernelArg ( kernel, 1, sizeof(cl_mem), &nv12_buffer );
     ret |= clSetKernelArg ( kernel, 2, sizeof(unsigned int), &width);
     ret |= clSetKernelArg ( kernel, 3, sizeof(unsigned int), &height);
     ret |= clSetKernelArg ( kernel, 4, sizeof(short), &rgb0);
@@ -193,7 +193,7 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
         return -1;
     }
 
-    const size_t global_ws[] = { yuvStride + (yuvStride >> 1), size_t(height) };
+    const size_t global_ws[] = { nv12Stride + (nv12Stride >> 1), size_t(height) };
     ret |= clEnqueueNDRangeKernel ( command_queue, kernel, 2, NULL, global_ws, NULL, 0, NULL, NULL );
     if (ret)
     {
@@ -201,16 +201,16 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
         return -1;
     }
 
-    // Read yuv buffer from gpu
-    ret |= clEnqueueReadBuffer(command_queue, yuv_buffer, CL_TRUE, 0,
-        yuvSize * sizeof(uint32_t), local_yuv_buffer, 0, NULL, NULL);
+    // Read nv12 buffer from gpu
+    ret |= clEnqueueReadBuffer(command_queue, nv12_buffer, CL_TRUE, 0,
+        nv12Size * sizeof(uint32_t), local_nv12_buffer, 0, NULL, NULL);
     if (ret)
     {
         std::cerr << "clEnqueueReadBuffer failed!" << std::endl;
         return -1;
     }
 
-    formatted_pixels = (uint8_t *) local_yuv_buffer;
+    formatted_pixels = (uint8_t *) local_nv12_buffer;
     if (y_invert)
         formatted_pixels += width * (height - 1);
 
@@ -235,8 +235,8 @@ OpenCL::~OpenCL()
     clFinish(command_queue);
     clReleaseKernel(kernel);
     clReleaseProgram(program);
-    clReleaseMemObject(yuv_buffer);
+    clReleaseMemObject(nv12_buffer);
     clReleaseCommandQueue(command_queue);
     clReleaseContext(context);
-    free(local_yuv_buffer);
+    free(local_nv12_buffer);
 }

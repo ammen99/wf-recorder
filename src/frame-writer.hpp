@@ -46,7 +46,7 @@ struct FrameWriterParams
     bool enable_audio;
     bool enable_ffmpeg_debug_output;
 
-    bool to_yuv;
+    bool to_nv12;
 };
 
 class FrameWriter
