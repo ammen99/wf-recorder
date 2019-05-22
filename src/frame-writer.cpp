@@ -156,12 +156,14 @@ void FrameWriter::init_video_stream()
         videoCodecCtx->pix_fmt = AV_PIX_FMT_VAAPI;
         init_hw_accel();
         videoCodecCtx->hw_frames_ctx = av_buffer_ref(hw_frame_context);
+        if (params.to_yuv)
+            init_sws(AV_PIX_FMT_NV12);
     } else
     {
         videoCodecCtx->pix_fmt = choose_sw_format(codec);
         std::cout << "Choosing pixel format " <<
             av_get_pix_fmt_name(videoCodecCtx->pix_fmt) << std::endl;
-        init_sws();
+        init_sws(videoCodecCtx->pix_fmt);
     }
 
     if (fmtCtx->oformat->flags & AVFMT_GLOBALHEADER)
@@ -284,10 +286,10 @@ void FrameWriter::init_codecs()
     av_dict_free(&dummy);
 }
 
-void FrameWriter::init_sws()
+void FrameWriter::init_sws(AVPixelFormat format)
 {
     swsCtx = sws_getContext(params.width, params.height, get_input_format(),
-        params.width, params.height, videoCodecCtx->pix_fmt,
+        params.width, params.height, format,
         SWS_FAST_BILINEAR, NULL, NULL, NULL);
 
     if (!swsCtx)
@@ -321,7 +323,9 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
     init_codecs();
 
     encoder_frame = av_frame_alloc();
-    if (hw_device_context) {
+    if (hw_device_context && params.to_yuv) {
+        encoder_frame->format = AV_PIX_FMT_NV12;
+    } else if (hw_device_context) {
         encoder_frame->format = get_input_format();
     } else {
         encoder_frame->format = videoCodecCtx->pix_fmt;
@@ -369,6 +373,12 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
     {
         encoder_frame->data[0] = (uint8_t*)formatted_pixels;
         encoder_frame->linesize[0] = stride[0];
+
+        if (params.to_yuv)
+        {
+            sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
+                encoder_frame->data, encoder_frame->linesize);
+        }
 
         if (av_hwframe_transfer_data(hw_frame, encoder_frame, 0))
         {

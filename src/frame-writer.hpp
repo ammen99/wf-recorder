@@ -45,6 +45,8 @@ struct FrameWriterParams
 
     bool enable_audio;
     bool enable_ffmpeg_debug_output;
+
+    bool to_yuv;
 };
 
 class FrameWriter
@@ -64,7 +66,7 @@ class FrameWriter
     AVPixelFormat choose_sw_format(AVCodec *codec);
     AVPixelFormat get_input_format();
     void init_hw_accel();
-    void init_sws();
+    void init_sws(AVPixelFormat format);
     void init_codecs();
     void init_video_stream();
 
