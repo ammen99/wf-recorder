@@ -13,6 +13,8 @@ class OpenCL
     cl_context context;
     cl_command_queue command_queue;
     cl_program program;
+    cl_int ret = 0;
+    uint32_t *local_yuv_buffer;
 
     public:
 
@@ -20,7 +22,7 @@ class OpenCL
     ~OpenCL();
 
     int
-    do_frame(const uint8_t* pixels, uint32_t **local_yuv_buffer, AVFrame *encoder_frame, AVPixelFormat format, bool y_invert);
+    do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat format, bool y_invert);
 };
 
 extern std::unique_ptr<OpenCL> opencl;

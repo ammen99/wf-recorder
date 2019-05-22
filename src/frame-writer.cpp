@@ -385,10 +385,9 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
     if (hw_device_context)
     {
 #ifdef HAVE_OPENCL
-        uint32_t *local_yuv_buffer = NULL;
         if (params.to_yuv)
         {
-            int ret = opencl->do_frame(pixels, &local_yuv_buffer, encoder_frame, get_input_format(), y_invert);
+            int ret = opencl->do_frame(pixels, encoder_frame, get_input_format(), y_invert);
 
             if (ret)
                 sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
@@ -409,10 +408,6 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
         }
 
         output_frame = &hw_frame;
-
-#ifdef HAVE_OPENCL
-	free(local_yuv_buffer);
-#endif
     } else if(get_input_format() == videoCodecCtx->pix_fmt)
     {
         output_frame = &encoder_frame;
