@@ -121,7 +121,10 @@ AVPixelFormat FrameWriter::get_input_format()
 
 AVPixelFormat FrameWriter::choose_sw_format(AVCodec *codec)
 {
-    /* First case: if the codec supports getting the appropriate RGB format
+    /* First case: the user preference is to convert the rgb data to yuv */
+    if (params.to_yuv && is_fmt_supported(AV_PIX_FMT_NV12, codec->pix_fmts))
+        return AV_PIX_FMT_NV12;
+    /* Second case: if the codec supports getting the appropriate RGB format
      * directly, we want to use it since we don't have to convert data */
     auto in_fmt = get_input_format();
     if (is_fmt_supported(in_fmt, codec->pix_fmts))
@@ -159,16 +162,17 @@ void FrameWriter::init_video_stream()
     videoCodecCtx->height = params.height;
     videoCodecCtx->time_base = (AVRational){ 1, FPS };
 
+#ifdef HAVE_OPENCL
+     if (params.to_yuv)
+         opencl = std::unique_ptr<OpenCL> (new OpenCL(params.width, params.height));
+#endif
+
     if (params.codec.find("vaapi") != std::string::npos)
     {
         videoCodecCtx->pix_fmt = AV_PIX_FMT_VAAPI;
         init_hw_accel();
         videoCodecCtx->hw_frames_ctx = av_buffer_ref(hw_frame_context);
 
-#ifdef HAVE_OPENCL
-        if (params.to_yuv)
-            opencl = std::unique_ptr<OpenCL> (new OpenCL(params.width, params.height));
-#endif
         if (params.to_yuv)
             init_sws(AV_PIX_FMT_NV12);
     } else
@@ -387,9 +391,7 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 #ifdef HAVE_OPENCL
         if (params.to_yuv)
         {
-            int ret = opencl->do_frame(pixels, encoder_frame, get_input_format(), y_invert);
-
-            if (ret)
+            if (opencl->do_frame(pixels, encoder_frame, get_input_format(), y_invert))
                 sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
                     encoder_frame->data, encoder_frame->linesize);
         }
@@ -418,8 +420,19 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
         encoder_frame->buf[0] = NULL;
     } else
     {
+#ifdef HAVE_OPENCL
+        if (params.to_yuv)
+        {
+            if (opencl->do_frame(pixels, encoder_frame, get_input_format(), y_invert))
+            {
+                sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
+                    encoder_frame->data, encoder_frame->linesize);
+            }
+        }
+#else
         sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
             encoder_frame->data, encoder_frame->linesize);
+#endif
         /* Force ffmpeg to create a copy of the frame, if the codec needs it */
         saved_buf0 = encoder_frame->buf[0];
         encoder_frame->buf[0] = NULL;
