@@ -345,14 +345,7 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
     if (hw_device_context) {
         encoder_frame->format = params.convert_rgb ? AV_PIX_FMT_NV12 : get_input_format();
     } else {
-#ifdef HAVE_OPENCL
-        if (params.convert_rgb)
-            encoder_frame->format = opencl->ret ? videoCodecCtx->pix_fmt : AV_PIX_FMT_NV12;
-        else
-            encoder_frame->format = videoCodecCtx->pix_fmt;
-#else
         encoder_frame->format = videoCodecCtx->pix_fmt;
-#endif
     }
     encoder_frame->width = params.width;
     encoder_frame->height = params.height;
