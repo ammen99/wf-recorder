@@ -176,7 +176,13 @@ void FrameWriter::init_video_stream()
         videoCodecCtx->hw_frames_ctx = av_buffer_ref(hw_frame_context);
 
         if (params.convert_rgb)
+        {
+#ifdef HAVE_OPENCL
             init_sws(AV_PIX_FMT_NV12);
+#else
+            init_sws(AV_PIX_FMT_YUV420P);
+#endif
+        }
     } else
     {
         videoCodecCtx->pix_fmt = choose_sw_format(codec);
@@ -343,7 +349,13 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
 
     encoder_frame = av_frame_alloc();
     if (hw_device_context) {
-        encoder_frame->format = params.convert_rgb ? AV_PIX_FMT_NV12 : get_input_format();
+        encoder_frame->format = params.convert_rgb ?
+#ifdef HAVE_OPENCL
+            AV_PIX_FMT_NV12
+#else
+            AV_PIX_FMT_YUV420P
+#endif
+            : get_input_format();
     } else {
         encoder_frame->format = videoCodecCtx->pix_fmt;
     }
