@@ -88,7 +88,12 @@ OpenCL::OpenCL(int _width, int _height)
     cl_device_id device_id = NULL;
     cl_uint ret_num_devices;
     cl_uint ret_num_platforms;
-    cl_int ret = clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
+    ret = clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
+    if (ret)
+    {
+        std::cerr << "clGetPlatformIDs failed!" << std::endl;
+        return;
+    }
     ret = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_DEFAULT, 1,
         &device_id, &ret_num_devices);
     if (ret)
