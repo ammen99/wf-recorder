@@ -226,6 +226,8 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
     encoder_frame->linesize[0] = -width;
     encoder_frame->linesize[1] = -width;
 
+    clReleaseMemObject(rgb_buffer);
+
     return ret;
 }
 
@@ -235,6 +237,7 @@ OpenCL::~OpenCL()
     clFinish(command_queue);
     clReleaseKernel(kernel);
     clReleaseProgram(program);
+    clReleaseMemObject(rgb_buffer);
     clReleaseMemObject(nv12_buffer);
     clReleaseCommandQueue(command_queue);
     clReleaseContext(context);

@@ -15,13 +15,14 @@ class OpenCL
     cl_context context;
     cl_command_queue command_queue;
     cl_program program;
-    cl_int ret = 0;
     uint32_t *local_nv12_buffer;
 
     public:
 
     OpenCL(int width, int height);
     ~OpenCL();
+
+    cl_int ret = 0;
 
     int
     do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat format, bool y_invert);

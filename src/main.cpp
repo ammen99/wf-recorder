@@ -555,7 +555,7 @@ int main(int argc, char *argv[])
     params.codec = DEFAULT_CODEC;
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
-    params.to_nv12 = false;
+    params.convert_rgb = false;
 
     PulseReaderParams pulseParams;
 
@@ -575,13 +575,14 @@ int main(int argc, char *argv[])
         { "audio",           optional_argument, NULL, 'a' },
         { "help",            no_argument,       NULL, 'h' },
         { "to-nv12",         no_argument,       NULL, 't' },
+        { "convert-rgb",     no_argument,       NULL, 'r' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la::t::h", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la::t::r::h", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -614,8 +615,8 @@ int main(int argc, char *argv[])
                 pulseParams.audio_source = optarg ? strdup(optarg) : NULL;
                 break;
 
-            case 't':
-                params.to_nv12 = true;
+            case 'r':
+                params.convert_rgb = true;
                 break;
 
             case 'h':
