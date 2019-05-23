@@ -215,6 +215,13 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
         return -1;
     }
 
+    ret |= clReleaseMemObject(rgb_buffer);
+    if (ret)
+    {
+        std::cerr << "clReleaseMemObject failed!" << std::endl;
+        return -1;
+    }
+
     formatted_pixels = (uint8_t *) local_nv12_buffer;
     if (y_invert)
         formatted_pixels += width * (height - 1);
@@ -231,8 +238,6 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
     encoder_frame->linesize[0] = -width;
     encoder_frame->linesize[1] = -width;
 
-    clReleaseMemObject(rgb_buffer);
-
     return ret;
 }
 
@@ -242,9 +247,9 @@ OpenCL::~OpenCL()
     clFinish(command_queue);
     clReleaseKernel(kernel);
     clReleaseProgram(program);
-    clReleaseMemObject(rgb_buffer);
     clReleaseMemObject(nv12_buffer);
-    clReleaseCommandQueue(command_queue);
+    /* Causes crash */
+    //clReleaseCommandQueue(command_queue);
     clReleaseContext(context);
     free(local_nv12_buffer);
 }
