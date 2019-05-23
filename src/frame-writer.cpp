@@ -401,6 +401,7 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 #else
         if (params.to_nv12)
         {
+            encoder_frame->format = AV_PIX_FMT_YUV420P;
             sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
                 encoder_frame->data, encoder_frame->linesize);
         }
