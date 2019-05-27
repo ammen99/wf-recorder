@@ -40,7 +40,7 @@ __kernel void rgbx_2_yuv420 (__global unsigned int  *sourceImage,					\n\
 													\n\
     for (i = 0; i < 4; i++)										\n\
     {													\n\
-        if (i == 1 && (posX + 1) > halfWidth)								\n\
+        if (i == 1 && ((posX * 2) + 1) >= srcWidth)							\n\
             continue;											\n\
         if (i > 1 && ((posSrc[1] + ((i - 1) >> 1)) >= (srcWidth * srcHeight)))				\n\
             break;											\n\
@@ -71,21 +71,21 @@ __kernel void rgbx_2_yuv420 (__global unsigned int  *sourceImage,					\n\
     c2 = ((pixels[0] >> 8) & 0xff);									\n\
     c3 = ((pixels[0] >> 16) & 0xff);									\n\
     d = 0;												\n\
-    if (posX + 1 == halfWidth)										\n\
+    if (((posX * 2) + 1) < srcWidth)									\n\
     {													\n\
         c1 += (pixels[1] & 0xff);									\n\
         c2 += ((pixels[1] >> 8) & 0xff);								\n\
         c3 += ((pixels[1] >> 16) & 0xff);								\n\
         d++;												\n\
     }													\n\
-    if (posY + 1 == halfHeight)										\n\
+    if (((posY * 2) + 1) < srcHeight)									\n\
     {													\n\
         c1 += (pixels[2] & 0xff);									\n\
         c2 += ((pixels[2] >> 8) & 0xff);								\n\
         c3 += ((pixels[2] >> 16) & 0xff);								\n\
         d++;												\n\
     }													\n\
-    if (posX + 1 == halfWidth && posY + 1 == halfHeight)						\n\
+    if (((posX * 2) + 1) < srcWidth && ((posY * 2) + 1) < srcHeight)					\n\
     {													\n\
         c1 += (pixels[3] & 0xff);									\n\
         c2 += ((pixels[3] >> 8) & 0xff);								\n\
