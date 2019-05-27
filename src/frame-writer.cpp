@@ -392,13 +392,19 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
                     encoder_frame->data, encoder_frame->linesize);
             }
         }
+        else
 #else
         if (params.convert_rgb)
         {
             sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
                 encoder_frame->data, encoder_frame->linesize);
         }
+        else
 #endif
+        {
+            encoder_frame->data[0] = (uint8_t*) formatted_pixels;
+            encoder_frame->linesize[0] = stride[0];
+        }
 
         if (av_hwframe_transfer_data(hw_frame, encoder_frame, 0))
         {
