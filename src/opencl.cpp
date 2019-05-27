@@ -9,107 +9,107 @@
 #include "opencl.hpp"
 
 
-static char const *cl_source_str = "									\n\
-__kernel void rgbx_2_yuv420 (__global unsigned int  *sourceImage,					\n\
-                             __global unsigned char *destImage,						\n\
-                             unsigned int srcWidth,							\n\
-                             unsigned int srcHeight,							\n\
-                             short rgb0)								\n\
-{													\n\
-    int i, d;												\n\
-    unsigned int pixels[4], posSrc[2];									\n\
-    unsigned int RGB, ValueY, ValueU, ValueV, c1, c2, c3;						\n\
-    unsigned char r, g, b;										\n\
-													\n\
-    unsigned int posX = get_global_id(0);								\n\
-    unsigned int posY = get_global_id(1);								\n\
-													\n\
-    unsigned int halfWidth = ((srcWidth + 1) >> 1);							\n\
-    unsigned int halfHeight = ((srcHeight + 1) >> 1);							\n\
-													\n\
-    if (posX >= halfWidth || posY >= halfHeight)							\n\
-        return;												\n\
-													\n\
-    posSrc[0] = ((posY * 2) * srcWidth) + (posX * 2);							\n\
-    posSrc[1] = (((posY * 2) + 1) * srcWidth) + (posX * 2);						\n\
-													\n\
-    pixels[0] = sourceImage[posSrc[0] + 0];								\n\
-    pixels[1] = sourceImage[posSrc[0] + 1];								\n\
-    pixels[2] = sourceImage[posSrc[1] + 0];								\n\
-    pixels[3] = sourceImage[posSrc[1] + 1];								\n\
-													\n\
-    for (i = 0; i < 4; i++)										\n\
-    {													\n\
-        if (i == 1 && ((posX * 2) + 1) >= srcWidth)							\n\
-            continue;											\n\
-        if (i > 1 && ((posSrc[1] + ((i - 1) >> 1)) >= (srcWidth * srcHeight)))				\n\
-            break;											\n\
-													\n\
-        RGB = pixels[i];										\n\
-        if (rgb0)											\n\
-        {												\n\
-            r = (RGB) & 0xff; g = (RGB >> 8) & 0xff; b = (RGB >> 16) & 0xff;				\n\
-        }												\n\
-        else //bgr0											\n\
-        {												\n\
-            b = (RGB) & 0xff; g = (RGB >> 8) & 0xff; r = (RGB >> 16) & 0xff;				\n\
-        }												\n\
-													\n\
-        // Y plane - pack 1 * 8-bit Y's within each 8-bit unit.						\n\
-        ValueY = ((66 * r + 129 * g + 25 * b) >> 8) + 16;						\n\
-        if (i < 2)											\n\
-        {												\n\
-            destImage[((posY * 2) * srcWidth) + (posX * 2) + i] = ValueY;				\n\
-        }												\n\
-        else												\n\
-        {												\n\
-            destImage[(((posY * 2) + 1) * srcWidth) + (posX * 2) + (i - 2)] = ValueY;			\n\
-        }												\n\
-    }													\n\
-													\n\
-    c1 = (pixels[0] & 0xff);										\n\
-    c2 = ((pixels[0] >> 8) & 0xff);									\n\
-    c3 = ((pixels[0] >> 16) & 0xff);									\n\
-    d = 0;												\n\
-    if (((posX * 2) + 1) < srcWidth)									\n\
-    {													\n\
-        c1 += (pixels[1] & 0xff);									\n\
-        c2 += ((pixels[1] >> 8) & 0xff);								\n\
-        c3 += ((pixels[1] >> 16) & 0xff);								\n\
-        d++;												\n\
-    }													\n\
-    if (((posY * 2) + 1) < srcHeight)									\n\
-    {													\n\
-        c1 += (pixels[2] & 0xff);									\n\
-        c2 += ((pixels[2] >> 8) & 0xff);								\n\
-        c3 += ((pixels[2] >> 16) & 0xff);								\n\
-        d++;												\n\
-    }													\n\
-    if (((posX * 2) + 1) < srcWidth && ((posY * 2) + 1) < srcHeight)					\n\
-    {													\n\
-        c1 += (pixels[3] & 0xff);									\n\
-        c2 += ((pixels[3] >> 8) & 0xff);								\n\
-        c3 += ((pixels[3] >> 16) & 0xff);								\n\
-    }													\n\
-    if (rgb0)												\n\
-    {													\n\
-        r = c1 >> d; g = c2 >> d; b = c3 >> d;								\n\
-    }													\n\
-    else //bgr0												\n\
-    {													\n\
-        b = c1 >> d; g = c2 >> d; r = c3 >> d;								\n\
-    }													\n\
-													\n\
-    // UV plane - pack 1 * 8-bit U and 1 * 8-bit V for each 4-pixel average				\n\
-    ValueU = ((-38 * r + -74 * g + 112 * b) >> 8) + 128;						\n\
-    ValueV = ((112 * r - 94 * g - 18 * b) >> 8) + 128;							\n\
-    unsigned int u_offset = (srcWidth * srcHeight) + (posY * halfWidth);				\n\
-    unsigned int v_offset = u_offset + (halfWidth * halfHeight);					\n\
-    destImage[u_offset + posX] = ValueU;								\n\
-    destImage[v_offset + posX] = ValueV;								\n\
-    return;												\n\
-}													\n\
-";
+static char const *cl_source_str = R"(
+__kernel void rgbx_2_yuv420 (__global unsigned int  *sourceImage,
+                             __global unsigned char *destImage,
+                             unsigned int srcWidth,
+                             unsigned int srcHeight,
+                             short rgb0)
+{
+    int i, d;
+    unsigned int pixels[4], posSrc[2];
+    unsigned int RGB, ValueY, ValueU, ValueV, c1, c2, c3;
+    unsigned char r, g, b;
+
+    unsigned int posX = get_global_id(0);
+    unsigned int posY = get_global_id(1);
+
+    unsigned int halfWidth = ((srcWidth + 1) >> 1);
+    unsigned int halfHeight = ((srcHeight + 1) >> 1);
+
+    if (posX >= halfWidth || posY >= halfHeight)
+        return;
+
+    posSrc[0] = ((posY * 2) * srcWidth) + (posX * 2);
+    posSrc[1] = (((posY * 2) + 1) * srcWidth) + (posX * 2);
+
+    pixels[0] = sourceImage[posSrc[0] + 0];
+    pixels[1] = sourceImage[posSrc[0] + 1];
+    pixels[2] = sourceImage[posSrc[1] + 0];
+    pixels[3] = sourceImage[posSrc[1] + 1];
+
+    for (i = 0; i < 4; i++)
+    {
+        if (i == 1 && ((posX * 2) + 1) >= srcWidth)
+            continue;
+        if (i > 1 && ((posSrc[1] + ((i - 1) >> 1)) >= (srcWidth * srcHeight)))
+            break;
+
+        RGB = pixels[i];
+        if (rgb0)
+        {
+            r = (RGB) & 0xff; g = (RGB >> 8) & 0xff; b = (RGB >> 16) & 0xff;
+        }
+        else //bgr0
+        {
+            b = (RGB) & 0xff; g = (RGB >> 8) & 0xff; r = (RGB >> 16) & 0xff;
+        }
+
+        // Y plane - pack 1 * 8-bit Y within each 8-bit unit.
+        ValueY = ((66 * r + 129 * g + 25 * b) >> 8) + 16;
+        if (i < 2)
+        {
+            destImage[((posY * 2) * srcWidth) + (posX * 2) + i] = ValueY;
+        }
+        else
+        {
+            destImage[(((posY * 2) + 1) * srcWidth) + (posX * 2) + (i - 2)] = ValueY;
+        }
+    }
+
+    c1 = (pixels[0] & 0xff);
+    c2 = ((pixels[0] >> 8) & 0xff);
+    c3 = ((pixels[0] >> 16) & 0xff);
+    d = 0;
+    if (((posX * 2) + 1) < srcWidth)
+    {
+        c1 += (pixels[1] & 0xff);
+        c2 += ((pixels[1] >> 8) & 0xff);
+        c3 += ((pixels[1] >> 16) & 0xff);
+        d++;
+    }
+    if (((posY * 2) + 1) < srcHeight)
+    {
+        c1 += (pixels[2] & 0xff);
+        c2 += ((pixels[2] >> 8) & 0xff);
+        c3 += ((pixels[2] >> 16) & 0xff);
+        d++;
+    }
+    if (((posX * 2) + 1) < srcWidth && ((posY * 2) + 1) < srcHeight)
+    {
+        c1 += (pixels[3] & 0xff);
+        c2 += ((pixels[3] >> 8) & 0xff);
+        c3 += ((pixels[3] >> 16) & 0xff);
+    }
+    if (rgb0)
+    {
+        r = c1 >> d; g = c2 >> d; b = c3 >> d;
+    }
+    else //bgr0
+    {
+        b = c1 >> d; g = c2 >> d; r = c3 >> d;
+    }
+
+    // UV plane - pack 1 * 8-bit U and 1 * 8-bit V for each 4-pixel average
+    ValueU = ((-38 * r - 74 * g + 112 * b) >> 8) + 128;
+    ValueV = ((112 * r - 94 * g - 18  * b) >> 8) + 128;
+    unsigned int u_offset = (srcWidth * srcHeight) + (posY * halfWidth);
+    unsigned int v_offset = u_offset + (halfWidth * halfHeight);
+    destImage[u_offset + posX] = ValueU;
+    destImage[v_offset + posX] = ValueV;
+    return;
+}
+)";
 
 OpenCL::OpenCL(int _width, int _height)
 {
