@@ -121,12 +121,7 @@ AVPixelFormat FrameWriter::get_input_format()
 
 AVPixelFormat FrameWriter::choose_sw_format(AVCodec *codec)
 {
-#ifdef HAVE_OPENCL
-    /* First case: the user preference is to convert the rgb data to nv12 */
-    if (params.convert_rgb && is_fmt_supported(AV_PIX_FMT_NV12, codec->pix_fmts))
-        return AV_PIX_FMT_NV12;
-#endif
-    /* Second case: if the codec supports getting the appropriate RGB format
+    /* First case: if the codec supports getting the appropriate RGB format
      * directly, we want to use it since we don't have to convert data */
     auto in_fmt = get_input_format();
     if (is_fmt_supported(in_fmt, codec->pix_fmts))
@@ -165,7 +160,7 @@ void FrameWriter::init_video_stream()
     videoCodecCtx->time_base = (AVRational){ 1, FPS };
 
 #ifdef HAVE_OPENCL
-     if (params.convert_rgb)
+     if (!params.no_opencl && params.convert_rgb)
          opencl = std::unique_ptr<OpenCL> (new OpenCL(params.width, params.height));
 #endif
 
@@ -176,13 +171,7 @@ void FrameWriter::init_video_stream()
         videoCodecCtx->hw_frames_ctx = av_buffer_ref(hw_frame_context);
 
         if (params.convert_rgb)
-        {
-#ifdef HAVE_OPENCL
-            init_sws(AV_PIX_FMT_NV12);
-#else
             init_sws(AV_PIX_FMT_YUV420P);
-#endif
-        }
     } else
     {
         videoCodecCtx->pix_fmt = choose_sw_format(codec);
@@ -349,13 +338,7 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
 
     encoder_frame = av_frame_alloc();
     if (hw_device_context) {
-        encoder_frame->format = params.convert_rgb ?
-#ifdef HAVE_OPENCL
-            AV_PIX_FMT_NV12
-#else
-            AV_PIX_FMT_YUV420P
-#endif
-            : get_input_format();
+        encoder_frame->format = params.convert_rgb ? AV_PIX_FMT_YUV420P : get_input_format();
     } else {
         encoder_frame->format = videoCodecCtx->pix_fmt;
     }
@@ -403,7 +386,7 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 #ifdef HAVE_OPENCL
         if (params.convert_rgb)
         {
-            if (opencl->do_frame(pixels, encoder_frame, get_input_format(), y_invert))
+            if (params.no_opencl || opencl->do_frame(pixels, encoder_frame, get_input_format(), y_invert))
             {
                 sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
                     encoder_frame->data, encoder_frame->linesize);
@@ -437,7 +420,7 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 #ifdef HAVE_OPENCL
         if (params.convert_rgb)
         {
-            if (opencl->do_frame(pixels, encoder_frame, get_input_format(), y_invert))
+            if (params.no_opencl || opencl->do_frame(pixels, encoder_frame, get_input_format(), y_invert))
             {
                 sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
                     encoder_frame->data, encoder_frame->linesize);

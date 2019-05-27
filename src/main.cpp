@@ -556,6 +556,7 @@ int main(int argc, char *argv[])
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
     params.convert_rgb = false;
+    params.no_opencl = false;
 
     PulseReaderParams pulseParams;
 
@@ -576,13 +577,14 @@ int main(int argc, char *argv[])
         { "help",            no_argument,       NULL, 'h' },
         { "to-nv12",         no_argument,       NULL, 't' },
         { "convert-rgb",     no_argument,       NULL, 'r' },
+        { "no-opencl",       no_argument,       NULL, 'n' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la::t::r::h", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la::t::r::n::h", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -621,6 +623,10 @@ int main(int argc, char *argv[])
 
             case 'h':
                 help();
+                break;
+
+            case 'n':
+                params.no_opencl = true;
                 break;
 
             case 'p':
