@@ -367,6 +367,31 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
     }
 }
 
+void FrameWriter::convert_pixels_to_yuv(const uint8_t *pixels,
+    const uint8_t *formatted_pixels, int stride[])
+{
+    bool y_invert = (pixels != formatted_pixels);
+    bool converted_with_opencl = false;
+
+#ifdef HAVE_OPENCL
+    if (!params.no_opencl && params.convert_rgb)
+    {
+        int r = opencl->do_frame(pixels, encoder_frame,
+            get_input_format(), y_invert);
+
+        std::cout << "convert via opencl" << std::endl;
+        converted_with_opencl = (r == 0);
+    }
+#endif
+
+    if (!converted_with_opencl)
+    {
+        std::cout << "convert with sws" << std::endl;
+        sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
+            encoder_frame->data, encoder_frame->linesize);
+    }
+}
+
 void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 {
     /* Calculate data after y-inversion */
@@ -383,25 +408,9 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 
     if (hw_device_context)
     {
-#ifdef HAVE_OPENCL
-        if (params.convert_rgb)
-        {
-            if (params.no_opencl || opencl->do_frame(pixels, encoder_frame, get_input_format(), y_invert))
-            {
-                sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
-                    encoder_frame->data, encoder_frame->linesize);
-            }
-        }
-        else
-#else
-        if (params.convert_rgb)
-        {
-            sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
-                encoder_frame->data, encoder_frame->linesize);
-        }
-        else
-#endif
-        {
+        if (params.convert_rgb) {
+            convert_pixels_to_yuv(pixels, formatted_pixels, stride);
+        } else {
             encoder_frame->data[0] = (uint8_t*) formatted_pixels;
             encoder_frame->linesize[0] = stride[0];
         }
@@ -423,21 +432,8 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
         encoder_frame->buf[0] = NULL;
     } else
     {
-#ifdef HAVE_OPENCL
-        if (params.convert_rgb)
-        {
-            if (params.no_opencl || opencl->do_frame(pixels, encoder_frame, get_input_format(), y_invert))
-            {
-                sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
-                    encoder_frame->data, encoder_frame->linesize);
-            }
-        }
-        else
-#endif
-        {
-            sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
-                encoder_frame->data, encoder_frame->linesize);
-        }
+        convert_pixels_to_yuv(pixels, formatted_pixels, stride);
+
         /* Force ffmpeg to create a copy of the frame, if the codec needs it */
         saved_buf0 = encoder_frame->buf[0];
         encoder_frame->buf[0] = NULL;

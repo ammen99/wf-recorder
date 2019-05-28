@@ -74,6 +74,16 @@ class FrameWriter
     AVFrame *encoder_frame = NULL;
     AVFrame *hw_frame = NULL;
 
+    /**
+     * Convert the given pixels to YUV and store in encoder_frame.
+     * Calls OpenCL if it is enabled.
+     *
+     * @param formatted_pixels contains the same data as pixels but y-inverted
+     * if the input format requires y-inversion.
+     */
+    void convert_pixels_to_yuv(const uint8_t *pixels,
+        const uint8_t *formatted_pixels, int stride[]);
+
     SwrContext *swrCtx;
     AVStream *audioStream;
     AVCodecContext *audioCodecCtx;
