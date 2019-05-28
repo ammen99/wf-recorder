@@ -379,14 +379,12 @@ void FrameWriter::convert_pixels_to_yuv(const uint8_t *pixels,
         int r = opencl->do_frame(pixels, encoder_frame,
             get_input_format(), y_invert);
 
-        std::cout << "convert via opencl" << std::endl;
         converted_with_opencl = (r == 0);
     }
 #endif
 
     if (!converted_with_opencl)
     {
-        std::cout << "convert with sws" << std::endl;
         sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
             encoder_frame->data, encoder_frame->linesize);
     }
