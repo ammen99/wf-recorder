@@ -219,7 +219,7 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
     if (ret)
     {
         std::cerr << "clCreateBuffer (rgb) failed!" << std::endl;
-        return -1;
+        return ret;
     }
 
     ret |= clSetKernelArg ( kernel, 0, sizeof(cl_mem), &rgb_buffer );
@@ -230,7 +230,7 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
     if (ret)
     {
         std::cerr << "clSetKernelArg failed!" << std::endl;
-        return -1;
+        return ret;
     }
 
     const size_t global_ws[] = {halfWidth, halfHeight};
@@ -238,7 +238,7 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
     if (ret)
     {
         std::cerr << "clEnqueueNDRangeKernel failed!" << std::endl;
-        return -1;
+        return ret;
     }
 
     // Read yuv420 buffer from gpu
@@ -247,14 +247,14 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
     if (ret)
     {
         std::cerr << "clEnqueueReadBuffer failed!" << std::endl;
-        return -1;
+        return ret;
     }
 
     ret |= clReleaseMemObject(rgb_buffer);
     if (ret)
     {
         std::cerr << "clReleaseMemObject failed!" << std::endl;
-        return -1;
+        return ret;
     }
 
     formatted_pixels = local_yuv420_buffer;
