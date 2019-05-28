@@ -334,6 +334,11 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
         std::exit(-1);
     }
 
+#ifndef HAVE_OPENCL
+    if (params.opencl)
+        std::cerr << "This version of wf-recorder was built without OpenCL support. Ignoring OpenCL option." << std::endl;
+#endif
+
     init_codecs();
 
     encoder_frame = av_frame_alloc();
@@ -381,6 +386,9 @@ void FrameWriter::convert_pixels_to_yuv(const uint8_t *pixels,
 
         converted_with_opencl = (r == 0);
     }
+#else
+    /* Silence compiler warning when opencl is disabled */
+    (void)(y_invert);
 #endif
 
     if (!converted_with_opencl)
