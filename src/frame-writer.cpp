@@ -160,7 +160,7 @@ void FrameWriter::init_video_stream()
     videoCodecCtx->time_base = (AVRational){ 1, FPS };
 
 #ifdef HAVE_OPENCL
-     if (!params.no_opencl && params.convert_rgb)
+     if (params.opencl && params.force_yuv)
          opencl = std::unique_ptr<OpenCL> (new OpenCL(params.width, params.height));
 #endif
 
@@ -170,7 +170,7 @@ void FrameWriter::init_video_stream()
         init_hw_accel();
         videoCodecCtx->hw_frames_ctx = av_buffer_ref(hw_frame_context);
 
-        if (params.convert_rgb)
+        if (params.force_yuv)
             init_sws(AV_PIX_FMT_YUV420P);
     } else
     {
@@ -338,7 +338,7 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
 
     encoder_frame = av_frame_alloc();
     if (hw_device_context) {
-        encoder_frame->format = params.convert_rgb ? AV_PIX_FMT_YUV420P : get_input_format();
+        encoder_frame->format = params.force_yuv ? AV_PIX_FMT_YUV420P : get_input_format();
     } else {
         encoder_frame->format = videoCodecCtx->pix_fmt;
     }
@@ -374,7 +374,7 @@ void FrameWriter::convert_pixels_to_yuv(const uint8_t *pixels,
     bool converted_with_opencl = false;
 
 #ifdef HAVE_OPENCL
-    if (!params.no_opencl && params.convert_rgb)
+    if (params.opencl && params.force_yuv)
     {
         int r = opencl->do_frame(pixels, encoder_frame,
             get_input_format(), y_invert);
@@ -408,7 +408,7 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 
     if (hw_device_context)
     {
-        if (params.convert_rgb) {
+        if (params.force_yuv) {
             convert_pixels_to_yuv(pixels, formatted_pixels, stride);
         } else {
             encoder_frame->data[0] = (uint8_t*) formatted_pixels;
