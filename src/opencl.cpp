@@ -271,14 +271,14 @@ OpenCL::init(int _width, int _height)
 
     yuv420Size = frameSize + frameSizeUV * 2; // Y+UV planes
 
-    yuv420_buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, yuv420Size * sizeof(uint8_t), 0, &ret);
+    yuv420_buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, yuv420Size * sizeof(uint8_t) * 4, 0, &ret);
     if (ret)
     {
         std::cerr << "clCreateBuffer (yuv420) failure!" << std::endl;
         return ret;
     }
 
-    local_yuv420_buffer = (uint8_t *) malloc(yuv420Size * sizeof(uint8_t));
+    local_yuv420_buffer = (uint8_t *) malloc(yuv420Size * sizeof(uint8_t) * 4);
 
     if (!local_yuv420_buffer)
     {
@@ -386,7 +386,7 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
 
     // Read yuv420 buffer from gpu
     ret |= clEnqueueReadBuffer(command_queue, yuv420_buffer, CL_TRUE, 0,
-        yuv420Size * sizeof(uint8_t), local_yuv420_buffer, 0, NULL, NULL);
+        yuv420Size * sizeof(uint8_t) * 4, local_yuv420_buffer, 0, NULL, NULL);
     if (ret)
     {
         std::cerr << "clEnqueueReadBuffer failed!" << std::endl;
