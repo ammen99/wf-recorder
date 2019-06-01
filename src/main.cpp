@@ -24,6 +24,10 @@
 
 #include "config.h"
 
+#ifdef HAVE_OPENCL
+std::unique_ptr<OpenCL> opencl;
+#endif
+
 std::mutex frame_writer_mutex, frame_writer_pending_mutex;
 std::unique_ptr<FrameWriter> frame_writer;
 
@@ -310,6 +314,14 @@ static void write_loop(FrameWriterParams params, PulseReaderParams pulseParams)
             params.height = buffer.height;
             frame_writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
 
+#ifdef HAVE_OPENCL
+            if (params.opencl && params.force_yuv)
+            {
+                frame_writer->opencl = std::move(opencl);
+                frame_writer->opencl->init(params.width, params.height);
+            }
+#endif
+
             if (params.enable_audio)
             {
                 pulseParams.audio_frame_size = frame_writer->get_audio_buffer_size();
@@ -557,6 +569,7 @@ int main(int argc, char *argv[])
     params.enable_audio = false;
     params.force_yuv = false;
     params.opencl = false;
+    params.opencl_device = -1;
 
     PulseReaderParams pulseParams;
 
@@ -576,14 +589,14 @@ int main(int argc, char *argv[])
         { "audio",           optional_argument, NULL, 'a' },
         { "help",            no_argument,       NULL, 'h' },
         { "force-yuv",       no_argument,       NULL, 't' },
-        { "opencl",          no_argument,       NULL, 'e' },
+        { "opencl",          optional_argument, NULL, 'e' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la::t::e::h", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la::te::h", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -626,6 +639,7 @@ int main(int argc, char *argv[])
 
             case 'e':
                 params.opencl = true;
+                params.opencl_device = optarg ? atoi(optarg) : -1;
                 break;
 
             case 'p':
@@ -719,6 +733,11 @@ int main(int argc, char *argv[])
     }
 
     printf("selected region %d %d %d %d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);
+
+#ifdef HAVE_OPENCL
+     if (params.opencl && params.force_yuv)
+         opencl = std::unique_ptr<OpenCL> (new OpenCL(params.opencl_device));
+#endif
 
     timespec first_frame;
     first_frame.tv_sec = -1;

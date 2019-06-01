@@ -10,14 +10,6 @@
 #include <cstring>
 #include "averr.h"
 
-#include "config.h"
-
-#ifdef HAVE_OPENCL
-#include "opencl.hpp"
-
-std::unique_ptr<OpenCL> opencl;
-#endif
-
 #define FPS 60
 #define AUDIO_RATE 44100
 
@@ -158,11 +150,6 @@ void FrameWriter::init_video_stream()
     videoCodecCtx->width = params.width;
     videoCodecCtx->height = params.height;
     videoCodecCtx->time_base = (AVRational){ 1, FPS };
-
-#ifdef HAVE_OPENCL
-     if (params.opencl && params.force_yuv)
-         opencl = std::unique_ptr<OpenCL> (new OpenCL(params.width, params.height));
-#endif
 
     if (params.codec.find("vaapi") != std::string::npos)
     {

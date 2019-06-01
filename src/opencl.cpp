@@ -18,11 +18,16 @@ __kernel void rgbx_2_yuv420 (__global unsigned int  *sourceImage,
 {
     int i, d;
     unsigned int pixels[4], posSrc[2];
-    unsigned int RGB, ValueY, ValueU, ValueV, c1, c2, c3;
+    unsigned int RGB, ValueY, ValueU, ValueV, c1, c2, c3, u_offset, v_offset;
     unsigned char r, g, b;
 
     unsigned int posX = get_global_id(0);
     unsigned int posY = get_global_id(1);
+
+    unsigned int X2 = posX * 2;
+    unsigned int Y2 = posY * 2;
+
+    unsigned int size = srcWidth * srcHeight;
 
     unsigned int halfWidth = ((srcWidth + 1) >> 1);
     unsigned int halfHeight = ((srcHeight + 1) >> 1);
@@ -30,8 +35,8 @@ __kernel void rgbx_2_yuv420 (__global unsigned int  *sourceImage,
     if (posX >= halfWidth || posY >= halfHeight)
         return;
 
-    posSrc[0] = ((posY * 2) * srcWidth) + (posX * 2);
-    posSrc[1] = (((posY * 2) + 1) * srcWidth) + (posX * 2);
+    posSrc[0] = (Y2 * srcWidth) + X2;
+    posSrc[1] = ((Y2 + 1) * srcWidth) + X2;
 
     pixels[0] = sourceImage[posSrc[0] + 0];
     pixels[1] = sourceImage[posSrc[0] + 1];
@@ -40,9 +45,9 @@ __kernel void rgbx_2_yuv420 (__global unsigned int  *sourceImage,
 
     for (i = 0; i < 4; i++)
     {
-        if (i == 1 && ((posX * 2) + 1) >= srcWidth)
+        if (i == 1 && (X2 + 1) >= srcWidth)
             continue;
-        if (i > 1 && ((posSrc[1] + ((i - 1) >> 1)) >= (srcWidth * srcHeight)))
+        if (i > 1 && (posSrc[1] + ((i - 1) >> 1)) >= size)
             break;
 
         RGB = pixels[i];
@@ -59,11 +64,11 @@ __kernel void rgbx_2_yuv420 (__global unsigned int  *sourceImage,
         ValueY = ((66 * r + 129 * g + 25 * b) >> 8) + 16;
         if (i < 2)
         {
-            destImage[((posY * 2) * srcWidth) + (posX * 2) + i] = ValueY;
+            destImage[(Y2 * srcWidth) + X2 + i] = ValueY;
         }
         else
         {
-            destImage[(((posY * 2) + 1) * srcWidth) + (posX * 2) + (i - 2)] = ValueY;
+            destImage[((Y2 + 1) * srcWidth) + X2 + (i - 2)] = ValueY;
         }
     }
 
@@ -71,21 +76,21 @@ __kernel void rgbx_2_yuv420 (__global unsigned int  *sourceImage,
     c2 = ((pixels[0] >> 8) & 0xff);
     c3 = ((pixels[0] >> 16) & 0xff);
     d = 0;
-    if (((posX * 2) + 1) < srcWidth)
+    if ((X2 + 1) < srcWidth)
     {
         c1 += (pixels[1] & 0xff);
         c2 += ((pixels[1] >> 8) & 0xff);
         c3 += ((pixels[1] >> 16) & 0xff);
         d++;
     }
-    if (((posY * 2) + 1) < srcHeight)
+    if ((Y2 + 1) < srcHeight)
     {
         c1 += (pixels[2] & 0xff);
         c2 += ((pixels[2] >> 8) & 0xff);
         c3 += ((pixels[2] >> 16) & 0xff);
         d++;
     }
-    if (((posX * 2) + 1) < srcWidth && ((posY * 2) + 1) < srcHeight)
+    if (d == 2)
     {
         c1 += (pixels[3] & 0xff);
         c2 += ((pixels[3] >> 8) & 0xff);
@@ -100,38 +105,197 @@ __kernel void rgbx_2_yuv420 (__global unsigned int  *sourceImage,
         b = c1 >> d; g = c2 >> d; r = c3 >> d;
     }
 
-    // UV plane - pack 1 * 8-bit U and 1 * 8-bit V for each 4-pixel average
+    // UV plane - pack 1 * 8-bit U and 1 * 8-bit V for each subsample average
     ValueU = ((-38 * r - 74 * g + 112 * b) >> 8) + 128;
     ValueV = ((112 * r - 94 * g - 18  * b) >> 8) + 128;
-    unsigned int u_offset = (srcWidth * srcHeight) + (posY * halfWidth);
-    unsigned int v_offset = u_offset + (halfWidth * halfHeight);
+
+    u_offset = size + (posY * halfWidth);
+    v_offset = u_offset + (halfWidth * halfHeight);
+
     destImage[u_offset + posX] = ValueU;
     destImage[v_offset + posX] = ValueV;
+
     return;
 }
 )";
 
-OpenCL::OpenCL(int _width, int _height)
+cl_device_id
+OpenCL::get_device_id(int device)
 {
-    width = _width;
-    height = _height;
+    uint32_t i, j;
+    char* value;
+    size_t valueSize;
+    cl_uint platformCount;
+    cl_platform_id* platforms;
+    cl_uint deviceCount;
+    cl_device_id* devices;
+    cl_device_id device_id;
+    std::vector<cl_device_id> all_devices;
 
-    // Get platform and device information
-    cl_platform_id platform_id = NULL;
-    cl_device_id device_id = NULL;
-    cl_uint ret_num_devices;
-    cl_uint ret_num_platforms;
-    ret = clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
+    ret = clGetPlatformIDs(0, NULL, &platformCount);
     if (ret)
     {
         std::cerr << "clGetPlatformIDs failed!" << std::endl;
-        return;
+        return NULL;
     }
-    ret = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_DEFAULT, 1,
-        &device_id, &ret_num_devices);
+    if (!platformCount)
+    {
+        std::cerr << "No OpenCL platforms detected." << std::endl;
+        return NULL;
+    }
+    platforms = (cl_platform_id*) malloc(sizeof(cl_platform_id) * platformCount);
+    ret = clGetPlatformIDs(platformCount, platforms, NULL);
     if (ret)
     {
-        std::cerr << "clGetDeviceIDs failed!" << std::endl;
+        std::cerr << "clGetPlatformIDs failed!" << std::endl;
+        return NULL;
+    }
+
+    if (platformCount == 1 && device <= 0)
+    {
+        ret = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_ALL, 0, NULL, &deviceCount);
+        if (ret)
+        {
+            std::cerr << "clGetDeviceIDs failed!" << std::endl;
+            return NULL;
+        }
+        if (!deviceCount)
+        {
+            std::cerr << "No OpenCL devices detected." << std::endl;
+            return NULL;
+        }
+        if (deviceCount == 1)
+        {
+            ret = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_DEFAULT, 1,
+                &device_id, &deviceCount);
+            if (ret)
+            {
+                std::cerr << "clGetDeviceIDs failed!" << std::endl;
+                return NULL;
+            }
+            return device_id;
+	}
+    }
+
+    if (device < 0)
+    {
+        std::cout << std::endl;
+        std::cout << "Please choose an OpenCL device:" << std::endl;
+    }
+
+    for (i = 0; i < platformCount; i++) {
+        ret = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &deviceCount);
+        if (ret)
+        {
+            std::cerr << "clGetDeviceIDs failed!" << std::endl;
+            return NULL;
+        }
+        devices = (cl_device_id*) malloc(sizeof(cl_device_id) * deviceCount);
+        ret = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, deviceCount, devices, NULL);
+        if (ret)
+        {
+            std::cerr << "clGetDeviceIDs failed!" << std::endl;
+            return NULL;
+        }
+
+        for (j = 0; j < deviceCount; j++) {
+            ret = clGetDeviceInfo(devices[j], CL_DEVICE_NAME, 0, NULL, &valueSize);
+            if (ret)
+            {
+                std::cerr << "clGetDeviceInfo failed!" << std::endl;
+                return NULL;
+            }
+            value = (char*) malloc(valueSize);
+            ret = clGetDeviceInfo(devices[j], CL_DEVICE_NAME, valueSize, value, NULL);
+            if (ret)
+            {
+                std::cerr << "clGetDeviceInfo failed!" << std::endl;
+                return NULL;
+            }
+            all_devices.push_back(devices[j]);
+            if (device < 0)
+                std::cout << all_devices.size() << ": " << value << std::endl;
+            free(value);
+            if (device == (int) all_devices.size())
+                break;
+        }
+
+        free(devices);
+        if (device == (int) all_devices.size())
+            break;
+    }
+
+    free(platforms);
+
+    if (device > (int) all_devices.size())
+    {
+        std::cerr << "Max OpenCL device number is " << all_devices.size() << std::endl;
+        return NULL;
+    }
+
+    if (!device)
+        return all_devices[device];
+
+    if (device > 0)
+        return all_devices[device - 1];
+
+    std::cout << "Enter device no.:";
+    fflush(stdout);
+
+    int choice;
+    if (scanf("%d", &choice) != 1 || choice > (int) all_devices.size() || choice <= 0)
+    {
+        std::cerr << "Bad choice." << std::endl;
+        return NULL;
+    }
+
+    return all_devices[choice - 1];
+}
+
+int
+OpenCL::init(int _width, int _height)
+{
+    if (ret)
+        return ret;
+
+    width = _width;
+    height = _height;
+
+    halfWidth = ((width + 1) >> 1);
+    halfHeight = ((height + 1) >> 1);
+    unsigned int frameSize = width * height;
+    unsigned int frameSizeUV = halfWidth * halfHeight;
+
+    argbSize = frameSize * 4; // ARGB pixels
+
+    yuv420Size = frameSize + frameSizeUV * 2; // Y+UV planes
+
+    yuv420_buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, yuv420Size * sizeof(char) * 4, 0, &ret);
+    if (ret)
+    {
+        std::cerr << "clCreateBuffer (yuv420) failure!" << std::endl;
+        return ret;
+    }
+
+    local_yuv420_buffer = (uint8_t *) malloc(yuv420Size * sizeof(uint8_t) * 4);
+
+    if (!local_yuv420_buffer)
+    {
+        std::cerr << "malloc failure!" << std::endl;
+        ret = -1;
+    }
+
+    std::cout << "Using OpenCL for accelerated RGB to YUV420 conversion" << std::endl;
+
+    return ret;
+}
+
+OpenCL::OpenCL(int device)
+{
+    device_id = get_device_id(device);
+    if (!device_id)
+    {
+        ret = -1;
         return;
     }
 
@@ -181,29 +345,6 @@ OpenCL::OpenCL(int _width, int _height)
         std::cerr << "clCreateKernel failed!" << std::endl;
         return;
     }
-
-    halfWidth = ((width + 1) >> 1);
-    halfHeight = ((height + 1) >> 1);
-    unsigned int frameSize = width * height;
-    unsigned int frameSizeUV = halfWidth * halfHeight;
-
-    argbSize = frameSize * 4; // ARGB pixels
-
-    yuv420Size = frameSize + frameSizeUV * 2; // Y+UV planes
-
-    yuv420_buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, yuv420Size * sizeof(char) * 4, 0, &ret);
-    if (ret)
-    {
-        std::cerr << "clCreateBuffer (yuv420) failure!" << std::endl;
-        return;
-    }
-
-    local_yuv420_buffer = (uint8_t *) malloc(yuv420Size * sizeof(uint8_t) * 4);
-
-    if (!local_yuv420_buffer)
-        std::cerr << "malloc failure!" << std::endl;
-
-    std::cout << "Using OpenCL for accelerated RGB to YUV420 conversion" << std::endl;
 }
 
 int
@@ -283,6 +424,9 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
 
 OpenCL::~OpenCL()
 {
+    if (ret)
+        return;
+
     clFlush(command_queue);
     clFinish(command_queue);
     clReleaseKernel(kernel);

@@ -23,6 +23,14 @@ extern "C"
     #include <libavutil/opt.h>
 }
 
+#include "config.h"
+
+#ifdef HAVE_OPENCL
+#include <memory>
+#include "opencl.hpp"
+class OpenCL;
+#endif
+
 enum InputFormat
 {
      INPUT_FORMAT_BGR0,
@@ -48,6 +56,7 @@ struct FrameWriterParams
 
     bool opencl;
     bool force_yuv;
+    int opencl_device;
 };
 
 class FrameWriter
@@ -100,6 +109,10 @@ public :
     /* Buffer must have size get_audio_buffer_size() */
     void add_audio(const void* buffer);
     size_t get_audio_buffer_size();
+
+#ifdef HAVE_OPENCL
+    std::unique_ptr<OpenCL> opencl;
+#endif
 
     ~FrameWriter();
 };
