@@ -63,13 +63,9 @@ __kernel void rgbx_2_yuv420 (__global unsigned int  *sourceImage,
         // Y plane - pack 1 * 8-bit Y within each 8-bit unit.
         ValueY = ((66 * r + 129 * g + 25 * b) >> 8) + 16;
         if (i < 2)
-        {
             destImage[(Y2 * srcWidth) + X2 + i] = ValueY;
-        }
         else
-        {
             destImage[((Y2 + 1) * srcWidth) + X2 + (i - 2)] = ValueY;
-        }
     }
 
     c1 = (pixels[0] & 0xff);
@@ -190,6 +186,11 @@ OpenCL::get_device_id(int device)
             std::cerr << "clGetDeviceIDs failed!" << std::endl;
             return NULL;
         }
+        if (!deviceCount)
+        {
+            std::cerr << "No OpenCL devices detected." << std::endl;
+            return NULL;
+        }
         devices = (cl_device_id*) malloc(sizeof(cl_device_id) * deviceCount);
         ret = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, deviceCount, devices, NULL);
         if (ret)
@@ -270,19 +271,20 @@ OpenCL::init(int _width, int _height)
 
     yuv420Size = frameSize + frameSizeUV * 2; // Y+UV planes
 
-    yuv420_buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, yuv420Size * sizeof(char) * 4, 0, &ret);
+    yuv420_buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, yuv420Size * sizeof(uint8_t), 0, &ret);
     if (ret)
     {
         std::cerr << "clCreateBuffer (yuv420) failure!" << std::endl;
         return ret;
     }
 
-    local_yuv420_buffer = (uint8_t *) malloc(yuv420Size * sizeof(uint8_t) * 4);
+    local_yuv420_buffer = (uint8_t *) malloc(yuv420Size * sizeof(uint8_t));
 
     if (!local_yuv420_buffer)
     {
         std::cerr << "malloc failure!" << std::endl;
         ret = -1;
+        return ret;
     }
 
     std::cout << "Using OpenCL for accelerated RGB to YUV420 conversion" << std::endl;
@@ -350,7 +352,7 @@ OpenCL::OpenCL(int device)
 int
 OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat format, bool y_invert)
 {
-    const uint8_t *formatted_pixels = pixels;
+    const uint8_t *formatted_pixels;
     short rgb0 = format == AV_PIX_FMT_RGB0 ? 1 : 0;
 
     if (ret)
@@ -384,7 +386,7 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
 
     // Read yuv420 buffer from gpu
     ret |= clEnqueueReadBuffer(command_queue, yuv420_buffer, CL_TRUE, 0,
-        yuv420Size * sizeof(uint8_t) * 4, local_yuv420_buffer, 0, NULL, NULL);
+        yuv420Size * sizeof(uint8_t), local_yuv420_buffer, 0, NULL, NULL);
     if (ret)
     {
         std::cerr << "clEnqueueReadBuffer failed!" << std::endl;
@@ -424,6 +426,8 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
 
 OpenCL::~OpenCL()
 {
+    free(local_yuv420_buffer);
+
     if (ret)
         return;
 
@@ -435,5 +439,4 @@ OpenCL::~OpenCL()
     /* Causes crash */
     //clReleaseCommandQueue(command_queue);
     clReleaseContext(context);
-    free(local_yuv420_buffer);
 }
