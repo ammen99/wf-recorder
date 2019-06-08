@@ -181,22 +181,36 @@ OpenCL::get_device_id(int device)
 
     for (i = 0; i < platformCount; i++) {
         ret = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &deviceCount);
-        if (ret)
+        switch (ret)
         {
-            std::cerr << "clGetDeviceIDs failed!" << std::endl;
-            return NULL;
+            case CL_INVALID_PLATFORM:
+            case CL_INVALID_DEVICE_TYPE:
+            case CL_INVALID_VALUE:
+            case CL_DEVICE_NOT_FOUND:
+            continue;
+            break;
+            case CL_SUCCESS:
+            default:
+            break;
         }
         if (!deviceCount)
         {
-            std::cerr << "No OpenCL devices detected." << std::endl;
-            return NULL;
+            std::cerr << "No OpenCL devices detected for platform " << i + 1 << std::endl;
+            continue;
         }
         devices = (cl_device_id*) malloc(sizeof(cl_device_id) * deviceCount);
         ret = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, deviceCount, devices, NULL);
-        if (ret)
+        switch (ret)
         {
-            std::cerr << "clGetDeviceIDs failed!" << std::endl;
-            return NULL;
+            case CL_INVALID_PLATFORM:
+            case CL_INVALID_DEVICE_TYPE:
+            case CL_INVALID_VALUE:
+            case CL_DEVICE_NOT_FOUND:
+            continue;
+            break;
+            case CL_SUCCESS:
+            default:
+            break;
         }
 
         for (j = 0; j < deviceCount; j++) {
@@ -271,14 +285,14 @@ OpenCL::init(int _width, int _height)
 
     yuv420Size = frameSize + frameSizeUV * 2; // Y+UV planes
 
-    yuv420_buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, yuv420Size * sizeof(uint8_t) * 4, 0, &ret);
+    yuv420_buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, yuv420Size * sizeof(uint8_t), 0, &ret);
     if (ret)
     {
         std::cerr << "clCreateBuffer (yuv420) failure!" << std::endl;
         return ret;
     }
 
-    local_yuv420_buffer = (uint8_t *) malloc(yuv420Size * sizeof(uint8_t) * 4);
+    local_yuv420_buffer = (uint8_t *) malloc(yuv420Size * sizeof(uint8_t));
 
     if (!local_yuv420_buffer)
     {
@@ -386,7 +400,7 @@ OpenCL::do_frame(const uint8_t* pixels, AVFrame *encoder_frame, AVPixelFormat fo
 
     // Read yuv420 buffer from gpu
     ret |= clEnqueueReadBuffer(command_queue, yuv420_buffer, CL_TRUE, 0,
-        yuv420Size * sizeof(uint8_t) * 4, local_yuv420_buffer, 0, NULL, NULL);
+        yuv420Size * sizeof(uint8_t), local_yuv420_buffer, 0, NULL, NULL);
     if (ret)
     {
         std::cerr << "clEnqueueReadBuffer failed!" << std::endl;
