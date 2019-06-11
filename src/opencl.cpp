@@ -450,7 +450,6 @@ OpenCL::~OpenCL()
     clReleaseKernel(kernel);
     clReleaseProgram(program);
     clReleaseMemObject(yuv420_buffer);
-    /* Causes crash */
-    //clReleaseCommandQueue(command_queue);
+    clReleaseCommandQueue(command_queue);
     clReleaseContext(context);
 }
