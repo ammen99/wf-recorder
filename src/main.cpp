@@ -550,10 +550,10 @@ int main(int argc, char *argv[])
             case 't':
                 params.to_yuv = true;
                 break;
-            
+
             case 'h':
                 break;
-                
+
             case 'p':
                 param = optarg;
                 pos = param.find("=");
@@ -573,7 +573,8 @@ int main(int argc, char *argv[])
         }
     }
 
-    if ( c == 'h' ) {
+    if (c == 'h') 
+    {
          printf("Usage: wf-recorder [OPTION]... [FILE]...
 Screen recording of wlroots-based compositors
 
@@ -627,7 +628,8 @@ Examples:
     }
         
     display = wl_display_connect(NULL);
-    if (display == NULL) {
+    if (display == NULL) 
+    {
         fprintf(stderr, "failed to create display: %m\n");
         return EXIT_FAILURE;
     }
