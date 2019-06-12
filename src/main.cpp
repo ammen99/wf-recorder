@@ -514,7 +514,7 @@ int main(int argc, char *argv[])
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la::t::h::", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la::t::h", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -565,13 +565,13 @@ int main(int argc, char *argv[])
                     printf("Invalid codec option %s\n", optarg);
                 }
                 break;
-            
+
             default:
                 printf("Unsupported command line argument %s\n", optarg);
         }
     }
-    
-    if(c=='h'){
+
+    if ( c == 'h' ) {
          printf("Usage: wf-recorder [OPTION]... [FILE]...
 Screen recording of wlroots-based compositors
 
@@ -596,7 +596,7 @@ With no FILE, start recording the current screen.
   -o, --output              Specify the output where the video is to be recorded.
                 
   -p, --codec-param         Change the codec parameters.
-                       -p <option_name>=<option_value>
+                            -p <option_name>=<option_value>
 
   -t, to-yuv                Use the -t or --to-yuv option in addition to the vaapi options to convert the data in software,
                             before sending it to the gpu.
