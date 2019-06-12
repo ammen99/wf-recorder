@@ -550,8 +550,10 @@ int main(int argc, char *argv[])
             case 't':
                 params.to_yuv = true;
                 break;
+            
             case 'h':
                 break;
+                
             case 'p':
                 param = optarg;
                 pos = param.find("=");
