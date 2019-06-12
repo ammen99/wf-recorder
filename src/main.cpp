@@ -507,13 +507,14 @@ int main(int argc, char *argv[])
         { "log",             no_argument,       NULL, 'l' },
         { "audio",           optional_argument, NULL, 'a' },
         { "to-yuv",          no_argument,       NULL, 't' },
+        { "help",            no_argument,       NULL, 'h' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la::t::", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la::t::h::", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -549,7 +550,8 @@ int main(int argc, char *argv[])
             case 't':
                 params.to_yuv = true;
                 break;
-
+            case 'h':
+                break;
             case 'p':
                 param = optarg;
                 pos = param.find("=");
@@ -563,12 +565,65 @@ int main(int argc, char *argv[])
                     printf("Invalid codec option %s\n", optarg);
                 }
                 break;
-
+            
             default:
                 printf("Unsupported command line argument %s\n", optarg);
         }
     }
+    
+    if(c=='h'){
+         printf("Usage: wf-recorder [OPTION]... [FILE]...
+Screen recording of wlroots-based compositors
 
+With no FILE, start recording the current screen.
+
+  -a, --audio               Starts recording the screen with audio
+                
+  -c, --codec               Specifies the codec of the video. Supports  GIF output also.
+                            To modify codec parameters, use -p <option_name>=<option_value>
+                
+  -d, --device              Selects the device to use when encoding the video
+                            Some drivers report support for rgb0 data for vaapi input but really only support yuv.
+                            Use the -t or --to-yuv option in addition to the vaapi options to convert the data in software,
+                            before sending it to the gpu.
+                
+  -g, --geometry            Selects a specific part of the screen.
+  
+  -h, --help                Prints this help screen.
+                
+  -l, --log                 Generates a log on the current terminal. Debug purposes. 
+                
+  -o, --output              Specify the output where the video is to be recorded.
+                
+  -p, --codec-param         Change the codec parameters.
+                       -p <option_name>=<option_value>
+
+  -t, to-yuv                Use the -t or --to-yuv option in addition to the vaapi options to convert the data in software,
+                            before sending it to the gpu.
+                
+                
+                
+Examples:
+  
+  Video Only:
+  
+  - wf-recorder                       Records the video. Use Ctrl+C to stop recording. 
+                                      The video file will be stored as recording.mp4 in the current working directory.
+                
+  - wf-recorder -f <filename>         Records the video. Use Ctrl+C to stop recording. 
+                                      The video file will be stored as <outputname>.mp4 in the current working directory.
+ 
+  Video and Audio:
+  
+  - wf-recorder -a                    Records the audio. Use Ctrl+C to stop recording. 
+                                      The video file will be stored as recording.mp4 in the current working directory.
+                
+  - wf-recorder -a -f <filename>      Records the audio. Use Ctrl+C to stop recording. 
+                                      The video file will be stored as <outputname>.mp4 in the current working directory.
+");
+        return EXIT_SUCCESS;
+    }
+        
     display = wl_display_connect(NULL);
     if (display == NULL) {
         fprintf(stderr, "failed to create display: %m\n");
