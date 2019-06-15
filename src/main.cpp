@@ -481,6 +481,68 @@ static wf_recorder_output* detect_output_from_region(const capture_region& regio
     return nullptr;
 }
 
+void help(){
+  
+    printf("Usage: wf-recorder [OPTION]... -f [FILE]...
+Screen recording of wlroots-based compositors
+
+With no FILE, start recording the current screen.
+
+  -a, --audio [OPTION]      Starts recording the screen with audio.
+                            [OPTION] In case you want to specify the pulseaudio device which will capture the audio, 
+                            you can run this command with the name of that device. 
+                            You can find your device name by running : pactl list sinks | grep Name
+                
+  -c, --codec               Specifies the codec of the video. Supports  GIF output also.
+                            To modify codec parameters, use -p <option_name>=<option_value>
+                
+  -d, --device              Selects the device to use when encoding the video
+                            Some drivers report support for rgb0 data for vaapi input but really only support yuv.
+                            Use the -t or --to-yuv option in addition to the vaapi options to convert the data in software,
+                            before sending it to the gpu.
+ 
+  -f <filename>.ext         By using the -f option the output file will have the name filename.ext and the file format will be 
+                            determined by provided file extension .ext . If the extension .ext provided is not recognized by your FFmpeg muxers,
+                            the command will fail.
+                            You can check the muxers that your FFmpeg installation supports by running  : ffmpeg -muxers  
+           
+  -g, --geometry            Selects a specific part of the screen.
+  
+  -h, --help                Prints this help screen.
+                
+  -l, --log                 Generates a log on the current terminal. Debug purposes. 
+                
+  -o, --output              Specify the output where the video is to be recorded.
+                
+  -p, --codec-param         Change the codec parameters.
+                            -p <option_name>=<option_value>
+
+  -t, to-yuv                Use the -t or --to-yuv option in addition to the vaapi options to convert the data in software,
+                            before sending it to the gpu.
+                
+                
+                
+Examples:
+  
+  Video Only:
+  
+  - wf-recorder                        Records the video. Use Ctrl+C to stop recording. 
+                                       The video file will be stored as recording.mp4 in the current working directory.
+                
+  - wf-recorder -f <filename>.ext      Records the video. Use Ctrl+C to stop recording. 
+                                       The video file will be stored as <outputname>.ext in the current working directory.
+ 
+  Video and Audio:
+  
+  - wf-recorder -a                     Records the audio. Use Ctrl+C to stop recording. 
+                                       The video file will be stored as recording.mp4 in the current working directory.
+                
+  - wf-recorder -a -f <filename>.ext   Records the audio. Use Ctrl+C to stop recording. 
+                                       The video file will be stored as <outputname>.ext in the current working directory.
+");
+        exit(EXIT_SUCCESS);
+}
+
 int main(int argc, char *argv[])
 {
     FrameWriterParams params;
@@ -571,60 +633,6 @@ int main(int argc, char *argv[])
             default:
                 printf("Unsupported command line argument %s\n", optarg);
         }
-    }
-
-    if (c == 'h') 
-    {
-         printf("Usage: wf-recorder [OPTION]... [FILE]...
-Screen recording of wlroots-based compositors
-
-With no FILE, start recording the current screen.
-
-  -a, --audio               Starts recording the screen with audio
-                
-  -c, --codec               Specifies the codec of the video. Supports  GIF output also.
-                            To modify codec parameters, use -p <option_name>=<option_value>
-                
-  -d, --device              Selects the device to use when encoding the video
-                            Some drivers report support for rgb0 data for vaapi input but really only support yuv.
-                            Use the -t or --to-yuv option in addition to the vaapi options to convert the data in software,
-                            before sending it to the gpu.
-                
-  -g, --geometry            Selects a specific part of the screen.
-  
-  -h, --help                Prints this help screen.
-                
-  -l, --log                 Generates a log on the current terminal. Debug purposes. 
-                
-  -o, --output              Specify the output where the video is to be recorded.
-                
-  -p, --codec-param         Change the codec parameters.
-                            -p <option_name>=<option_value>
-
-  -t, to-yuv                Use the -t or --to-yuv option in addition to the vaapi options to convert the data in software,
-                            before sending it to the gpu.
-                
-                
-                
-Examples:
-  
-  Video Only:
-  
-  - wf-recorder                       Records the video. Use Ctrl+C to stop recording. 
-                                      The video file will be stored as recording.mp4 in the current working directory.
-                
-  - wf-recorder -f <filename>         Records the video. Use Ctrl+C to stop recording. 
-                                      The video file will be stored as <outputname>.mp4 in the current working directory.
- 
-  Video and Audio:
-  
-  - wf-recorder -a                    Records the audio. Use Ctrl+C to stop recording. 
-                                      The video file will be stored as recording.mp4 in the current working directory.
-                
-  - wf-recorder -a -f <filename>      Records the audio. Use Ctrl+C to stop recording. 
-                                      The video file will be stored as <outputname>.mp4 in the current working directory.
-");
-        return EXIT_SUCCESS;
     }
         
     display = wl_display_connect(NULL);
