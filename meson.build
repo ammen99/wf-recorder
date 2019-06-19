@@ -36,6 +36,33 @@ swr = dependency('libswresample')
 threads = dependency('threads')
 pulse = dependency('libpulse-simple')
 
+scdoc = dependency('scdoc', version: '>=1.9.2', native: true, required: get_option('man-pages'))
+
+if scdoc.found()
+    scdoc_bin=find_program(scdoc.get_pkgconfig_variable('scdoc'), native: true)
+
+    sh = find_program('sh', native: true)
+
+    mandir=get_option('mandir')
+
+    filename ='manpage/wf-recorder.1.scd'
+
+    project_name='wf-recorder'
+    section='1'
+    output= '@0@.@1@'.format(project_name, section)
+
+    custom_target(
+  	project_name,
+	input: filename,
+	output:output,
+	command: [
+	      sh, '-c', '@0@ < @INPUT@ > @1@'.format(scdoc_bin.path(), output)
+	  ],
+	install: true,
+	install_dir: '@0@/man@1@'.format(mandir, section)
+	)
+endif
+
 subdir('proto')
 executable('wf-recorder', ['src/frame-writer.cpp', 'src/main.cpp', 'src/pulse.cpp', 'src/averr.c'],
         dependencies: [wayland_client, wayland_protos, libavutil, libavcodec, libavformat, wf_protos, sws, threads, pulse, swr],
