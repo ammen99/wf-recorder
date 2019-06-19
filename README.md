@@ -21,6 +21,8 @@ ninja -C build
 ```
 Optionally configure with `-Ddefault_codec='codec'`. The default is libx264. Now you can just run `./build/wf-recorder` or install it with `sudo ninja -C build install`.
 
+Optionally install `scdoc`, a tool by ddevault, for building the manpage.
+
 # usage
 In it's simplest form, run `wf-recorder` to start recording and use Ctrl+C to stop. This will create a file called recording.mp4 in the current working directory using the default codec.
 
