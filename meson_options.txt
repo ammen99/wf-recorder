@@ -1,1 +1,2 @@
 option('default_codec', type: 'string', value: 'libx264', description: 'Codec that will be used by default')
+option('man-pages', type: 'feature', value: 'auto', description: 'Generate and install man pages')
