@@ -482,7 +482,7 @@ static wf_recorder_output* detect_output_from_region(const capture_region& regio
 }
 
 static void help()
-{    
+{
     printf(R"(Usage: wf-recorder [OPTION]... -f [FILE]...
 Screen recording of wlroots-based compositors
 
@@ -619,6 +619,7 @@ int main(int argc, char *argv[])
                 break;
 
             case 'h':
+                help();
                 break;
 
             case 'p':
