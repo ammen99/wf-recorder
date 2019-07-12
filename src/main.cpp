@@ -502,7 +502,7 @@ With no FILE, start recording the current screen.
 
   -a, --audio [DEVICE]      Starts recording the screen with audio.
                             [DEVICE] argument is optional.
-                            In case you want to specify the pulseaudio device which will capture 
+                            In case you want to specify the pulseaudio device which will capture
                             the audio, you can run this command with the name of that device.
                             You can find your device by running: pactl list sinks | grep Name
 
@@ -533,14 +533,14 @@ With no FILE, start recording the current screen.
   -p, --codec-param         Change the codec parameters.
                             -p <option_name>=<option_value>
 
-  -t, to-yuv                Use the -t or --to-yuv option in addition to the vaapi options to
-                            convert the data in software, before sending it to the gpu.\n\n
+  -t, force-yuv             Use the -t or --force-yuv option to force conversion of the data to
+                            yuv format, before sending it to the gpu.\n\n
 Examples:
 
   Video Only:
 
   - wf-recorder                         Records the video. Use Ctrl+C to stop recording.
-                                        The video file will be stored as recording.mp4 in the 
+                                        The video file will be stored as recording.mp4 in the
                                         current working directory.
 
   - wf-recorder -f <filename>.ext       Records the video. Use Ctrl+C to stop recording.
