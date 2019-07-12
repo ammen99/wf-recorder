@@ -512,8 +512,6 @@ With no FILE, start recording the current screen.
   -d, --device              Selects the device to use when encoding the video
                             Some drivers report support for rgb0 data for vaapi input but
                             really only support yuv.
-                            Use the -t or --to-yuv option in addition to the vaapi options to
-                            convert the data in software, before sending it to the gpu.
 
   -f <filename>.ext         By using the -f option the output file will have the name :
                             filename.ext and the file format will be determined by provided
