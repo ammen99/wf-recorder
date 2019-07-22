@@ -111,9 +111,23 @@ AVPixelFormat FrameWriter::get_input_format()
         AV_PIX_FMT_BGR0 : AV_PIX_FMT_RGB0;
 }
 
+AVPixelFormat FrameWriter::lookup_pixel_format(std::string pix_fmt)
+{
+    AVPixelFormat fmt = av_get_pix_fmt(pix_fmt.c_str());
+
+    if (fmt != AV_PIX_FMT_NONE)
+      return fmt;
+
+    std::cerr << "Failed to find the pixel format: " << pix_fmt << std::endl;
+    std::exit(-1);
+}
+
 AVPixelFormat FrameWriter::choose_sw_format(AVCodec *codec)
 {
     auto in_fmt = get_input_format();
+
+    if (!params.pix_fmt.empty())
+        return lookup_pixel_format(params.pix_fmt);
 
     /* For codecs such as rawvideo no supported formats are listed */
     if (!codec->pix_fmts)

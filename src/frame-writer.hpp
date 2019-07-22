@@ -51,6 +51,7 @@ struct FrameWriterParams
 
     std::string codec;
     std::string muxer;
+    std::string pix_fmt;
     std::string hw_device; // used only if codec contains vaapi
     std::map<std::string, std::string> codec_options;
 
@@ -78,6 +79,7 @@ class FrameWriter
     AVBufferRef *hw_device_context = NULL;
     AVBufferRef *hw_frame_context = NULL;
 
+    AVPixelFormat lookup_pixel_format(std::string pix_fmt);
     AVPixelFormat choose_sw_format(AVCodec *codec);
     AVPixelFormat get_input_format();
     void init_hw_accel();
