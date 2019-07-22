@@ -40,6 +40,9 @@ wf-recorder - A simple screen recording program for wlroots-based compositors
 *-m, --muxer*
 	Set the output format to a specific muxer instead of detecting it from the filename.
 
+*-x, --pixel-format*
+	Set the output pixel format. These can be found by running : *ffmpeg -pix_fmts*
+
 *-g, --geometry*            
 	Selects a specific part of the screen.
 
