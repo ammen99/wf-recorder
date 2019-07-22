@@ -304,11 +304,15 @@ void FrameWriter::init_sws(AVPixelFormat format)
     }
 }
 
-static const char* determine_output_format(const std::string& output_name)
+static const char* determine_output_format(const FrameWriterParams& params)
 {
-    if (output_name.find("rtmp") == 0)
+    if (!params.muxer.empty())
+        return params.muxer.c_str();
+
+    if (params.file.find("rtmp") == 0)
         return "flv";
-    if (output_name.find("udp") == 0)
+
+    if (params.file.find("udp") == 0)
         return "mpegts";
 
     return NULL;
@@ -323,7 +327,7 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
     // Preparing the data concerning the format and codec,
     // in order to write properly the header, frame data and end of file.
     this->outputFmt = av_guess_format(NULL, params.file.c_str(), NULL);
-    auto streamFormat = determine_output_format(params.file);
+    auto streamFormat = determine_output_format(params);
     auto context_ret = avformat_alloc_output_context2(&this->fmtCtx, NULL,
         streamFormat, params.file.c_str());
     if (context_ret < 0)

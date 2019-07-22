@@ -38,6 +38,7 @@ struct FrameWriterParams
     InputFormat format;
 
     std::string codec;
+    std::string muxer;
     std::string hw_device; // used only if codec contains vaapi
     std::map<std::string, std::string> codec_options;
 
