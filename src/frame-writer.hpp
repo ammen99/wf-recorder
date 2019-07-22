@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include "config.h"
 
 #define AUDIO_RATE 44100
 
@@ -16,6 +17,9 @@ extern "C"
     #include <libswscale/swscale.h>
     #include <libswresample/swresample.h>
     #include <libavcodec/avcodec.h>
+#ifdef HAVE_LIBAVDEVICE
+    #include <libavdevice/avdevice.h>
+#endif
     #include <libavutil/mathematics.h>
     #include <libavformat/avformat.h>
     #include <libavutil/pixdesc.h>
