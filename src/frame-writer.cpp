@@ -325,6 +325,10 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
     if (params.enable_ffmpeg_debug_output)
         av_log_set_level(AV_LOG_DEBUG);
 
+#ifdef HAVE_LIBAVDEVICE
+    avdevice_register_all();
+#endif
+
     // Preparing the data concerning the format and codec,
     // in order to write properly the header, frame data and end of file.
     this->outputFmt = av_guess_format(NULL, params.file.c_str(), NULL);
