@@ -113,9 +113,14 @@ AVPixelFormat FrameWriter::get_input_format()
 
 AVPixelFormat FrameWriter::choose_sw_format(AVCodec *codec)
 {
-    /* First case: if the codec supports getting the appropriate RGB format
-     * directly, we want to use it since we don't have to convert data */
     auto in_fmt = get_input_format();
+
+    /* For codecs such as rawvideo no supported formats are listed */
+    if (!codec->pix_fmts)
+        return in_fmt;
+
+    /* If the codec supports getting the appropriate RGB format
+     * directly, we want to use it since we don't have to convert data */
     if (is_fmt_supported(in_fmt, codec->pix_fmts))
         return in_fmt;
 
