@@ -156,8 +156,9 @@ void FrameWriter::init_video_stream()
         videoCodecCtx->pix_fmt = AV_PIX_FMT_VAAPI;
         init_hw_accel();
         videoCodecCtx->hw_frames_ctx = av_buffer_ref(hw_frame_context);
-        if (params.to_yuv)
-            init_sws(AV_PIX_FMT_NV12);
+
+        if (params.force_yuv)
+            init_sws(AV_PIX_FMT_YUV420P);
     } else
     {
         videoCodecCtx->pix_fmt = choose_sw_format(codec);
@@ -320,13 +321,16 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
         std::exit(-1);
     }
 
+#ifndef HAVE_OPENCL
+    if (params.opencl)
+        std::cerr << "This version of wf-recorder was built without OpenCL support. Ignoring OpenCL option." << std::endl;
+#endif
+
     init_codecs();
 
     encoder_frame = av_frame_alloc();
-    if (hw_device_context && params.to_yuv) {
-        encoder_frame->format = AV_PIX_FMT_NV12;
-    } else if (hw_device_context) {
-        encoder_frame->format = get_input_format();
+    if (hw_device_context) {
+        encoder_frame->format = params.force_yuv ? AV_PIX_FMT_YUV420P : get_input_format();
     } else {
         encoder_frame->format = videoCodecCtx->pix_fmt;
     }
@@ -355,6 +359,32 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
     }
 }
 
+void FrameWriter::convert_pixels_to_yuv(const uint8_t *pixels,
+    const uint8_t *formatted_pixels, int stride[])
+{
+    bool y_invert = (pixels != formatted_pixels);
+    bool converted_with_opencl = false;
+
+#ifdef HAVE_OPENCL
+    if (params.opencl && params.force_yuv)
+    {
+        int r = opencl->do_frame(pixels, encoder_frame,
+            get_input_format(), y_invert);
+
+        converted_with_opencl = (r == 0);
+    }
+#else
+    /* Silence compiler warning when opencl is disabled */
+    (void)(y_invert);
+#endif
+
+    if (!converted_with_opencl)
+    {
+        sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
+            encoder_frame->data, encoder_frame->linesize);
+    }
+}
+
 void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 {
     /* Calculate data after y-inversion */
@@ -371,13 +401,11 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 
     if (hw_device_context)
     {
-        encoder_frame->data[0] = (uint8_t*)formatted_pixels;
-        encoder_frame->linesize[0] = stride[0];
-
-        if (params.to_yuv)
-        {
-            sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
-                encoder_frame->data, encoder_frame->linesize);
+        if (params.force_yuv) {
+            convert_pixels_to_yuv(pixels, formatted_pixels, stride);
+        } else {
+            encoder_frame->data[0] = (uint8_t*) formatted_pixels;
+            encoder_frame->linesize[0] = stride[0];
         }
 
         if (av_hwframe_transfer_data(hw_frame, encoder_frame, 0))
@@ -397,8 +425,8 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
         encoder_frame->buf[0] = NULL;
     } else
     {
-        sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
-            encoder_frame->data, encoder_frame->linesize);
+        convert_pixels_to_yuv(pixels, formatted_pixels, stride);
+
         /* Force ffmpeg to create a copy of the frame, if the codec needs it */
         saved_buf0 = encoder_frame->buf[0];
         encoder_frame->buf[0] = NULL;

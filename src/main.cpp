@@ -24,6 +24,10 @@
 
 #include "config.h"
 
+#ifdef HAVE_OPENCL
+std::unique_ptr<OpenCL> opencl;
+#endif
+
 std::mutex frame_writer_mutex, frame_writer_pending_mutex;
 std::unique_ptr<FrameWriter> frame_writer;
 
@@ -310,6 +314,14 @@ static void write_loop(FrameWriterParams params, PulseReaderParams pulseParams)
             params.height = buffer.height;
             frame_writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
 
+#ifdef HAVE_OPENCL
+            if (params.opencl && params.force_yuv)
+            {
+                frame_writer->opencl = std::move(opencl);
+                frame_writer->opencl->init(params.width, params.height);
+            }
+#endif
+
             if (params.enable_audio)
             {
                 pulseParams.audio_frame_size = frame_writer->get_audio_buffer_size();
@@ -490,7 +502,7 @@ With no FILE, start recording the current screen.
 
   -a, --audio [DEVICE]      Starts recording the screen with audio.
                             [DEVICE] argument is optional.
-                            In case you want to specify the pulseaudio device which will capture 
+                            In case you want to specify the pulseaudio device which will capture
                             the audio, you can run this command with the name of that device.
                             You can find your device by running: pactl list sinks | grep Name
 
@@ -500,8 +512,6 @@ With no FILE, start recording the current screen.
   -d, --device              Selects the device to use when encoding the video
                             Some drivers report support for rgb0 data for vaapi input but
                             really only support yuv.
-                            Use the -t or --to-yuv option in addition to the vaapi options to
-                            convert the data in software, before sending it to the gpu.
 
   -f <filename>.ext         By using the -f option the output file will have the name :
                             filename.ext and the file format will be determined by provided
@@ -521,14 +531,14 @@ With no FILE, start recording the current screen.
   -p, --codec-param         Change the codec parameters.
                             -p <option_name>=<option_value>
 
-  -t, to-yuv                Use the -t or --to-yuv option in addition to the vaapi options to
-                            convert the data in software, before sending it to the gpu.\n\n
+  -t, force-yuv             Use the -t or --force-yuv option to force conversion of the data to
+                            yuv format, before sending it to the gpu.\n\n
 Examples:
 
   Video Only:
 
   - wf-recorder                         Records the video. Use Ctrl+C to stop recording.
-                                        The video file will be stored as recording.mp4 in the 
+                                        The video file will be stored as recording.mp4 in the
                                         current working directory.
 
   - wf-recorder -f <filename>.ext       Records the video. Use Ctrl+C to stop recording.
@@ -555,7 +565,9 @@ int main(int argc, char *argv[])
     params.codec = DEFAULT_CODEC;
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
-    params.to_yuv = false;
+    params.force_yuv = false;
+    params.opencl = false;
+    params.opencl_device = -1;
 
     PulseReaderParams pulseParams;
 
@@ -573,15 +585,16 @@ int main(int argc, char *argv[])
         { "device",          required_argument, NULL, 'd' },
         { "log",             no_argument,       NULL, 'l' },
         { "audio",           optional_argument, NULL, 'a' },
-        { "to-yuv",          no_argument,       NULL, 't' },
         { "help",            no_argument,       NULL, 'h' },
+        { "force-yuv",       no_argument,       NULL, 't' },
+        { "opencl",          optional_argument, NULL, 'e' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la::t::h", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:g:c:p:d:la::te::h", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -615,11 +628,16 @@ int main(int argc, char *argv[])
                 break;
 
             case 't':
-                params.to_yuv = true;
+                params.force_yuv = true;
                 break;
 
             case 'h':
                 help();
+                break;
+
+            case 'e':
+                params.opencl = true;
+                params.opencl_device = optarg ? atoi(optarg) : -1;
                 break;
 
             case 'p':
@@ -713,6 +731,11 @@ int main(int argc, char *argv[])
     }
 
     printf("selected region %d %d %d %d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);
+
+#ifdef HAVE_OPENCL
+     if (params.opencl && params.force_yuv)
+         opencl = std::unique_ptr<OpenCL> (new OpenCL(params.opencl_device));
+#endif
 
     timespec first_frame;
     first_frame.tv_sec = -1;

@@ -40,4 +40,6 @@ To use gpu encoding, use a VAAPI codec (for ex. `h264_vaapi`) and specify a GPU 
 ```
 wf-recorder -f test-vaapi.mkv -c h264_vaapi -d /dev/dri/renderD128
 ```
-Some drivers report support for rgb0 data for vaapi input but really only support yuv. In this case, use the `-t` or `--to-yuv` option in addition to the vaapi options to convert the data in software before sending it to the gpu.
+Some drivers report support for rgb0 data for vaapi input but really only support yuv planar formats. In this case, use the `-t` or `--force-yuv` option in addition to the vaapi options to convert the data to yuv planar data before sending it to the gpu.
+
+The `-e` option attempts to use OpenCL if wf-recorder was built with OpenCL support and `-t` or `--force-yuv` is specified, even without vaapi gpu encoding. Use `-e#` or `--opencl=#` to use a specific OpenCL device, where `#` is one of the devices listed.

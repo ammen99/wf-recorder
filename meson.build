@@ -4,7 +4,7 @@ project(
 	'cpp',
 	version: '0.1',
 	license: 'MIT',
-	meson_version: '>=0.43.0',
+	meson_version: '>=0.47.0',
 	default_options: [
 		'cpp_std=c++11',
         'c_std=c11',
@@ -17,16 +17,25 @@ conf_data = configuration_data()
 
 conf_data.set('default_codec', get_option('default_codec'))
 
-configure_file(input: 'config.h.in',
-               output: 'config.h',
-               configuration: conf_data)
-
 include_directories(['.'])
 
 add_project_arguments(['-Wno-deprecated-declarations'], language: 'cpp')
 
+project_sources = ['src/frame-writer.cpp', 'src/main.cpp', 'src/pulse.cpp', 'src/averr.c']
+
 wayland_client = dependency('wayland-client')
 wayland_protos = dependency('wayland-protocols')
+
+opencl = dependency('OpenCL', required : get_option('opencl'))
+
+if opencl.found()
+    conf_data.set('HAVE_OPENCL', true)
+    project_sources += 'src/opencl.cpp'
+endif
+
+configure_file(input: 'config.h.in',
+               output: 'config.h',
+               configuration: conf_data)
 
 libavutil = dependency('libavutil')
 libavcodec = dependency('libavcodec')
@@ -64,6 +73,6 @@ if scdoc.found()
 endif
 
 subdir('proto')
-executable('wf-recorder', ['src/frame-writer.cpp', 'src/main.cpp', 'src/pulse.cpp', 'src/averr.c'],
-        dependencies: [wayland_client, wayland_protos, libavutil, libavcodec, libavformat, wf_protos, sws, threads, pulse, swr],
+executable('wf-recorder', project_sources,
+        dependencies: [wayland_client, wayland_protos, libavutil, libavcodec, libavformat, wf_protos, sws, threads, pulse, swr, opencl],
         install: true)

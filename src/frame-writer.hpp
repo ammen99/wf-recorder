@@ -23,6 +23,14 @@ extern "C"
     #include <libavutil/opt.h>
 }
 
+#include "config.h"
+
+#ifdef HAVE_OPENCL
+#include <memory>
+#include "opencl.hpp"
+class OpenCL;
+#endif
+
 enum InputFormat
 {
      INPUT_FORMAT_BGR0,
@@ -46,7 +54,9 @@ struct FrameWriterParams
     bool enable_audio;
     bool enable_ffmpeg_debug_output;
 
-    bool to_yuv;
+    bool opencl;
+    bool force_yuv;
+    int opencl_device;
 };
 
 class FrameWriter
@@ -73,6 +83,16 @@ class FrameWriter
     AVFrame *encoder_frame = NULL;
     AVFrame *hw_frame = NULL;
 
+    /**
+     * Convert the given pixels to YUV and store in encoder_frame.
+     * Calls OpenCL if it is enabled.
+     *
+     * @param formatted_pixels contains the same data as pixels but y-inverted
+     * if the input format requires y-inversion.
+     */
+    void convert_pixels_to_yuv(const uint8_t *pixels,
+        const uint8_t *formatted_pixels, int stride[]);
+
     SwrContext *swrCtx;
     AVStream *audioStream;
     AVCodecContext *audioCodecCtx;
@@ -89,6 +109,10 @@ public :
     /* Buffer must have size get_audio_buffer_size() */
     void add_audio(const void* buffer);
     size_t get_audio_buffer_size();
+
+#ifdef HAVE_OPENCL
+    std::unique_ptr<OpenCL> opencl;
+#endif
 
     ~FrameWriter();
 };
