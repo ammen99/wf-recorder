@@ -15,7 +15,7 @@ yay -S wf-recorder-git
 ## from source
 
 ```
-git clone https://github.com/ammen99/wf-recorder && cd wf-recorder
+git clone https://github.com/ammen99/wf-recorder.git && cd wf-recorder
 meson build --prefix=/usr --buildtype=release
 ninja -C build
 ```
