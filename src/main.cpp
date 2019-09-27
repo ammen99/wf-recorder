@@ -194,7 +194,7 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
         exit(EXIT_FAILURE);
     }
 
-    zwlr_screencopy_frame_v1_copy(frame, buffer.wl_buffer);
+    zwlr_screencopy_frame_v1_copy_with_damage(frame, buffer.wl_buffer);
 }
 
 static void frame_handle_flags(void*, struct zwlr_screencopy_frame_v1 *, uint32_t flags) {
@@ -215,11 +215,17 @@ static void frame_handle_failed(void *, struct zwlr_screencopy_frame_v1 *) {
     exit_main_loop = true;
 }
 
+static void frame_handle_damage(void *, struct zwlr_screencopy_frame_v1 *,
+    uint32_t, uint32_t, uint32_t, uint32_t)
+{
+}
+
 static const struct zwlr_screencopy_frame_v1_listener frame_listener = {
     .buffer = frame_handle_buffer,
     .flags = frame_handle_flags,
     .ready = frame_handle_ready,
     .failed = frame_handle_failed,
+    .damage = frame_handle_damage,
 };
 
 static void handle_global(void*, struct wl_registry *registry,
@@ -239,7 +245,7 @@ static void handle_global(void*, struct wl_registry *registry,
     else if (strcmp(interface, zwlr_screencopy_manager_v1_interface.name) == 0)
     {
         screencopy_manager = (zwlr_screencopy_manager_v1*) wl_registry_bind(registry, name,
-            &zwlr_screencopy_manager_v1_interface, 1);
+            &zwlr_screencopy_manager_v1_interface, 2);
     }
     else if (strcmp(interface, zxdg_output_manager_v1_interface.name) == 0)
     {
