@@ -33,17 +33,20 @@ if opencl.found()
     project_sources += 'src/opencl.cpp'
 endif
 
-configure_file(input: 'config.h.in',
-               output: 'config.h',
-               configuration: conf_data)
-
 libavutil = dependency('libavutil')
 libavcodec = dependency('libavcodec')
 libavformat = dependency('libavformat')
+libavdevice = dependency('libavdevice', required: false)
 sws = dependency('libswscale')
 swr = dependency('libswresample')
 threads = dependency('threads')
 pulse = dependency('libpulse-simple')
+
+conf_data.set('HAVE_LIBAVDEVICE', libavdevice.found())
+
+configure_file(input: 'config.h.in',
+               output: 'config.h',
+               configuration: conf_data)
 
 scdoc = dependency('scdoc', version: '>=1.9.2', native: true, required: get_option('man-pages'))
 
@@ -73,6 +76,12 @@ if scdoc.found()
 endif
 
 subdir('proto')
+
+dependencies = [
+    wayland_client, wayland_protos,
+    libavutil, libavcodec, libavformat, libavdevice,
+    wf_protos, sws, threads, pulse, swr, opencl
+]
 executable('wf-recorder', project_sources,
-        dependencies: [wayland_client, wayland_protos, libavutil, libavcodec, libavformat, wf_protos, sws, threads, pulse, swr, opencl],
+        dependencies: dependencies,
         install: true)

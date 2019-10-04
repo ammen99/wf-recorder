@@ -520,6 +520,12 @@ With no FILE, start recording the current screen.
                             You can check the muxers that your FFmpeg installation supports by
                             running  : ffmpeg -muxers
 
+  -m, --muxer               Set the output format to a specific muxer instead of detecting it
+                            from the filename.
+
+  -x, --pixel-format        Set the output pixel format. These can be found by running:
+                            *ffmpeg -pix_fmts*
+
   -g, --geometry            Selects a specific part of the screen.
 
   -h, --help                Prints this help screen.
@@ -579,6 +585,8 @@ int main(int argc, char *argv[])
     struct option opts[] = {
         { "output",          required_argument, NULL, 'o' },
         { "file",            required_argument, NULL, 'f' },
+        { "muxer",           required_argument, NULL, 'm' },
+        { "pixel-format",    required_argument, NULL, 'x' },
         { "geometry",        required_argument, NULL, 'g' },
         { "codec",           required_argument, NULL, 'c' },
         { "codec-param",     required_argument, NULL, 'p' },
@@ -604,6 +612,14 @@ int main(int argc, char *argv[])
 
             case 'o':
                 cmdline_output = optarg;
+                break;
+
+            case 'm':
+                params.muxer = optarg;
+                break;
+
+            case 'x':
+                params.pix_fmt = optarg;
                 break;
 
             case 'g':

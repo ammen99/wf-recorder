@@ -111,11 +111,30 @@ AVPixelFormat FrameWriter::get_input_format()
         AV_PIX_FMT_BGR0 : AV_PIX_FMT_RGB0;
 }
 
+AVPixelFormat FrameWriter::lookup_pixel_format(std::string pix_fmt)
+{
+    AVPixelFormat fmt = av_get_pix_fmt(pix_fmt.c_str());
+
+    if (fmt != AV_PIX_FMT_NONE)
+      return fmt;
+
+    std::cerr << "Failed to find the pixel format: " << pix_fmt << std::endl;
+    std::exit(-1);
+}
+
 AVPixelFormat FrameWriter::choose_sw_format(AVCodec *codec)
 {
-    /* First case: if the codec supports getting the appropriate RGB format
-     * directly, we want to use it since we don't have to convert data */
     auto in_fmt = get_input_format();
+
+    if (!params.pix_fmt.empty())
+        return lookup_pixel_format(params.pix_fmt);
+
+    /* For codecs such as rawvideo no supported formats are listed */
+    if (!codec->pix_fmts)
+        return in_fmt;
+
+    /* If the codec supports getting the appropriate RGB format
+     * directly, we want to use it since we don't have to convert data */
     if (is_fmt_supported(in_fmt, codec->pix_fmts))
         return in_fmt;
 
@@ -300,11 +319,15 @@ void FrameWriter::init_sws(AVPixelFormat format)
     }
 }
 
-static const char* determine_output_format(const std::string& output_name)
+static const char* determine_output_format(const FrameWriterParams& params)
 {
-    if (output_name.find("rtmp") == 0)
+    if (!params.muxer.empty())
+        return params.muxer.c_str();
+
+    if (params.file.find("rtmp") == 0)
         return "flv";
-    if (output_name.find("udp") == 0)
+
+    if (params.file.find("udp") == 0)
         return "mpegts";
 
     return NULL;
@@ -316,10 +339,14 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
     if (params.enable_ffmpeg_debug_output)
         av_log_set_level(AV_LOG_DEBUG);
 
+#ifdef HAVE_LIBAVDEVICE
+    avdevice_register_all();
+#endif
+
     // Preparing the data concerning the format and codec,
     // in order to write properly the header, frame data and end of file.
     this->outputFmt = av_guess_format(NULL, params.file.c_str(), NULL);
-    auto streamFormat = determine_output_format(params.file);
+    auto streamFormat = determine_output_format(params);
     auto context_ret = avformat_alloc_output_context2(&this->fmtCtx, NULL,
         streamFormat, params.file.c_str());
     if (context_ret < 0)

@@ -36,6 +36,11 @@ to select and limit the recording to a part of the screen.
 
 To specify a codec, use the `-c <codec>` option. To modify codec parameters, use `-p <option_name>=<option_value>`
 
+To set a specific output format use the `--muxer` option. For example, to output to a video4linux2 loopback you might use:
+```
+wf-recorder --muxer=v4l2 --codec=rawvideo --file=/dev/video2
+```
+
 To use gpu encoding, use a VAAPI codec (for ex. `h264_vaapi`) and specify a GPU device to use with the `-d` option:
 ```
 wf-recorder -f test-vaapi.mkv -c h264_vaapi -d /dev/dri/renderD128

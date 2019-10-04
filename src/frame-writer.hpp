@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include "config.h"
 
 #define AUDIO_RATE 44100
 
@@ -16,6 +17,9 @@ extern "C"
     #include <libswscale/swscale.h>
     #include <libswresample/swresample.h>
     #include <libavcodec/avcodec.h>
+#ifdef HAVE_LIBAVDEVICE
+    #include <libavdevice/avdevice.h>
+#endif
     #include <libavutil/mathematics.h>
     #include <libavformat/avformat.h>
     #include <libavutil/pixdesc.h>
@@ -46,6 +50,8 @@ struct FrameWriterParams
     InputFormat format;
 
     std::string codec;
+    std::string muxer;
+    std::string pix_fmt;
     std::string hw_device; // used only if codec contains vaapi
     std::map<std::string, std::string> codec_options;
 
@@ -73,6 +79,7 @@ class FrameWriter
     AVBufferRef *hw_device_context = NULL;
     AVBufferRef *hw_frame_context = NULL;
 
+    AVPixelFormat lookup_pixel_format(std::string pix_fmt);
     AVPixelFormat choose_sw_format(AVCodec *codec);
     AVPixelFormat get_input_format();
     void init_hw_accel();
