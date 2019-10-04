@@ -546,7 +546,7 @@ With no FILE, start recording the current screen.
     printf(R"(
 
   -t, --force-yuv           Use the -t or --force-yuv option to force conversion of the data to
-                            yuv format, before sending it to the gpu.\n\n
+                            yuv format, before sending it to the gpu.)" "\n\n" R"(
 Examples:
 
   Video Only:
@@ -569,7 +569,7 @@ Examples:
                                         The video file will be stored as <outputname>.ext in the
                                         current working directory.
 
-)");
+)" "\n");
     exit(EXIT_SUCCESS);
 }
 
