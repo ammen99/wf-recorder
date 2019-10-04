@@ -535,9 +535,17 @@ With no FILE, start recording the current screen.
   -o, --output              Specify the output where the video is to be recorded.
 
   -p, --codec-param         Change the codec parameters.
-                            -p <option_name>=<option_value>
+                            -p <option_name>=<option_value>)");
+#ifdef HAVE_OPENCL
+    printf(R"(
 
-  -t, force-yuv             Use the -t or --force-yuv option to force conversion of the data to
+  -e, --opencl              Use the -e[#] or --opencl[=#] in conjunction with -t or --force-yuv option
+                            to use opencl for gpu accelerated conversion of data to yuv. # is one
+                            of the devices listed when running without specifying #.)");
+#endif
+    printf(R"(
+
+  -t, --force-yuv           Use the -t or --force-yuv option to force conversion of the data to
                             yuv format, before sending it to the gpu.\n\n
 Examples:
 
