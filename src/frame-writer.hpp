@@ -46,6 +46,7 @@ struct FrameWriterParams
     std::string file;
     int width;
     int height;
+    int stride;
 
     InputFormat format;
 

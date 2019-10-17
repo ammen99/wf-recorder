@@ -422,7 +422,7 @@ void FrameWriter::convert_pixels_to_yuv(const uint8_t *pixels,
 void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 {
     /* Calculate data after y-inversion */
-    int stride[] = {int(4 * params.width)};
+    int stride[] = {int(params.stride)};
     const uint8_t *formatted_pixels = pixels;
     if (y_invert)
     {
