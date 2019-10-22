@@ -559,8 +559,9 @@ Examples:
 
   - wf-recorder -a -f <filename>.ext    Records the audio. Use Ctrl+C to stop recording.
                                         The video file will be stored as <outputname>.ext in the
-                                        current working directory.)"
-    );
+                                        current working directory.
+
+)");
     exit(EXIT_SUCCESS);
 }
 
