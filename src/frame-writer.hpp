@@ -102,7 +102,7 @@ class FrameWriter
     void init_audio_stream();
     void send_audio_pkt(AVFrame *frame);
 
-    void finish_frame(AVPacket& pkt, bool isVideo);
+    void finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt);
 
 public :
     FrameWriter(const FrameWriterParams& params);

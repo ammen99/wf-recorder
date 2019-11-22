@@ -422,7 +422,7 @@ void FrameWriter::encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt)
             return;
         }
 
-        finish_frame(*pkt, true);
+        finish_frame(enc_ctx, *pkt);
     }
 }
 
@@ -512,10 +512,7 @@ void FrameWriter::send_audio_pkt(AVFrame *frame)
     pkt.data = NULL;
     pkt.size = 0;
 
-    int got_output;
-    avcodec_encode_audio2(audioCodecCtx, &pkt, frame, &got_output);
-    if (got_output)
-      finish_frame(pkt, false);
+    encode(audioCodecCtx, frame, &pkt);
 }
 
 size_t FrameWriter::get_audio_buffer_size()
@@ -550,11 +547,11 @@ void FrameWriter::add_audio(const void* buffer)
     av_frame_free(&outputf);
 }
 
-void FrameWriter::finish_frame(AVPacket& pkt, bool is_video)
+void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
 {
     static std::mutex fmt_mutex, pending_mutex;
 
-    if (is_video)
+    if (enc_ctx == videoCodecCtx)
     {
         av_packet_rescale_ts(&pkt, (AVRational){ 1, 1000000 }, videoStream->time_base);
         pkt.stream_index = videoStream->index;
@@ -589,11 +586,9 @@ FrameWriter::~FrameWriter()
 
     encode(videoCodecCtx, NULL, &pkt);
 
-    for (int got_output = 1; got_output && params.enable_audio;)
+    if (params.enable_audio)
     {
-        avcodec_encode_audio2(audioCodecCtx, &pkt, NULL, &got_output);
-        if (got_output)
-            finish_frame(pkt, false);
+        encode(audioCodecCtx, NULL, &pkt);
     }
 
     // Writing the end of the file.
