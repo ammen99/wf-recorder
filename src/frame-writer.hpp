@@ -93,6 +93,8 @@ class FrameWriter
     void convert_pixels_to_yuv(const uint8_t *pixels,
         const uint8_t *formatted_pixels, int stride[]);
 
+    void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt);
+
     SwrContext *swrCtx;
     AVStream *audioStream;
     AVCodecContext *audioCodecCtx;
