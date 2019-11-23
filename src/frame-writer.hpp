@@ -100,6 +100,8 @@ class FrameWriter
     void convert_pixels_to_yuv(const uint8_t *pixels,
         const uint8_t *formatted_pixels, int stride[]);
 
+    void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt);
+
     SwrContext *swrCtx;
     AVStream *audioStream;
     AVCodecContext *audioCodecCtx;
@@ -107,7 +109,7 @@ class FrameWriter
     void init_audio_stream();
     void send_audio_pkt(AVFrame *frame);
 
-    void finish_frame(AVPacket& pkt, bool isVideo);
+    void finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt);
 
 public :
     FrameWriter(const FrameWriterParams& params);
