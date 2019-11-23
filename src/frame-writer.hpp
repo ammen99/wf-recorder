@@ -63,6 +63,7 @@ struct FrameWriterParams
     bool opencl;
     bool force_yuv;
     int opencl_device;
+    int bframes;
 };
 
 class FrameWriter

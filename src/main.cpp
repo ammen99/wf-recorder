@@ -546,7 +546,10 @@ With no FILE, start recording the current screen.
     printf(R"(
 
   -t, --force-yuv           Use the -t or --force-yuv option to force conversion of the data to
-                            yuv format, before sending it to the gpu.)" "\n\n" R"(
+                            yuv format, before sending it to the gpu.
+
+  -b, --bframes             This option is used to set the maximum number of b-frames to be used.
+                            If b-frames are not supported by your hardware, set this to 0.)" "\n\n" R"(
 Examples:
 
   Video Only:
@@ -583,6 +586,7 @@ int main(int argc, char *argv[])
     params.force_yuv = false;
     params.opencl = false;
     params.opencl_device = -1;
+    params.bframes = -1;
 
     PulseReaderParams pulseParams;
 
@@ -605,13 +609,14 @@ int main(int argc, char *argv[])
         { "help",            no_argument,       NULL, 'h' },
         { "force-yuv",       no_argument,       NULL, 't' },
         { "opencl",          optional_argument, NULL, 'e' },
+        { "bframes",         optional_argument, NULL, 'b' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:d:la::te::h", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:d:b:la::te::h", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -641,6 +646,10 @@ int main(int argc, char *argv[])
 
             case 'd':
                 params.hw_device = optarg;
+                break;
+
+            case 'b':
+                params.bframes = optarg ? atoi(optarg) : -1;
                 break;
 
             case 'l':

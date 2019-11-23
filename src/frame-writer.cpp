@@ -170,6 +170,9 @@ void FrameWriter::init_video_stream()
     videoCodecCtx->height = params.height;
     videoCodecCtx->time_base = (AVRational){ 1, FPS };
 
+    if (params.bframes != -1)
+        videoCodecCtx->max_b_frames = params.bframes;
+
     if (params.codec.find("vaapi") != std::string::npos)
     {
         videoCodecCtx->pix_fmt = AV_PIX_FMT_VAAPI;
