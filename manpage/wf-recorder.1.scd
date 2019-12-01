@@ -60,9 +60,15 @@ wf-recorder - A simple screen recording program for wlroots-based compositors
 
 	*-p <option_name>=<option_value>*
 
-*-t, to-yuv*
-	Use the -t or --to-yuv option in addition to the vaapi options to convert the data in software,
+*-e, --opencl [DEVICE]*      
+	Uses opencl to do RGB to YUV conversion on the gpu.
+
+*-t, --force-yuv*            
+	Use the -t or --force-yuv option in addition to the vaapi options to convert the data in software,
 	before sending it to the gpu.
+
+*-b [max_b_frames], --bframes [max_b_frames]*
+	Sets the maximum number of B-Frames to use.
 
 # DESCRIPTION
 *wf-recorder* is a tool built to screen record your screen on Wayland compositors.
