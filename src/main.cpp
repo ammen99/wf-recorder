@@ -609,7 +609,7 @@ int main(int argc, char *argv[])
         { "help",            no_argument,       NULL, 'h' },
         { "force-yuv",       no_argument,       NULL, 't' },
         { "opencl",          optional_argument, NULL, 'e' },
-        { "bframes",         optional_argument, NULL, 'b' },
+        { "bframes",         required_argument, NULL, 'b' },
         { 0,                 0,                 NULL,  0  }
     };
 
@@ -649,7 +649,7 @@ int main(int argc, char *argv[])
                 break;
 
             case 'b':
-                params.bframes = optarg ? atoi(optarg) : -1;
+                params.bframes = atoi(optarg);
                 break;
 
             case 'l':
