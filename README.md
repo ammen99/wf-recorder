@@ -18,7 +18,13 @@ aura -A wf-recorder-git
 ```
 
 ## From Source
+=======
+### install dependences (ubuntu)
+```
+sudo apt install libavutil-dev libavcodec-dev libavformat-dev libswscale-dev libpulse-dev
+```
 
+### download & build
 ```
 git clone https://github.com/ammen99/wf-recorder.git && cd wf-recorder
 meson build --prefix=/usr --buildtype=release
