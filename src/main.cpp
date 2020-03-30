@@ -111,7 +111,7 @@ struct wf_buffer
     bool y_invert;
 
     timespec presented;
-    uint32_t base_usec;
+    uint64_t base_usec;
 
     std::atomic<bool> released{true}; // if the buffer can be used to store new pending frames
     std::atomic<bool> available{false}; // if the buffer can be used to feed the encoder
