@@ -19,12 +19,19 @@ aura -A wf-recorder-git
 
 ## From Source
 =======
-### install dependences (ubuntu)
+### Install Dependencies
+
+#### Ubuntu
 ```
 sudo apt install libavutil-dev libavcodec-dev libavformat-dev libswscale-dev libpulse-dev
 ```
 
-### download & build
+#### Fedora
+```
+$ sudo yum install wayland-devel wayland-protocols-devel ffmpeg-devel
+```
+
+### Download & Build
 ```
 git clone https://github.com/ammen99/wf-recorder.git && cd wf-recorder
 meson build --prefix=/usr --buildtype=release
