@@ -851,7 +851,10 @@ int main(int argc, char *argv[])
     writer_thread.join();
 
     for (auto& buffer : buffers)
-        wl_buffer_destroy(buffer.wl_buffer);
+    {
+        if (buffer.wl_buffer)
+            wl_buffer_destroy(buffer.wl_buffer);
+    }
 
     return EXIT_SUCCESS;
 }
