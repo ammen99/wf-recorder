@@ -192,6 +192,8 @@ void FrameWriter::init_video_stream()
     if (fmtCtx->oformat->flags & AVFMT_GLOBALHEADER)
         videoCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
+    avcodec_parameters_from_context(videoStream->codecpar, videoStream->codec);
+
     int ret;
     char err[256];
     if ((ret = avcodec_open2(videoCodecCtx, codec, &options)) < 0)
@@ -259,6 +261,8 @@ void FrameWriter::init_audio_stream()
 
     if (fmtCtx->oformat->flags & AVFMT_GLOBALHEADER)
         audioCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+    avcodec_parameters_from_context(audioStream->codecpar, audioStream->codec);
 
     int err;
     if ((err = avcodec_open2(audioCodecCtx, codec, NULL)) < 0)
