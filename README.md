@@ -17,6 +17,13 @@ or
 aura -A wf-recorder-git
 ```
 
+## Fedora Linux
+
+Fedora users can install from rpmfusion-free-updates. First [enable rpmfusion](https://rpmfusion.org/Configuration) and then
+```
+sudo dnf install wf-recorder
+```
+
 ## From Source
 =======
 ### Install Dependencies
