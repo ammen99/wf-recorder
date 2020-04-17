@@ -28,7 +28,7 @@ sudo apt install libavutil-dev libavcodec-dev libavformat-dev libswscale-dev lib
 
 #### Fedora
 ```
-$ sudo yum install wayland-devel wayland-protocols-devel ffmpeg-devel
+$ sudo dnf install wayland-devel wayland-protocols-devel ffmpeg-devel
 ```
 
 ### Download & Build
