@@ -25,7 +25,6 @@ sudo dnf install wf-recorder
 ```
 
 ## From Source
-=======
 ### Install Dependencies
 
 #### Ubuntu
@@ -57,6 +56,12 @@ To select a specific part of the screen you can either use `-g <geometry>`, or u
 
 ```
 wf-recorder -g "$(slurp)"
+```
+
+You can record screen and sound simultaneously with
+
+```
+wf-recorder --audio --file=recording_with_audio.mp4
 ```
 
 To specify a codec, use the `-c <codec>` option. To modify codec parameters, use `-p <option_name>=<option_value>`.
