@@ -17,6 +17,13 @@ or
 aura -A wf-recorder-git
 ```
 
+## Artix Linux
+
+Artix users can install wf-recorder from the official repos
+```
+pacman -S wf-recorder
+```
+
 ## Fedora Linux
 
 Fedora users can install from rpmfusion-free-updates. First [enable rpmfusion](https://rpmfusion.org/Configuration) and then
