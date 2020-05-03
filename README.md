@@ -78,6 +78,8 @@ To set a specific output format, use the `--muxer` option. For example, to outpu
 wf-recorder --muxer=v4l2 --codec=rawvideo --file=/dev/video2
 ```
 
+See `--list-video-codecs` for a complete list of supported video encoders.
+
 To use GPU encoding, use a VAAPI codec (for ex. `h264_vaapi`) and specify a GPU device to use with the `-d` option:
 ```
 wf-recorder -f test-vaapi.mkv -c h264_vaapi -d /dev/dri/renderD128
