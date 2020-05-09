@@ -601,7 +601,9 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
         pending_mutex.unlock();
     }
 
-    av_interleaved_write_frame(fmtCtx, &pkt);
+    if (av_interleaved_write_frame(fmtCtx, &pkt) != 0) {
+        params.write_aborted_flag = true;
+    }
     av_packet_unref(&pkt);
 
     if (params.enable_audio)

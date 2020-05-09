@@ -584,7 +584,7 @@ Examples:
 
 int main(int argc, char *argv[])
 {
-    FrameWriterParams params;
+    FrameWriterParams params = FrameWriterParams(exit_main_loop);
     params.file = "recording.mp4";
     params.codec = DEFAULT_CODEC;
     params.enable_ffmpeg_debug_output = false;
