@@ -184,6 +184,12 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
     buffer.height = height;
     buffer.stride = stride;
 
+    /* ffmpeg requires even width and height */
+    if (buffer.width % 2)
+        buffer.width -= 1;
+    if (buffer.height % 2)
+        buffer.height -= 1;
+
     if (!buffer.wl_buffer) {
         buffer.wl_buffer =
             create_shm_buffer(format, width, height, stride, &buffer.data);
@@ -318,6 +324,7 @@ static void write_loop(FrameWriterParams params, PulseReaderParams pulseParams)
             params.format = get_input_format(buffer);
             params.width = buffer.width;
             params.height = buffer.height;
+            params.stride = buffer.stride;
             frame_writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
 
 #ifdef HAVE_OPENCL
@@ -436,22 +443,6 @@ struct capture_region
     capture_region(int32_t _x, int32_t _y, int32_t _width, int32_t _height)
         : x(_x), y(_y), width(_width), height(_height) { }
 
-    /* Make sure that dimension is even, while trying to keep the segment
-     * [coordinate, coordinate+dimension) as good as possible (i.e not going
-     * out of the monitor) */
-    void make_even(int32_t& coordinate, int32_t& dimension)
-    {
-        if (dimension % 2 == 0)
-            return;
-
-        /* We need to increase dimension to make it an even number */
-        ++dimension;
-
-        /* Try to decrease coordinate. If coordinate > 0, we can always lower it
-         * by 1 pixel and stay inside the screen. */
-        coordinate = std::max(coordinate - 1, 0);
-    }
-
     void set_from_string(std::string geometry_string)
     {
         if (sscanf(geometry_string.c_str(), "%d,%d %dx%d", &x, &y, &width, &height) != 4)
@@ -461,11 +452,6 @@ struct capture_region
             x = y = width = height = 0;
             return;
         }
-
-        /* ffmpeg requires even width and height */
-        make_even(x, width);
-        make_even(y, height);
-        printf("Adjusted geometry: %d,%d %dx%d\n", x, y, width, height);
     }
 
     bool is_selected()
