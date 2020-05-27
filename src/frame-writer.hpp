@@ -108,23 +108,24 @@ class FrameWriter
 
     void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt);
 
+#ifdef HAVE_PULSE
     SwrContext *swrCtx;
     AVStream *audioStream;
     AVCodecContext *audioCodecCtx;
     void init_swr();
     void init_audio_stream();
     void send_audio_pkt(AVFrame *frame);
-
+#endif
     void finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt);
 
 public :
     FrameWriter(const FrameWriterParams& params);
     void add_frame(const uint8_t* pixels, int64_t usec, bool y_invert);
-
+#ifdef HAVE_PULSE
     /* Buffer must have size get_audio_buffer_size() */
     void add_audio(const void* buffer);
     size_t get_audio_buffer_size();
-
+#endif
 #ifdef HAVE_OPENCL
     std::unique_ptr<OpenCL> opencl;
 #endif
