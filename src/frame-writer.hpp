@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <atomic>
 #include "config.h"
 
 #define AUDIO_RATE 44100
@@ -65,6 +66,9 @@ struct FrameWriterParams
     bool force_yuv;
     int opencl_device;
     int bframes;
+
+    std::atomic<bool>& write_aborted_flag;
+    FrameWriterParams(std::atomic<bool>& flag): write_aborted_flag(flag) {}
 };
 
 class FrameWriter
