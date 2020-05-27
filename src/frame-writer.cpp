@@ -202,7 +202,7 @@ void FrameWriter::init_video_stream()
     }
     av_dict_free(&options);
 }
-
+#ifdef HAVE_PULSE
 static uint64_t get_codec_channel_layout(AVCodec *codec)
 {
       int i = 0;
@@ -287,13 +287,14 @@ void FrameWriter::init_audio_stream()
         std::exit(-1);
     }
 }
-
+#endif
 void FrameWriter::init_codecs()
 {
     init_video_stream();
+#ifdef HAVE_PULSE
     if (params.enable_audio)
         init_audio_stream();
-
+#endif
     av_dump_format(fmtCtx, 0, params.file.c_str(), 1);
     if (avio_open(&fmtCtx->pb, params.file.c_str(), AVIO_FLAG_WRITE))
     {
@@ -517,7 +518,7 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
     if (saved_buf0)
         encoder_frame->buf[0] = saved_buf0;
 }
-
+#ifdef HAVE_PULSE
 #define SRC_RATE 1e6
 #define DST_RATE 1e3
 
@@ -576,7 +577,7 @@ void FrameWriter::add_audio(const void* buffer)
     av_frame_free(&inputf);
     av_frame_free(&outputf);
 }
-
+#endif
 void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
 {
     static std::mutex fmt_mutex, pending_mutex;
@@ -585,7 +586,9 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
     {
         av_packet_rescale_ts(&pkt, (AVRational){ 1, 1000000 }, videoStream->time_base);
         pkt.stream_index = videoStream->index;
-    } else
+    }
+#ifdef HAVE_PULSE
+    else
     {
         av_packet_rescale_ts(&pkt, (AVRational){ 1, 1000 }, audioStream->time_base);
         pkt.stream_index = audioStream->index;
@@ -600,14 +603,15 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
         fmt_mutex.lock();
         pending_mutex.unlock();
     }
-
+#endif
     if (av_interleaved_write_frame(fmtCtx, &pkt) != 0) {
         params.write_aborted_flag = true;
     }
     av_packet_unref(&pkt);
-
+#ifdef HAVE_PULSE
     if (params.enable_audio)
         fmt_mutex.unlock();
+#endif
 }
 
 FrameWriter::~FrameWriter()
@@ -617,12 +621,12 @@ FrameWriter::~FrameWriter()
     av_init_packet(&pkt);
 
     encode(videoCodecCtx, NULL, &pkt);
-
+#ifdef HAVE_PULSE
     if (params.enable_audio)
     {
         encode(audioCodecCtx, NULL, &pkt);
     }
-
+#endif
     // Writing the end of the file.
     av_write_trailer(fmtCtx);
 
@@ -635,9 +639,10 @@ FrameWriter::~FrameWriter()
     sws_freeContext(swsCtx);
 
     av_frame_free(&encoder_frame);
+#ifdef HAVE_PULSE
     if (params.enable_audio)
         avcodec_close(audioStream->codec);
-
+#endif
     // TODO: free all the hw accel
     avformat_free_context(fmtCtx);
 }

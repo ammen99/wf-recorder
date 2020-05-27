@@ -21,10 +21,17 @@ include_directories(['.'])
 
 add_project_arguments(['-Wno-deprecated-declarations'], language: 'cpp')
 
-project_sources = ['src/frame-writer.cpp', 'src/main.cpp', 'src/pulse.cpp', 'src/averr.c']
+project_sources = ['src/frame-writer.cpp', 'src/main.cpp', 'src/averr.c']
 
 wayland_client = dependency('wayland-client')
 wayland_protos = dependency('wayland-protocols')
+
+pulse = dependency('libpulse-simple', required : get_option('pulse'))
+
+if pulse.found()
+    conf_data.set('HAVE_PULSE', true)
+    project_sources += 'src/pulse.cpp'
+endif
 
 opencl = dependency('OpenCL', required : get_option('opencl'))
 
@@ -40,7 +47,6 @@ libavdevice = dependency('libavdevice', required: false)
 sws = dependency('libswscale')
 swr = dependency('libswresample')
 threads = dependency('threads')
-pulse = dependency('libpulse-simple')
 
 conf_data.set('HAVE_LIBAVDEVICE', libavdevice.found())
 
@@ -82,6 +88,7 @@ dependencies = [
     libavutil, libavcodec, libavformat, libavdevice,
     wf_protos, sws, threads, pulse, swr, opencl
 ]
+
 executable('wf-recorder', project_sources,
         dependencies: dependencies,
         install: true)
