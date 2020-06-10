@@ -1,4 +1,5 @@
 option('default_codec', type: 'string', value: 'libx264', description: 'Codec that will be used by default')
+option('default_acodec', type: 'string', value: 'aac', description: 'Audio codec that will be used by default')
 option('man-pages', type: 'feature', value: 'auto', description: 'Generate and install man pages')
 option('pulse', type: 'feature', value: 'auto', description: 'Enable Pulseaudio')
 option('opencl', type: 'feature', value: 'auto', description: 'Enable OpenCL')

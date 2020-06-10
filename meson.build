@@ -16,6 +16,7 @@ project(
 conf_data = configuration_data()
 
 conf_data.set('default_codec', get_option('default_codec'))
+conf_data.set('default_acodec', get_option('default_acodec'))
 
 include_directories(['.'])
 

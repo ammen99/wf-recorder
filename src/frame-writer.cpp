@@ -235,10 +235,10 @@ static enum AVSampleFormat get_codec_sample_fmt(AVCodec *codec)
 
 void FrameWriter::init_audio_stream()
 {
-    AVCodec* codec = avcodec_find_encoder_by_name("aac");
+    AVCodec* codec = avcodec_find_encoder_by_name(params.acodec.c_str());
     if (!codec)
     {
-        std::cerr << "Failed to find the aac codec" << std::endl;
+        std::cerr << "Failed to find the given audio codec: " << params.acodec << std::endl;
         std::exit(-1);
     }
 
@@ -250,7 +250,9 @@ void FrameWriter::init_audio_stream()
     }
 
     audioCodecCtx = audioStream->codec;
-    audioCodecCtx->bit_rate = lrintf(128000.0f);
+    if (params.codec.c_str() == "aac"){
+        audioCodecCtx->bit_rate = lrintf(128000.0f);
+    }
     audioCodecCtx->sample_fmt = get_codec_sample_fmt(codec);
     audioCodecCtx->channel_layout = get_codec_channel_layout(codec);
     audioCodecCtx->sample_rate = AUDIO_RATE;
