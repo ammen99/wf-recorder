@@ -515,7 +515,7 @@ With no FILE, start recording the current screen.)");
   -c, --codec               Specifies the codec of the video. Supports  GIF output also.
                             To modify codec parameters, use -p <option_name>=<option_value>
 
-  -u, --acodec              Specifies the codec of the audio. 
+  -C, --acodec              Specifies the codec of the audio. 
 
   -d, --device              Selects the device to use when encoding the video
                             Some drivers report support for rgb0 data for vaapi input but
@@ -618,7 +618,7 @@ int main(int argc, char *argv[])
         { "geometry",        required_argument, NULL, 'g' },
         { "codec",           required_argument, NULL, 'c' },
         { "codec-param",     required_argument, NULL, 'p' },
-	{ "acodec",          required_argument, NULL, 'u' },
+	{ "acodec",          required_argument, NULL, 'C' },
         { "device",          required_argument, NULL, 'd' },
         { "log",             no_argument,       NULL, 'l' },
         { "audio",           optional_argument, NULL, 'a' },
@@ -632,7 +632,7 @@ int main(int argc, char *argv[])
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:u:d:b:la::te::h", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:C:d:b:la::te::h", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -660,7 +660,7 @@ int main(int argc, char *argv[])
                 params.codec = optarg;
                 break;
 
-	    case 'u':
+	    case 'C':
 	        params.acodec = optarg;
 	        break;
 
