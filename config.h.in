@@ -1,6 +1,7 @@
 #pragma once
 
 #define DEFAULT_CODEC "@default_codec@"
+#define DEFAULT_ACODEC "@default_acodec@"
 #mesondefine HAVE_PULSE
 #mesondefine HAVE_OPENCL
 #mesondefine HAVE_LIBAVDEVICE

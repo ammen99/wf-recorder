@@ -16,6 +16,7 @@ project(
 conf_data = configuration_data()
 
 conf_data.set('default_codec', get_option('default_codec'))
+conf_data.set('default_acodec', get_option('default_acodec'))
 
 version = '"@0@"'.format(meson.project_version())
 git = find_program('git', native: true, required: false)

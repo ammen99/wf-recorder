@@ -558,6 +558,8 @@ Use Ctrl+C to stop.)");
   -c, --codec               Specifies the codec of the video. Supports  GIF output also.
                             To modify codec parameters, use -p <option_name>=<option_value>
 
+  -u, --acodec              Specifies the codec of the audio. 
+
   -d, --device              Selects the device to use when encoding the video
                             Some drivers report support for rgb0 data for vaapi input but
                             really only support yuv.
@@ -670,6 +672,7 @@ int main(int argc, char *argv[])
     FrameWriterParams params = FrameWriterParams(exit_main_loop);
     params.file = "recording.mp4";
     params.codec = DEFAULT_CODEC;
+    params.acodec = DEFAULT_ACODEC;
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
     params.force_yuv = false;
@@ -686,6 +689,7 @@ int main(int argc, char *argv[])
         { "geometry",        required_argument, NULL, 'g' },
         { "codec",           required_argument, NULL, 'c' },
         { "codec-param",     required_argument, NULL, 'p' },
+	    { "acodec",          required_argument, NULL, 'u' },
         { "device",          required_argument, NULL, 'd' },
         { "filter",          required_argument, NULL, 'F' },
         { "log",             no_argument,       NULL, 'l' },
@@ -701,7 +705,7 @@ int main(int argc, char *argv[])
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:d:b:la::thvDF:", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:u:d:b:la::te::h", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -731,6 +735,10 @@ int main(int argc, char *argv[])
 
             case 'c':
                 params.codec = optarg;
+                break;
+
+            case 'u':
+                params.acodec = optarg;
                 break;
 
             case 'd':

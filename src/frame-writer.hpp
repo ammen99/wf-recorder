@@ -55,6 +55,7 @@ struct FrameWriterParams
     std::string video_filter = "null"; // dummy filter
 
     std::string codec;
+    std::string acodec;
     std::string muxer;
     std::string pix_fmt;
     std::string hw_device; // used only if codec contains vaapi
