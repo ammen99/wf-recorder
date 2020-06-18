@@ -18,7 +18,6 @@
 #include <wayland-client-protocol.h>
 
 #include "frame-writer.hpp"
-#include "pulse.hpp"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 #include "xdg-output-unstable-v1-client-protocol.h"
 
@@ -29,6 +28,7 @@ std::unique_ptr<OpenCL> opencl;
 #endif
 
 #ifdef HAVE_PULSE
+#include "pulse.hpp"
 PulseReaderParams pulseParams;
 #endif
 
