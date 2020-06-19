@@ -558,8 +558,8 @@ Use Ctrl+C to stop.)");
 
   -c, --codec               Specifies the codec of the video. Supports  GIF output also.
                             To modify codec parameters, use -p <option_name>=<option_value>
-
-  -C, --acodec              Specifies the codec of the audio. 
+  
+  -r, --framerate           Changes an approximation of the video framerate. The default is 60.
 
   -d, --device              Selects the device to use when encoding the video
                             Some drivers report support for rgb0 data for vaapi input but
@@ -584,10 +584,7 @@ Use Ctrl+C to stop.)");
   -x, --pixel-format        Set the output pixel format. These can be found by running:
                             *ffmpeg -pix_fmts*
 
-  -X, --sample-format       Set the audio sample format. These can be found by running:
-                            *ffmpeg -sample_fmts*
-
-  -g, --geometry            Selects a specific part of the screen.
+  -g, --geometry            Selects a specific part of the screen. The format is "x,y WxH".
 
   -h, --help                Prints this help screen.
 
@@ -608,6 +605,14 @@ Use Ctrl+C to stop.)");
 
   -b, --bframes             This option is used to set the maximum number of b-frames to be used.
                             If b-frames are not supported by your hardware, set this to 0.)" "\n\n" R"(
+  
+  -C, --acodec              Specifies the codec of the audio.
+
+  -R, --sample-rate         Changes the audio sample rate, in HZ. The default value is 44100.
+  
+  -P, --acodec-param        Change the audio codec parameters.
+                            -P <option_name>=<option_value>)
+
 Examples:)");
 #ifdef HAVE_PULSE
     printf(R"(
