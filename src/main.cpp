@@ -514,9 +514,24 @@ With no FILE, start recording the current screen.)");
     printf(R"(
 
   -c, --codec               Specifies the codec of the video. Supports  GIF output also.
-                            To modify codec parameters, use -p <option_name>=<option_value>
+
+  -r, --framerate           Changes an approximation of the video framerate. The default is 60. 
+
+  -x, --pixel-format        Set the output pixel format. These can be found by running:
+                            *ffmpeg -pix_fmts*
+
+  -p, --codec-param         Change the video codec parameters.
+                            -p <option_name>=<option_value>)
 
   -C, --acodec              Specifies the codec of the audio. 
+
+  -R, --sample-rate         Changes the audio sample rate, in HZ. The default value is 44100. 
+
+  -X, --sample-format       Set the audio sample format. These can be found by running: 
+                            *ffmpeg -sample_fmts*
+
+  -P, --acodec-param        Change the audio codec parameters.
+                            -P <option_name>=<option_value>)
 
   -d, --device              Selects the device to use when encoding the video
                             Some drivers report support for rgb0 data for vaapi input but
@@ -532,22 +547,13 @@ With no FILE, start recording the current screen.)");
   -m, --muxer               Set the output format to a specific muxer instead of detecting it
                             from the filename.
 
-  -x, --pixel-format        Set the output pixel format. These can be found by running:
-                            *ffmpeg -pix_fmts*
-
-  -X, --sample-format       Set the audio sample format. These can be found by running: 
-                            *ffmpeg -sample_fmts*
-
   -g, --geometry            Selects a specific part of the screen.
 
   -h, --help                Prints this help screen.
 
   -l, --log                 Generates a log on the current terminal. Debug purposes.
 
-  -o, --output              Specify the output where the video is to be recorded.
-
-  -p, --codec-param         Change the codec parameters.
-                            -p <option_name>=<option_value>)");
+  -o, --output              Specify the output where the video is to be recorded.");
 #ifdef HAVE_OPENCL
     printf(R"(
 
