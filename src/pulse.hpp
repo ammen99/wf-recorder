@@ -8,6 +8,7 @@
 struct PulseReaderParams
 {
     size_t audio_frame_size;
+    uint32_t sample_rate;
     /* Can be NULL */
     char *audio_source;
 };
