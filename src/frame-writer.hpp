@@ -11,7 +11,7 @@
 #include <atomic>
 #include "config.h"
 
-#define AUDIO_RATE 44100
+//#define AUDIO_RATE 44100
 
 extern "C"
 {
@@ -55,8 +55,12 @@ struct FrameWriterParams
     std::string acodec;
     std::string muxer;
     std::string pix_fmt;
+    std::string sample_fmt;
     std::string hw_device; // used only if codec contains vaapi
     std::map<std::string, std::string> codec_options;
+    std::map<std::string, std::string> acodec_options;
+    int framerate;
+    int sample_rate;
 
     int64_t audio_sync_offset;
 
@@ -76,6 +80,7 @@ class FrameWriter
 {
     FrameWriterParams params;
     void load_codec_options(AVDictionary **dict);
+    void load_acodec_options(AVDictionary **dict);
 
     SwsContext* swsCtx;
     AVOutputFormat* outputFmt;

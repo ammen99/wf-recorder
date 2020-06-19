@@ -20,7 +20,7 @@ PulseReader::PulseReader(PulseReaderParams _p)
     pa_sample_spec sample_spec =
     {
         .format = PA_SAMPLE_FLOAT32LE,
-        .rate = 44100,
+        .rate = params.sample_rate,
         .channels = 2,
     };
 

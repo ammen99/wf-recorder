@@ -345,6 +345,7 @@ static void write_loop(FrameWriterParams params)
             if (params.enable_audio)
             {
                 pulseParams.audio_frame_size = frame_writer->get_audio_buffer_size();
+		pulseParams.sample_rate = params.sample_rate;
                 pr = std::unique_ptr<PulseReader> (new PulseReader(pulseParams));
                 pr->start();
             }
@@ -534,6 +535,9 @@ With no FILE, start recording the current screen.)");
   -x, --pixel-format        Set the output pixel format. These can be found by running:
                             *ffmpeg -pix_fmts*
 
+  -X, --sample-format       Set the audio sample format. These can be found by running: 
+                            *ffmpeg -sample_fmts*
+
   -g, --geometry            Selects a specific part of the screen.
 
   -h, --help                Prints this help screen.
@@ -597,7 +601,10 @@ int main(int argc, char *argv[])
     FrameWriterParams params = FrameWriterParams(exit_main_loop);
     params.file = "recording.mp4";
     params.codec = DEFAULT_CODEC;
+    params.framerate = DEFAULT_FRAMERATE;
     params.acodec = DEFAULT_ACODEC;
+    params.sample_rate = DEFAULT_SAMPLE_RATE;
+    params.sample_fmt = DEFAULT_SAMPLE_FMT;
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
     params.force_yuv = false;
@@ -614,11 +621,15 @@ int main(int argc, char *argv[])
         { "output",          required_argument, NULL, 'o' },
         { "file",            required_argument, NULL, 'f' },
         { "muxer",           required_argument, NULL, 'm' },
-        { "pixel-format",    required_argument, NULL, 'x' },
         { "geometry",        required_argument, NULL, 'g' },
         { "codec",           required_argument, NULL, 'c' },
         { "codec-param",     required_argument, NULL, 'p' },
+	{ "framerate",       required_argument, NULL, 'r' },
+        { "pixel-format",    required_argument, NULL, 'x' },
 	{ "acodec",          required_argument, NULL, 'C' },
+	{ "acodec-param",    required_argument, NULL, 'P' },
+	{ "sample-rate",     required_argument, NULL, 'R' },
+	{ "sample-format",   required_argument, NULL, 'X' },
         { "device",          required_argument, NULL, 'd' },
         { "log",             no_argument,       NULL, 'l' },
         { "audio",           optional_argument, NULL, 'a' },
@@ -632,7 +643,7 @@ int main(int argc, char *argv[])
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:C:d:b:la::te::h", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:la::te::h", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -648,10 +659,6 @@ int main(int argc, char *argv[])
                 params.muxer = optarg;
                 break;
 
-            case 'x':
-                params.pix_fmt = optarg;
-                break;
-
             case 'g':
                 selected_region.set_from_string(optarg);
                 break;
@@ -660,9 +667,25 @@ int main(int argc, char *argv[])
                 params.codec = optarg;
                 break;
 
+	    case 'r':
+	        params.framerate = atoi(optarg);
+	 	break;
+
+            case 'x':
+                params.pix_fmt = optarg;
+                break;
+
 	    case 'C':
 	        params.acodec = optarg;
 	        break;
+
+	    case 'R':
+	        params.sample_rate = atoi(optarg);
+		break;
+
+	    case 'X':
+	        params.sample_fmt = optarg;
+		break;
 
             case 'd':
                 params.hw_device = optarg;
@@ -707,6 +730,20 @@ int main(int argc, char *argv[])
                     auto optname = param.substr(0, pos);
                     auto optvalue = param.substr(pos + 1, param.length() - pos - 1);
                     params.codec_options[optname] = optvalue;
+                } else
+                {
+                    printf("Invalid codec option %s\n", optarg);
+                }
+                break;
+
+	    case 'P':
+                param = optarg;
+                pos = param.find("=");
+                if (pos != std::string::npos && pos != param.length() - 1)
+                {
+                    auto optname = param.substr(0, pos);
+                    auto optvalue = param.substr(pos + 1, param.length() - pos - 1);
+                    params.acodec_options[optname] = optvalue;
                 } else
                 {
                     printf("Invalid codec option %s\n", optarg);

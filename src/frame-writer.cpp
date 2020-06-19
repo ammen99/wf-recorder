@@ -10,8 +10,8 @@
 #include <cstring>
 #include "averr.h"
 
-#define FPS 60
-#define AUDIO_RATE 44100
+//#define FPS 60
+//#define AUDIO_RATE 44100
 
 class FFmpegInitialize
 {
@@ -94,6 +94,15 @@ void FrameWriter::load_codec_options(AVDictionary **dict)
     }
 }
 
+void FrameWriter::load_acodec_options(AVDictionary **dict)
+{
+    for (auto& opt : params.acodec_options)
+    {
+        std::cout << "Setting codec option: " << opt.first << "=" << opt.second << std::endl;
+        av_dict_set(dict, opt.first.c_str(), opt.second.c_str(), 0);
+    }
+}
+
 bool is_fmt_supported(AVPixelFormat fmt, const AVPixelFormat *supported)
 {
     for (int i = 0; supported[i] != AV_PIX_FMT_NONE; i++)
@@ -168,7 +177,8 @@ void FrameWriter::init_video_stream()
     videoCodecCtx = videoStream->codec;
     videoCodecCtx->width = params.width;
     videoCodecCtx->height = params.height;
-    videoCodecCtx->time_base = (AVRational){ 1, FPS };
+    std::cout << "Framerate: " << params.framerate << std::endl;
+    videoCodecCtx->time_base = (AVRational){ 1, params.framerate };
 
     if (params.bframes != -1)
         videoCodecCtx->max_b_frames = params.bframes;
@@ -218,11 +228,13 @@ static uint64_t get_codec_channel_layout(AVCodec *codec)
       return codec->channel_layouts[0];
 }
 
-static enum AVSampleFormat get_codec_sample_fmt(AVCodec *codec)
+static enum AVSampleFormat get_codec_sample_fmt(AVCodec *codec, AVSampleFormat requested_format)
 {
     int i = 0;
     if (!codec->sample_fmts)
-        return AV_SAMPLE_FMT_S16;
+        //return AV_SAMPLE_FMT_S16;
+        std::cout << "Using requested format: " << av_get_sample_fmt_name(requested_format) << std::endl;
+        return requested_format;
     while (1) {
         if (codec->sample_fmts[i] == -1)
             break;
@@ -235,6 +247,9 @@ static enum AVSampleFormat get_codec_sample_fmt(AVCodec *codec)
 
 void FrameWriter::init_audio_stream()
 {
+    AVDictionary *options = NULL;
+    load_codec_options(&options);
+    
     AVCodec* codec = avcodec_find_encoder_by_name(params.acodec.c_str());
     if (!codec)
     {
@@ -253,9 +268,9 @@ void FrameWriter::init_audio_stream()
     if (params.codec.c_str() == "aac"){
         audioCodecCtx->bit_rate = lrintf(128000.0f);
     }
-    audioCodecCtx->sample_fmt = get_codec_sample_fmt(codec);
+    audioCodecCtx->sample_fmt = get_codec_sample_fmt(codec, av_get_sample_fmt(params.sample_fmt.c_str()));
     audioCodecCtx->channel_layout = get_codec_channel_layout(codec);
-    audioCodecCtx->sample_rate = AUDIO_RATE;
+    audioCodecCtx->sample_rate = params.sample_rate;
     audioCodecCtx->time_base = (AVRational) { 1, 1000 };
     audioCodecCtx->channels = av_get_channel_layout_nb_channels(audioCodecCtx->channel_layout);
 
@@ -276,7 +291,7 @@ void FrameWriter::init_audio_stream()
         std::exit(-1);
     }
 
-    av_opt_set_int(swrCtx, "in_sample_rate", AUDIO_RATE, 0);
+    av_opt_set_int(swrCtx, "in_sample_rate", params.sample_rate, 0);
     av_opt_set_int(swrCtx, "out_sample_rate", audioCodecCtx->sample_rate, 0);
     av_opt_set_sample_fmt(swrCtx, "in_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
     av_opt_set_sample_fmt(swrCtx, "out_sample_fmt", audioCodecCtx->sample_fmt, 0);
@@ -524,9 +539,10 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 #define SRC_RATE 1e6
 #define DST_RATE 1e3
 
-static int64_t conv_audio_pts(SwrContext *ctx, int64_t in)
+static int64_t conv_audio_pts(SwrContext *ctx, int64_t in, int sample_rate)
 {
-    int64_t d = (int64_t) AUDIO_RATE * AUDIO_RATE;
+    //int64_t d = (int64_t) AUDIO_RATE * AUDIO_RATE;
+    int64_t d = (int64_t) sample_rate * sample_rate;
 
     /* Convert from audio_src_tb to 1/(src_samplerate * dst_samplerate) */
     in = av_rescale_rnd(in, d, SRC_RATE, AV_ROUND_NEAR_INF);
@@ -556,7 +572,8 @@ size_t FrameWriter::get_audio_buffer_size()
 void FrameWriter::add_audio(const void* buffer)
 {
     AVFrame *inputf = av_frame_alloc();
-    inputf->sample_rate    = AUDIO_RATE;
+    //inputf->sample_rate    = AUDIO_RATE;
+    inputf->sample_rate    = params.sample_rate;
     inputf->format         = AV_SAMPLE_FMT_FLT;
     inputf->channel_layout = AV_CH_LAYOUT_STEREO;
     inputf->nb_samples     = audioCodecCtx->frame_size;
@@ -571,7 +588,7 @@ void FrameWriter::add_audio(const void* buffer)
     outputf->nb_samples     = audioCodecCtx->frame_size;
     av_frame_get_buffer(outputf, 0);
 
-    outputf->pts = conv_audio_pts(swrCtx, INT64_MIN);
+    outputf->pts = conv_audio_pts(swrCtx, INT64_MIN, params.sample_rate);
     swr_convert_frame(swrCtx, outputf, inputf);
 
     send_audio_pkt(outputf);
