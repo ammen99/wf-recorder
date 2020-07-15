@@ -6,7 +6,7 @@
 #define DEFAULT_ACODEC "@default_acodec@"
 //#define DEFAULT_SAMPLE_RATE @default_sample_rate@
 #define DEFAULT_SAMPLE_RATE 44100
-#define DEFAULT_SAMPLE_FMT "@default_sample_fmt@"
+//#define DEFAULT_SAMPLE_FMT "@default_sample_fmt@"
 #mesondefine HAVE_PULSE
 #mesondefine HAVE_OPENCL
 #mesondefine HAVE_LIBAVDEVICE

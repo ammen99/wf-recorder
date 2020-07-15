@@ -228,13 +228,11 @@ static uint64_t get_codec_channel_layout(AVCodec *codec)
       return codec->channel_layouts[0];
 }
 
-static enum AVSampleFormat get_codec_sample_fmt(AVCodec *codec, AVSampleFormat requested_format)
+static enum AVSampleFormat get_codec_auto_sample_fmt(AVCodec *codec)
 {
     int i = 0;
     if (!codec->sample_fmts)
-        //return AV_SAMPLE_FMT_S16;
-        std::cout << "Using requested format: " << av_get_sample_fmt_name(requested_format) << std::endl;
-        return requested_format;
+        return AV_SAMPLE_FMT_S16;
     while (1) {
         if (codec->sample_fmts[i] == -1)
             break;
@@ -243,6 +241,28 @@ static enum AVSampleFormat get_codec_sample_fmt(AVCodec *codec, AVSampleFormat r
         i++;
     }
     return codec->sample_fmts[0];
+}
+
+bool check_fmt_available(AVCodec *codec, AVSampleFormat fmt){
+    for (const enum AVSampleFormat *sample_ptr = codec -> sample_fmts; *sample_ptr != -1; sample_ptr++){
+	if (*sample_ptr == fmt){
+	    return true;
+	}
+    }
+    return false;
+}
+
+static enum AVSampleFormat get_codec_sample_fmt(AVCodec *codec, AVSampleFormat requested_fmt)
+{
+    if (check_fmt_available(codec, requested_fmt))
+    {
+        std::cout << "Using requested sample format: " << av_get_sample_fmt_name(requested_fmt) << std::endl;
+        return requested_fmt;
+    } else
+    {
+	std::cout << "Couldn't use requested sample format: " << av_get_sample_fmt_name(requested_fmt) << "! Automatically picking an alternative." << std::endl;
+        return get_codec_auto_sample_fmt(codec);
+    }
 }
 
 void FrameWriter::init_audio_stream()
@@ -265,10 +285,15 @@ void FrameWriter::init_audio_stream()
     }
 
     audioCodecCtx = audioStream->codec;
-    if (params.codec.c_str() == "aac"){
+    if (params.codec == "aac"){
         audioCodecCtx->bit_rate = lrintf(128000.0f);
     }
-    audioCodecCtx->sample_fmt = get_codec_sample_fmt(codec, av_get_sample_fmt(params.sample_fmt.c_str()));
+    if (params.sample_fmt.size() == 0){
+	audioCodecCtx->sample_fmt = get_codec_auto_sample_fmt(codec);
+    } else
+    {
+	audioCodecCtx->sample_fmt = get_codec_sample_fmt(codec, av_get_sample_fmt(params.sample_fmt.c_str()));
+    }
     audioCodecCtx->channel_layout = get_codec_channel_layout(codec);
     audioCodecCtx->sample_rate = params.sample_rate;
     audioCodecCtx->time_base = (AVRational) { 1, 1000 };
