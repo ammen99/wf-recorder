@@ -556,30 +556,37 @@ With no FILE, start recording the current screen.)");
   -o, --output              Specify the output where the video is to be recorded.");
 #ifdef HAVE_OPENCL
     printf(R"(
+
+
   -e, --opencl              Use the -e[#] or --opencl[=#] in conjunction with -t or --force-yuv option
                             to use opencl for gpu accelerated conversion of data to yuv. # is one
                             of the devices listed when running without specifying #.)");
 #endif
     printf(R"(
+
+
   -t, --force-yuv           Use the -t or --force-yuv option to force conversion of the data to
                             yuv format, before sending it to the gpu.
+
   -b, --bframes             This option is used to set the maximum number of b-frames to be used.
                             If b-frames are not supported by your hardware, set this to 0.)" "\n\n" R"(
 Examples:)");
 #ifdef HAVE_PULSE
     printf(R"(
+
   Video Only:)");
 #endif
     printf(R"(
+
   - wf-recorder                         Records the video. Use Ctrl+C to stop recording.
                                         The video file will be stored as recording.mp4 in the
                                         current working directory.
+
   - wf-recorder -f <filename>.ext       Records the video. Use Ctrl+C to stop recording.
                                         The video file will be stored as <outputname>.ext in the
                                         current working directory.)");
 #ifdef HAVE_PULSE
     printf(R"(
-
 
   Video and Audio:
 
