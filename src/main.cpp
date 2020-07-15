@@ -618,18 +618,20 @@ Use Ctrl+C to stop.)");
 Examples:)");
 #ifdef HAVE_PULSE
     printf(R"(
+
   Video Only:)");
 #endif
     printf(R"(
+
   - wf-recorder                         Records the video. Use Ctrl+C to stop recording.
                                         The video file will be stored as recording.mp4 in the
                                         current working directory.
+
   - wf-recorder -f <filename>.ext       Records the video. Use Ctrl+C to stop recording.
                                         The video file will be stored as <outputname>.ext in the
                                         current working directory.)");
 #ifdef HAVE_PULSE
     printf(R"(
-
 
   Video and Audio:
 
