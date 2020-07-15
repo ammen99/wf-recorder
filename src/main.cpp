@@ -363,7 +363,7 @@ static void write_loop(FrameWriterParams params)
             if (params.enable_audio)
             {
                 pulseParams.audio_frame_size = frame_writer->get_audio_buffer_size();
-		pulseParams.sample_rate = params.sample_rate;
+                pulseParams.sample_rate = params.sample_rate;
                 pr = std::unique_ptr<PulseReader> (new PulseReader(pulseParams));
                 pr->start();
             }
@@ -600,8 +600,6 @@ Use Ctrl+C to stop.)");
   -F, --filter              Specify the ffmpeg filter string to use. For example,
                             -F hwupload,scale_vaapi=format=nv12 is used for VAAPI.
 
-  -o, --output              Specify the output where the video is to be recorded.
-  
   -t, --force-yuv           Use the -t or --force-yuv option to force conversion of the data to
                             yuv format, before sending it to the gpu.
   
