@@ -396,8 +396,10 @@ static enum AVSampleFormat get_codec_auto_sample_fmt(const AVCodec *codec)
 }
 
 bool check_fmt_available(AVCodec *codec, AVSampleFormat fmt){
-    for (const enum AVSampleFormat *sample_ptr = codec -> sample_fmts; *sample_ptr != -1; sample_ptr++){
-	if (*sample_ptr == fmt){
+    for (const enum AVSampleFormat *sample_ptr = codec -> sample_fmts; *sample_ptr != -1; sample_ptr++)
+    {
+	if (*sample_ptr == fmt)
+	{
 	    return true;
 	}
     }
@@ -406,13 +408,17 @@ bool check_fmt_available(AVCodec *codec, AVSampleFormat fmt){
 
 static enum AVSampleFormat get_codec_sample_fmt(AVCodec *codec, AVSampleFormat requested_fmt)
 {
-    if (check_fmt_available(codec, requested_fmt))
+    if (requested_fmt == AV_SAMPLE_FMT_NONE)
     {
-        std::cout << "Using requested sample format: " << av_get_sample_fmt_name(requested_fmt) << std::endl;
+	std::cout << "Invalid sample format entered! Automatically determining sample format instead." << std::endl;
+	return get_codec_auto_sample_fmt(codec);
+    } else if (check_fmt_available(codec, requested_fmt))
+    {
+        std::cout << "Using requested sample format " << av_get_sample_fmt_name(requested_fmt) << std::endl;
         return requested_fmt;
     } else
     {
-	std::cout << "Couldn't use requested sample format: " << av_get_sample_fmt_name(requested_fmt) << "! Automatically picking an alternative." << std::endl;
+	std::cout << "Couldn't use requested sample format " << av_get_sample_fmt_name(requested_fmt) << "! Automatically picking an alternative." << std::endl;
         return get_codec_auto_sample_fmt(codec);
     }
 }
