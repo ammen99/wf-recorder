@@ -345,7 +345,7 @@ static void write_loop(FrameWriterParams params)
             if (params.enable_audio)
             {
                 pulseParams.audio_frame_size = frame_writer->get_audio_buffer_size();
-		pulseParams.sample_rate = params.sample_rate;
+                pulseParams.sample_rate = params.sample_rate;
                 pr = std::unique_ptr<PulseReader> (new PulseReader(pulseParams));
                 pr->start();
             }
@@ -553,14 +553,14 @@ With no FILE, start recording the current screen.)");
 
   -l, --log                 Generates a log on the current terminal. Debug purposes.
 
-  -o, --output              Specify the output where the video is to be recorded.");
+  -o, --output              Specify the output where the video is to be recorded.)");
 #ifdef HAVE_OPENCL
     printf(R"(
 
   -e, --opencl              Use the -e[#] or --opencl[=#] in conjunction with -t or --force-yuv option
                             to use opencl for gpu accelerated conversion of data to yuv. # is one
                             of the devices listed when running without specifying #.)");
-//#endif
+#endif
     printf(R"(
 
   -t, --force-yuv           Use the -t or --force-yuv option to force conversion of the data to
@@ -630,12 +630,12 @@ int main(int argc, char *argv[])
         { "geometry",        required_argument, NULL, 'g' },
         { "codec",           required_argument, NULL, 'c' },
         { "codec-param",     required_argument, NULL, 'p' },
-	{ "framerate",       required_argument, NULL, 'r' },
+        { "framerate",       required_argument, NULL, 'r' },
         { "pixel-format",    required_argument, NULL, 'x' },
-	{ "acodec",          required_argument, NULL, 'C' },
-	{ "acodec-param",    required_argument, NULL, 'P' },
-	{ "sample-rate",     required_argument, NULL, 'R' },
-	{ "sample-format",   required_argument, NULL, 'X' },
+        { "acodec",          required_argument, NULL, 'C' },
+        { "acodec-param",    required_argument, NULL, 'P' },
+        { "sample-rate",     required_argument, NULL, 'R' },
+        { "sample-format",   required_argument, NULL, 'X' },
         { "device",          required_argument, NULL, 'd' },
         { "log",             no_argument,       NULL, 'l' },
         { "audio",           optional_argument, NULL, 'a' },
@@ -673,9 +673,9 @@ int main(int argc, char *argv[])
                 params.codec = optarg;
                 break;
 
-	    case 'r':
-	        params.framerate = atoi(optarg);
-	 	break;
+            case 'r':
+                params.framerate = atoi(optarg);
+                break;
 
             case 'x':
                 params.pix_fmt = optarg;
