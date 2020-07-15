@@ -560,7 +560,7 @@ With no FILE, start recording the current screen.)");
   -e, --opencl              Use the -e[#] or --opencl[=#] in conjunction with -t or --force-yuv option
                             to use opencl for gpu accelerated conversion of data to yuv. # is one
                             of the devices listed when running without specifying #.)");
-#endif
+//#endif
     printf(R"(
 
   -t, --force-yuv           Use the -t or --force-yuv option to force conversion of the data to
