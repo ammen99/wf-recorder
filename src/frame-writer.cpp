@@ -10,9 +10,6 @@
 #include <cstring>
 #include "averr.h"
 
-//#define FPS 60
-//#define AUDIO_RATE 44100
-
 class FFmpegInitialize
 {
 public :
@@ -246,10 +243,10 @@ static enum AVSampleFormat get_codec_auto_sample_fmt(AVCodec *codec)
 bool check_fmt_available(AVCodec *codec, AVSampleFormat fmt){
     for (const enum AVSampleFormat *sample_ptr = codec -> sample_fmts; *sample_ptr != -1; sample_ptr++)
     {
-	if (*sample_ptr == fmt)
-	{
-	    return true;
-	}
+        if (*sample_ptr == fmt)
+        {
+            return true;
+        }
     }
     return false;
 }
