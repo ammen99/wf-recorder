@@ -600,11 +600,13 @@ Use Ctrl+C to stop.)");
   -F, --filter              Specify the ffmpeg filter string to use. For example,
                             -F hwupload,scale_vaapi=format=nv12 is used for VAAPI.
 
+  -o, --output              Specify the output where the video is to be recorded.
+  
   -t, --force-yuv           Use the -t or --force-yuv option to force conversion of the data to
                             yuv format, before sending it to the gpu.
-
+  
   -b, --bframes             This option is used to set the maximum number of b-frames to be used.
-                            If b-frames are not supported by your hardware, set this to 0.)" "\n\n" R"(
+                            If b-frames are not supported by your hardware, set this to 0.
   
   -C, --acodec              Specifies the codec of the audio.
 
@@ -616,20 +618,18 @@ Use Ctrl+C to stop.)");
 Examples:)");
 #ifdef HAVE_PULSE
     printf(R"(
-
   Video Only:)");
 #endif
     printf(R"(
-
   - wf-recorder                         Records the video. Use Ctrl+C to stop recording.
                                         The video file will be stored as recording.mp4 in the
                                         current working directory.
-
   - wf-recorder -f <filename>.ext       Records the video. Use Ctrl+C to stop recording.
                                         The video file will be stored as <outputname>.ext in the
                                         current working directory.)");
 #ifdef HAVE_PULSE
     printf(R"(
+
 
   Video and Audio:
 
@@ -684,7 +684,7 @@ int main(int argc, char *argv[])
     params.framerate = DEFAULT_FRAMERATE;
     params.acodec = DEFAULT_ACODEC;
     params.sample_rate = DEFAULT_SAMPLE_RATE;
-    params.sample_fmt = DEFAULT_SAMPLE_FMT;
+    //params.sample_fmt = DEFAULT_SAMPLE_FMT;
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
     params.force_yuv = false;
