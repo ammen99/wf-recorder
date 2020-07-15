@@ -11,8 +11,6 @@
 #include <atomic>
 #include "config.h"
 
-//#define AUDIO_RATE 44100
-
 extern "C"
 {
     #include <libswresample/swresample.h>

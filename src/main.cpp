@@ -684,7 +684,6 @@ int main(int argc, char *argv[])
     params.framerate = DEFAULT_FRAMERATE;
     params.acodec = DEFAULT_ACODEC;
     params.sample_rate = DEFAULT_SAMPLE_RATE;
-    //params.sample_fmt = DEFAULT_SAMPLE_FMT;
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
     params.force_yuv = false;

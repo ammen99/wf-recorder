@@ -398,10 +398,10 @@ static enum AVSampleFormat get_codec_auto_sample_fmt(const AVCodec *codec)
 bool check_fmt_available(AVCodec *codec, AVSampleFormat fmt){
     for (const enum AVSampleFormat *sample_ptr = codec -> sample_fmts; *sample_ptr != -1; sample_ptr++)
     {
-	if (*sample_ptr == fmt)
-	{
-	    return true;
-	}
+        if (*sample_ptr == fmt)
+        {
+            return true;
+        }
     }
     return false;
 }
