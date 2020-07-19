@@ -6,15 +6,9 @@ wf-recorder is a utility program for screen recording of `wlroots`-based composi
 
 ## Arch Linux
 
-Arch users can use [wf-recorder-git](https://aur.archlinux.org/packages/wf-recorder-git/) from the AUR.
+Arch users can install wf-recorder from the Community repo.
 ```
-yay -S wf-recorder-git
-```
-
-or
-
-```
-aura -A wf-recorder-git
+pacman -S wf-recorder
 ```
 
 ## Artix Linux
