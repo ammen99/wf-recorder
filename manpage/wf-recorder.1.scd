@@ -21,7 +21,7 @@ wf-recorder - A simple screen recording program for wlroots-based compositors
 	Specifies the codec of the video. Supports GIF output as well.
 
 *-r, --framerate*
-	Changes an approximation of the video framerate. The default value is *60*.
+	Changes an approximation of the video framerate.
 
 *-x, --pixel-format*
 	Set the output pixel format. List available formats using *ffmpeg -pix_fmts*
@@ -35,7 +35,7 @@ wf-recorder - A simple screen recording program for wlroots-based compositors
 	Specifies the codec of the audio.
 
 *-R, --sample-rate*
-	Changes the audio sample rate, in HZ. The default value is *44100*.
+	Changes the audio sample rate, in HZ.
 
 *-X, --sample-format*
 	Set the output audio sample format. List available formats using *ffmpeg -sample_fmts*

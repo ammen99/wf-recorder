@@ -515,7 +515,7 @@ With no FILE, start recording the current screen.)");
 
   -c, --codec               Specifies the codec of the video. Supports  GIF output also.
 
-  -r, --framerate           Changes an approximation of the video framerate. The default is 60. 
+  -r, --framerate           Changes an approximation of the video framerate.
 
   -x, --pixel-format        Set the output pixel format. These can be found by running:
                             *ffmpeg -pix_fmts*
@@ -525,7 +525,7 @@ With no FILE, start recording the current screen.)");
 
   -C, --acodec              Specifies the codec of the audio. 
 
-  -R, --sample-rate         Changes the audio sample rate, in HZ. The default value is 44100. 
+  -R, --sample-rate         Changes the audio sample rate, in HZ.
 
   -X, --sample-format       Set the output audio sample format. These can be found by running: 
                             *ffmpeg -sample_fmts*
