@@ -294,6 +294,7 @@ void FrameWriter::init_audio_stream()
     }
     if (params.sample_fmt.size() == 0){
 	audioCodecCtx->sample_fmt = get_codec_auto_sample_fmt(codec);
+	std::cout << "Choosing sample format " << av_get_sample_fmt_name(audioCodecCtx->sample_fmt) << " for audio codec " << codec->name << std::endl;
     } else
     {
 	audioCodecCtx->sample_fmt = convert_codec_sample_fmt(codec, params.sample_fmt);
