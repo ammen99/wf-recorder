@@ -560,7 +560,7 @@ Use Ctrl+C to stop.)");
                             To modify codec parameters, use -p <option_name>=<option_value>
   
   -r, --framerate           Changes an approximation of the video framerate. The default is 60.
-
+  
   -d, --device              Selects the device to use when encoding the video
                             Some drivers report support for rgb0 data for vaapi input but
                             really only support yuv.
