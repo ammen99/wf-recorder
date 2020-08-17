@@ -517,7 +517,7 @@ With no FILE, start recording the current screen.)");
 
   -r, --framerate           Changes an approximation of the video framerate.
 
-  -x, --pixel-format        Set the output pixel format. These can be found by running:
+  -x, --pixel-format        Set the output video pixel format. These can be found by running:
                             *ffmpeg -pix_fmts*
 
   -p, --codec-param         Change the video codec parameters.

@@ -24,7 +24,7 @@ wf-recorder - A simple screen recording program for wlroots-based compositors
 	Changes an approximation of the video framerate.
 
 *-x, --pixel-format*
-	Set the output pixel format. List available formats using *ffmpeg -pix_fmts*
+	Set the output video pixel format. List available formats using *ffmpeg -pix_fmts*
 
 *-p, --codec-param*
 	Change the video codec parameters.
