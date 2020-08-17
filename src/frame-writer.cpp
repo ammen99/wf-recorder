@@ -229,7 +229,7 @@ static enum AVSampleFormat get_codec_auto_sample_fmt(AVCodec *codec)
 {
     int i = 0;
     if (!codec->sample_fmts)
-        return av_get_sample_fmt(DEFAULT_SAMPLE_FMT);
+        return av_get_sample_fmt(FALLBACK_SAMPLE_FMT);
     while (1) {
         if (codec->sample_fmts[i] == -1)
             break;
