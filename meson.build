@@ -16,7 +16,10 @@ project(
 conf_data = configuration_data()
 
 conf_data.set('default_codec', get_option('default_codec'))
+conf_data.set('default_framerate', get_option('default_framerate'))
 conf_data.set('default_acodec', get_option('default_acodec'))
+conf_data.set('default_sample_rate', get_option('default_sample_rate'))
+conf_data.set('default_sample_fmt', get_option('default_sample_fmt'))
 
 version = '"@0@"'.format(meson.project_version())
 git = find_program('git', native: true, required: false)
