@@ -4,7 +4,7 @@
 #define DEFAULT_FRAMERATE @default_framerate@
 #define DEFAULT_ACODEC "@default_acodec@"
 #define DEFAULT_SAMPLE_RATE @default_sample_rate@
-#define DEFAULT_SAMPLE_FMT "@default_sample_fmt@"
+#define FALLBACK_SAMPLE_FMT "@fallback_sample_fmt@"
 #mesondefine HAVE_PULSE
 #mesondefine HAVE_OPENCL
 #mesondefine HAVE_LIBAVDEVICE
