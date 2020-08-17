@@ -260,7 +260,7 @@ static enum AVSampleFormat convert_codec_sample_fmt(AVCodec *codec, std::string 
 	std::exit(-1);
     } else if (!codec->sample_fmts || check_fmt_available(codec, converted_fmt))
     {
-        std::cout << "Using sample format " << av_get_sample_fmt_name(converted_fmt) << std::endl;
+        std::cout << "Using sample format " << av_get_sample_fmt_name(converted_fmt) << " for audio codec " << codec->name << std::endl;
         return converted_fmt;
     } else
     {
