@@ -251,20 +251,21 @@ bool check_fmt_available(AVCodec *codec, AVSampleFormat fmt){
     return false;
 }
 
-static enum AVSampleFormat get_codec_sample_fmt(AVCodec *codec, AVSampleFormat requested_fmt)
+static enum AVSampleFormat convert_codec_sample_fmt(AVCodec *codec, std::string requested_fmt)
 {
-    if (requested_fmt == AV_SAMPLE_FMT_NONE)
+    static enum AVSampleFormat converted_fmt = av_get_sample_fmt(requested_fmt.c_str());
+    if (converted_fmt == AV_SAMPLE_FMT_NONE)
     {
-	std::cout << "Invalid sample format entered! Automatically determining sample format instead." << std::endl;
-	return get_codec_auto_sample_fmt(codec);
-    } else if (check_fmt_available(codec, requested_fmt))
+	std::cout << "Failed to find the given sample format: " << requested_fmt << std::endl;
+	std::exit(-1);
+    } else if (check_fmt_available(codec, converted_fmt))
     {
-        std::cout << "Using requested sample format " << av_get_sample_fmt_name(requested_fmt) << std::endl;
-        return requested_fmt;
+        std::cout << "Using sample format " << av_get_sample_fmt_name(converted_fmt) << std::endl;
+        return converted_fmt;
     } else
     {
-	std::cout << "Couldn't use requested sample format " << av_get_sample_fmt_name(requested_fmt) << "! Automatically picking an alternative." << std::endl;
-        return get_codec_auto_sample_fmt(codec);
+	std::cout << "Codec " << codec->name << " does not support sample format " << av_get_sample_fmt_name(converted_fmt) << std::endl;
+	std::exit(-1);
     }
 }
 
@@ -295,7 +296,7 @@ void FrameWriter::init_audio_stream()
 	audioCodecCtx->sample_fmt = get_codec_auto_sample_fmt(codec);
     } else
     {
-	audioCodecCtx->sample_fmt = get_codec_sample_fmt(codec, av_get_sample_fmt(params.sample_fmt.c_str()));
+	audioCodecCtx->sample_fmt = convert_codec_sample_fmt(codec, params.sample_fmt);
     }
     audioCodecCtx->channel_layout = get_codec_channel_layout(codec);
     audioCodecCtx->sample_rate = params.sample_rate;
