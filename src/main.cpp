@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <signal.h>
 #include <unistd.h>
 #include <wayland-client-protocol.h>
@@ -376,6 +377,24 @@ void handle_sigint(int)
     exit_main_loop = true;
 }
 
+static bool user_specified_overwrite(std::string filename)
+{
+    struct stat buffer;   
+    if (stat (filename.c_str(), &buffer) == 0)
+    {
+        std::string input;
+        std::cout << "Output file \"" << filename << "\" exists. Overwrite? Y/n: ";
+        std::getline(std::cin, input);
+        if (input.size() && input[0] != 'Y' && input[0] != 'y')
+        {
+            std::cout << "Use -f to specify the file name." << std::endl;
+            return false;
+	}
+    }
+
+    return true;
+}
+
 static void check_has_protos()
 {
     if (shm == NULL) {
@@ -708,6 +727,11 @@ int main(int argc, char *argv[])
             default:
                 printf("Unsupported command line argument %s\n", optarg);
         }
+    }
+
+    if (!user_specified_overwrite(params.file))
+    {
+        return EXIT_FAILURE;
     }
 
     display = wl_display_connect(NULL);
