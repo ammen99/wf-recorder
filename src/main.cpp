@@ -519,7 +519,9 @@ static void help()
     printf(R"(Usage: wf-recorder [OPTION]... -f [FILE]...
 Screen recording of wlroots-based compositors
 
-With no FILE, start recording the current screen.)");
+With no FILE, start recording the current screen.
+
+Use Ctrl+C to stop.)");
 #ifdef HAVE_PULSE
     printf(R"(
 
