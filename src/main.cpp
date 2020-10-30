@@ -529,7 +529,7 @@ Use Ctrl+C to stop.)");
                             [DEVICE] argument is optional.
                             In case you want to specify the pulseaudio device which will capture
                             the audio, you can run this command with the name of that device.
-                            You can find your device by running: pactl list sinks | grep Name)");
+                            You can find your device by running: pactl list sources | grep Name)");
 #endif
     printf(R"(
 
