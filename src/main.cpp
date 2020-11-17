@@ -33,12 +33,15 @@ std::unique_ptr<OpenCL> opencl;
 PulseReaderParams pulseParams;
 #endif
 
+#define MAX_FRAME_FAILURES 16
+
 std::mutex frame_writer_mutex, frame_writer_pending_mutex;
 std::unique_ptr<FrameWriter> frame_writer;
 
 static struct wl_shm *shm = NULL;
 static struct zxdg_output_manager_v1 *xdg_output_manager = NULL;
 static struct zwlr_screencopy_manager_v1 *screencopy_manager = NULL;
+void request_next_frame();
 
 struct wf_recorder_output
 {
@@ -212,6 +215,8 @@ static void frame_handle_flags(void*, struct zwlr_screencopy_frame_v1 *, uint32_
     buffers[active_buffer].y_invert = flags & ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT;
 }
 
+int32_t frame_failed_cnt = 0;
+
 static void frame_handle_ready(void *, struct zwlr_screencopy_frame_v1 *,
     uint32_t tv_sec_hi, uint32_t tv_sec_low, uint32_t tv_nsec) {
 
@@ -219,11 +224,17 @@ static void frame_handle_ready(void *, struct zwlr_screencopy_frame_v1 *,
     buffer_copy_done = true;
     buffer.presented.tv_sec = ((1ll * tv_sec_hi) << 32ll) | tv_sec_low;
     buffer.presented.tv_nsec = tv_nsec;
+    frame_failed_cnt = 0;
 }
 
 static void frame_handle_failed(void *, struct zwlr_screencopy_frame_v1 *) {
-    fprintf(stderr, "failed to copy frame\n");
-    exit_main_loop = true;
+    std::cerr << "Failed to copy frame, retrying..." << std::endl;
+    ++frame_failed_cnt;
+    if (frame_failed_cnt > MAX_FRAME_FAILURES)
+    {
+        std::cerr << "Failed to copy frame too many times, exiting!" << std::endl;
+        exit_main_loop = true;
+    }
 }
 
 static void frame_handle_damage(void *, struct zwlr_screencopy_frame_v1 *,
@@ -611,6 +622,35 @@ Examples:)");
     exit(EXIT_SUCCESS);
 }
 
+capture_region selected_region{};
+wf_recorder_output *chosen_output = nullptr;
+zwlr_screencopy_frame_v1 *frame = NULL;
+
+void request_next_frame()
+{
+    if (frame != NULL)
+    {
+        zwlr_screencopy_frame_v1_destroy(frame);
+    }
+
+    /* Capture the whole output if the user hasn't provided a good geometry */
+    if (!selected_region.is_selected())
+    {
+        frame = zwlr_screencopy_manager_v1_capture_output(
+            screencopy_manager, 1, chosen_output->output);
+    } else
+    {
+        frame = zwlr_screencopy_manager_v1_capture_output_region(
+            screencopy_manager, 1, chosen_output->output,
+            selected_region.x - chosen_output->x,
+            selected_region.y - chosen_output->y,
+            selected_region.width, selected_region.height);
+    }
+
+    zwlr_screencopy_frame_v1_add_listener(frame, &frame_listener, NULL);
+}
+
+
 int main(int argc, char *argv[])
 {
     FrameWriterParams params = FrameWriterParams(exit_main_loop);
@@ -625,8 +665,6 @@ int main(int argc, char *argv[])
 
     constexpr const char* default_cmdline_output = "interactive";
     std::string cmdline_output = default_cmdline_output;
-
-    capture_region selected_region{};
 
     struct option opts[] = {
         { "output",          required_argument, NULL, 'o' },
@@ -737,7 +775,7 @@ int main(int argc, char *argv[])
     }
 
     display = wl_display_connect(NULL);
-    if (display == NULL) 
+    if (display == NULL)
     {
         fprintf(stderr, "failed to create display: %m\n");
         return EXIT_FAILURE;
@@ -750,7 +788,6 @@ int main(int argc, char *argv[])
     check_has_protos();
     load_output_info();
 
-    wf_recorder_output *chosen_output = nullptr;
     if (available_outputs.size() == 1)
     {
         chosen_output = &available_outputs[0];
@@ -838,26 +875,14 @@ int main(int argc, char *argv[])
         }
 
         buffer_copy_done = false;
-        struct zwlr_screencopy_frame_v1 *frame = NULL;
+        request_next_frame();
 
-        /* Capture the whole output if the user hasn't provided a good geometry */
-        if (!selected_region.is_selected())
-        {
-            frame = zwlr_screencopy_manager_v1_capture_output(
-                screencopy_manager, 1, chosen_output->output);
-        } else
-        {
-            frame = zwlr_screencopy_manager_v1_capture_output_region(
-                screencopy_manager, 1, chosen_output->output,
-                selected_region.x - chosen_output->x,
-                selected_region.y - chosen_output->y,
-                selected_region.width, selected_region.height);
+        while (!buffer_copy_done && !exit_main_loop && wl_display_dispatch(display) != -1) {
+            // This space is intentionally left blank
         }
 
-        zwlr_screencopy_frame_v1_add_listener(frame, &frame_listener, NULL);
-
-        while (!buffer_copy_done && wl_display_dispatch(display) != -1) {
-            // This space is intentionally left blank
+        if (exit_main_loop) {
+            break;
         }
 
         auto& buffer = buffers[active_buffer];
@@ -882,7 +907,6 @@ int main(int argc, char *argv[])
         buffer.available = true;
 
         active_buffer = next_frame(active_buffer);
-        zwlr_screencopy_frame_v1_destroy(frame);
     }
 
     writer_thread.join();
