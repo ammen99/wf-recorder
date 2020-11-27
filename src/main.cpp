@@ -327,7 +327,7 @@ static void write_loop(FrameWriterParams params)
     while(!exit_main_loop)
     {
         // wait for frame to become available
-        while(buffers[last_encoded_frame].available != true) {
+        while(buffers[last_encoded_frame].available != true && !exit_main_loop) {
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
         }
         auto& buffer = buffers[last_encoded_frame];
