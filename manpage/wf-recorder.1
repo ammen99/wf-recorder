@@ -1,0 +1,181 @@
+.Dd $Mdocdate: November 27 2020 $
+.Dt WF-RECORDER 1
+.Os
+.Sh NAME
+.Nm wf-recorder
+.Nd simple screen recording program for wlroots-based compositors
+.Sh SYNOPSIS
+.Nm wf-recorder
+.Op Fl abcdefghlmoptx
+.Op Fl a , -audio Op Ar DEVICE
+.Op Fl b, -bframes Ar max_b_frames
+.Op Fl c, -codec Ar output_codec
+.Op Fl d, -device Ar encoding_device
+.Op Fl e, -opencl Op Ar opencl_device
+.Op Fl f Ar filename.ext
+.Op Fl g, -geometry Ar geometry
+.Op Fl h, -help
+.Op Fl l, -log
+.Op Fl m, -muxer Ar muxer
+.Op Fl o, -output Ar output
+.Op Fl p, -codec-param Op Ar option_param=option_value
+.Op Fl t, -force-yuv
+.Op Fl x, -pixel-format
+.Sh DESCRIPTION
+.Nm
+is a tool built to record your screen on Wayland compositors.
+It makes use of
+.Sy wlr-screencopy
+for capturing video and
+.Xr ffmpeg 1
+for encoding it.
+.Pp
+In its simplest form, run
+.Nm
+to start recording and use
+.Ql Ctrl+C
+to stop.
+This will create a file called
+.Ql recording.mp4
+in the current working directory using the default
+.Ar codec.
+.Pp
+The options are as follows:
+.Pp
+.Bl -tag -width Ds -compact
+.It Fl a , -audio Op Ar DEVICE
+Starts recording the screen with audio.
+.Pp
+.Ar DEVICE
+argument is optional.
+In case you want to specify the PulseAudio device which will capture the audio,
+you can run this command with the name of that device.
+You can find your device by running
+.D1 $ pactl list sinks | grep Name
+.Pp
+.It Fl b , -bframes Ar max_b_frames
+Sets the maximum number of B-Frames to use.
+.Pp
+.It Fl c , -codec
+.Ar output_codec
+Specifies the codec of the video. Supports GIF output as well.
+.Pp
+To modify codec parameters, use
+.Fl p
+.Ar option_name=option_value
+.Pp
+.It Fl d , -device Ar encoding_device
+Selects the device to use when encoding the video.
+.Pp
+Some drivers report support for
+.Ql rgb0
+data for vaapi input but really only support yuv.
+Use the
+.Fl t , -force-yuv
+option in addition to the vaapi options to convert the
+data in software, before sending it to the GPU.
+.Pp
+.It Fl e , -opencl Ar opencl_device
+Attempts to use OpenCL if
+.Nm
+was built with OpenCL support and
+.Fl t , -force-yuv
+are specified, even without vaapi GPU encoding.
+Use
+.Fl e , -opencl
+.Ar opencl_device
+to use a specific OpenCL device, where
+.Ar opencl_device
+is one of the devices listed.
+.Pp
+.It Fl f Ar filename.ext
+By using the
+.Fl f
+option, the output file will have the name
+.Ar filename.ext
+and the file format will be determined by the provided extension.
+If the extension is not recognized by your
+.Xr ffmpeg 1
+muxers, the command will fail.
+.Pp
+You can check the muxers that your
+.Xr ffmpeg 1
+installation supports by running
+.Dl $ ffmpeg -muxers
+.Pp
+.It Fl g , -geometry Ar screen_geometry
+Selects a specific part of the screen.
+.Pp
+.It Fl h , -help
+Prints the help screen.
+.Pp
+.It Fl l , -log
+Generates a log on the current terminal. For debug purposes.
+.Pp
+.It Fl m , -muxer Ar muxer
+Set the output format to a specific muxer instead of detecting it from the filename.
+.Pp
+.It Fl o , -output
+Specify the output where the video is to be recorded.
+.Pp
+.It Fl p , -codec-param Op Ar option_name=option_value
+Change the codec parameters.
+.Pp
+.It Fl t , -force-yuv
+Use this option in addition to the vaapi options to convert
+the data in software, before sending it to the GPU.
+.Pp
+.It Fl x , -pixel-format Ar pixel_format
+Set the output pixel format.
+.Pp
+List available formats using
+.Dl $ ffmpeg -pix_fmts
+.El
+.Sh EXAMPLES
+To select a specific part of the screen you can either use
+.Fl -g Ar geometry
+or
+use https://github.com/emersion/slurp for interactive selection of the
+screen area that will be recorded:
+.Dl $ wf-recorder -g "$(slurp)"
+.Pp
+You can record screen and sound simultaneously with
+.Dl $ wf-recorder --audio --file=recording_with_audio.mp4
+.Pp
+To specify a
+.Ar codec
+use the
+.Fl c Ar codec
+option. To modify codec parameters,
+.Fl p
+.Ar option_name=option_value.
+.Pp
+To set a specific output format, use the
+.Fl m muxer
+option. For example, to
+output to a v
+.Sy ideo4linux2
+loopback you might use:
+.Dl $ wf-recorder --muxer=v4l2 --codec=rawvideo --file=/dev/video2
+.Pp
+To use GPU encoding, use a VAAPI codec (for ex.
+.Ql h264_vaapi
+) and specify a GPU
+device to use with the
+.Fl d
+option:
+.Dl $ wf-recorder -f test-vaapi.mkv -c h264_vaapi -d /dev/dri/renderD128
+.Pp
+Some drivers report support for
+.Ql rgb0
+data for
+.Ql vaapi
+input but really only support yuv planar formats.
+In this case, use the
+.Fl t , -force-yuv
+option in addition to the
+.Ql vaapi
+options to convert the data to yuv planar data before sending it to the GPU.
+.Sh SEE ALSO
+.Xr ffmpeg 1 ,
+.Xr pactl 1

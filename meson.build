@@ -54,32 +54,8 @@ configure_file(input: 'config.h.in',
                output: 'config.h',
                configuration: conf_data)
 
-scdoc = dependency('scdoc', version: '>=1.9.2', native: true, required: get_option('man-pages'))
-
-if scdoc.found()
-    scdoc_bin=find_program(scdoc.get_pkgconfig_variable('scdoc'), native: true)
-
-    sh = find_program('sh', native: true)
-
-    mandir=get_option('mandir')
-
-    filename ='manpage/wf-recorder.1.scd'
-
-    project_name='wf-recorder'
-    section='1'
-    output= '@0@.@1@'.format(project_name, section)
-
-    custom_target(
-  	project_name,
-	input: filename,
-	output:output,
-	command: [
-	      sh, '-c', '@0@ < @INPUT@ > @1@'.format(scdoc_bin.path(), output)
-	  ],
-	install: true,
-	install_dir: '@0@/man@1@'.format(mandir, section)
-	)
-endif
+install_data('manpage/wf-recorder.1', install_dir :
+	join_paths(get_option('prefix'), get_option('mandir'), 'man1'))
 
 subdir('proto')
 
