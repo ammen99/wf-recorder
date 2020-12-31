@@ -60,7 +60,7 @@ libavutil = dependency('libavutil')
 libavcodec = dependency('libavcodec')
 libavformat = dependency('libavformat')
 libavdevice = dependency('libavdevice', required: false)
-sws = dependency('libswscale')
+libavfilter = dependency('libavfilter')
 swr = dependency('libswresample')
 threads = dependency('threads')
 
@@ -77,8 +77,8 @@ subdir('proto')
 
 dependencies = [
     wayland_client, wayland_protos,
-    libavutil, libavcodec, libavformat, libavdevice,
-    wf_protos, sws, threads, pulse, swr, opencl
+    libavutil, libavcodec, libavformat, libavdevice, libavfilter,
+    wf_protos, threads, pulse, swr, opencl
 ]
 
 executable('wf-recorder', project_sources,
