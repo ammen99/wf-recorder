@@ -182,6 +182,8 @@ static struct wl_buffer *create_shm_buffer(uint32_t fmt,
     return buffer;
 }
 
+static bool use_damage = true;
+
 static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, uint32_t format,
     uint32_t width, uint32_t height, uint32_t stride)
 {
@@ -208,7 +210,11 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
         exit(EXIT_FAILURE);
     }
 
-    zwlr_screencopy_frame_v1_copy_with_damage(frame, buffer.wl_buffer);
+    if (use_damage) {
+        zwlr_screencopy_frame_v1_copy_with_damage(frame, buffer.wl_buffer);
+    } else {
+        zwlr_screencopy_frame_v1_copy(frame, buffer.wl_buffer);
+    }
 }
 
 static void frame_handle_flags(void*, struct zwlr_screencopy_frame_v1 *, uint32_t flags) {
@@ -551,6 +557,12 @@ Use Ctrl+C to stop.)");
                             Some drivers report support for rgb0 data for vaapi input but
                             really only support yuv.
 
+  -D, --no-damage           By default, wf-recorder will request a new frame from the compositor
+                            only when the screen updates. This results in a much smaller output
+                            file, which however has a variable refresh rate. When this option is
+                            on, wf-recorder does not use this optimization and continuously
+                            records new frames, even if there are no updates on the screen.
+
   -f <filename>.ext         By using the -f option the output file will have the name :
                             filename.ext and the file format will be determined by provided
                             while extension .ext . If the extension .ext provided is not
@@ -683,14 +695,15 @@ int main(int argc, char *argv[])
         { "force-yuv",       no_argument,       NULL, 't' },
         { "opencl",          optional_argument, NULL, 'e' },
         { "bframes",         required_argument, NULL, 'b' },
-        { "version",         required_argument, NULL, 'v' },
+        { "version",         no_argument,       NULL, 'v' },
+        { "no-damage",       no_argument,       NULL, 'D' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:d:b:la::te::hv", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:d:b:la::te::hvD", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -770,6 +783,10 @@ int main(int argc, char *argv[])
             case 'v':
                 printf("wf-recorder %s\n", WFRECORDER_VERSION);
                 return 0;
+
+            case 'D':
+                use_damage = false;
+                break;
 
             default:
                 printf("Unsupported command line argument %s\n", optarg);

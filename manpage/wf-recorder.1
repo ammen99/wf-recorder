@@ -6,11 +6,12 @@
 .Nd simple screen recording program for wlroots-based compositors
 .Sh SYNOPSIS
 .Nm wf-recorder
-.Op Fl abcdefghlmoptvx
+.Op Fl abcdDefghlmoptvx
 .Op Fl a , -audio Op Ar DEVICE
 .Op Fl b, -bframes Ar max_b_frames
 .Op Fl c, -codec Ar output_codec
 .Op Fl d, -device Ar encoding_device
+.Op Fl D, -no-damage
 .Op Fl e, -opencl Op Ar opencl_device
 .Op Fl f Ar filename.ext
 .Op Fl g, -geometry Ar geometry
@@ -75,6 +76,13 @@ Use the
 .Fl t , -force-yuv
 option in addition to the vaapi options to convert the
 data in software, before sending it to the GPU.
+.Pp
+.It Fl D , -no-damage
+By default, wf-recorder will request a new frame from the compositor
+only when the screen updates. This results in a much smaller output
+file, which however has a variable refresh rate. When this option is
+on, wf-recorder does not use this optimization and continuously
+records new frames, even if there are no updates on the screen.
 .Pp
 .It Fl e , -opencl Ar opencl_device
 Attempts to use OpenCL if
