@@ -24,7 +24,7 @@ add_project_arguments(['-Wno-deprecated-declarations'], language: 'cpp')
 project_sources = ['src/frame-writer.cpp', 'src/main.cpp', 'src/averr.c']
 
 wayland_client = dependency('wayland-client')
-wayland_protos = dependency('wayland-protocols')
+wayland_protos = dependency('wayland-protocols', version: '>=1.14')
 
 pulse = dependency('libpulse-simple', required : get_option('pulse'))
 
