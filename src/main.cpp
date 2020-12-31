@@ -369,8 +369,11 @@ static void write_loop(FrameWriterParams params)
 #endif
         }
 
-        frame_writer->add_frame((unsigned char*)buffer.data, buffer.base_usec,
-            buffer.y_invert);
+        bool do_cont = frame_writer->add_frame((unsigned char*)buffer.data,
+            buffer.base_usec, buffer.y_invert);
+        if (!do_cont) {
+            break;
+        }
 
         frame_writer_mutex.unlock();
 
@@ -597,6 +600,9 @@ Use Ctrl+C to stop.)");
 #endif
     printf(R"(
 
+  -F, --filter              Specify the ffmpeg filter string to use. For example,
+                            -F hwupload,scale_vaapi=format=nv12 is used for VAAPI.
+
   -t, --force-yuv           Use the -t or --force-yuv option to force conversion of the data to
                             yuv format, before sending it to the gpu.
 
@@ -689,6 +695,7 @@ int main(int argc, char *argv[])
         { "codec",           required_argument, NULL, 'c' },
         { "codec-param",     required_argument, NULL, 'p' },
         { "device",          required_argument, NULL, 'd' },
+        { "filter",          required_argument, NULL, 'F' },
         { "log",             no_argument,       NULL, 'l' },
         { "audio",           optional_argument, NULL, 'a' },
         { "help",            no_argument,       NULL, 'h' },
@@ -703,12 +710,16 @@ int main(int argc, char *argv[])
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:d:b:la::te::hvD", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:d:b:la::te::hvDF:", opts, &i)) != -1)
     {
         switch(c)
         {
             case 'f':
                 params.file = optarg;
+                break;
+
+            case 'F':
+                params.video_filter = optarg;
                 break;
 
             case 'o':

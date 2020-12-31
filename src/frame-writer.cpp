@@ -8,9 +8,11 @@
 #include <vector>
 #include <queue>
 #include <cstring>
+#include <sstream>
 #include "averr.h"
 
-#define FPS 60
+
+static const AVRational US_RATIONAL{1,1000000} ;
 #define AUDIO_RATE 44100
 
 class FFmpegInitialize
@@ -36,46 +38,14 @@ void FrameWriter::init_hw_accel()
         std::cerr << "Failed to create hw encoding device " << params.hw_device << ": " << averr(ret) << std::endl;
         std::exit(-1);
     }
-
-    this->hw_frame_context = av_hwframe_ctx_alloc(hw_device_context);
-    if (!this->hw_frame_context)
-    {
-        std::cerr << "Failed to initialize hw frame context" << std::endl;
-        av_buffer_unref(&hw_device_context);
-        std::exit(-1);
-    }
-
-    AVHWFramesConstraints *cst;
-    cst = av_hwdevice_get_hwframe_constraints(hw_device_context, NULL);
-    if (!cst)
-    {
-        std::cerr << "Failed to get hwframe constraints" << std::endl;
-        av_buffer_unref(&hw_device_context);
-        std::exit(-1);
-    }
-
-    AVHWFramesContext *ctx = (AVHWFramesContext*)this->hw_frame_context->data;
-    ctx->width = params.width;
-    ctx->height = params.height;
-    ctx->format = cst->valid_hw_formats[0];
-    ctx->sw_format = AV_PIX_FMT_NV12;
-    av_hwframe_constraints_free(&cst);
-
-    if ((ret = av_hwframe_ctx_init(hw_frame_context)))
-    {
-        std::cerr << "Failed to initialize hwframe context: " << averr(ret) << std::endl;
-        av_buffer_unref(&hw_device_context);
-        av_buffer_unref(&hw_frame_context);
-        std::exit(-1);
-    }
 }
 
 void FrameWriter::load_codec_options(AVDictionary **dict)
 {
     static const std::map<std::string, std::string> default_x264_options = {
-        {"tune", "zerolatency"},
-        {"preset", "ultrafast"},
-        {"crf", "20"},
+         {"tune", "zerolatency"},
+         {"preset", "ultrafast"},
+         {"crf", "20"},
     };
 
     if (params.codec.find("libx264") != std::string::npos ||
@@ -147,6 +117,156 @@ AVPixelFormat FrameWriter::choose_sw_format(AVCodec *codec)
     return codec->pix_fmts[0];
 }
 
+void FrameWriter::init_video_filters(AVCodec *codec)
+{
+    if (params.codec.find("vaapi") != std::string::npos) {
+        if (params.video_filter == "null") {
+            // Add `hwupload,scale_vaapi=format=nv12` by default
+            // It is necessary for conversion to a proper format.
+            params.video_filter = "hwupload,scale_vaapi=format=nv12";
+        }
+    }
+
+    this->videoFilterGraph = avfilter_graph_alloc();
+
+    const AVFilter* source = avfilter_get_by_name("buffer");
+    const AVFilter* sink   = avfilter_get_by_name("buffersink");
+
+    if (!source || !sink) {
+        std::cerr << "filtering source or sink element not found\n";
+        exit(-1);
+    }
+
+    // Build the configuration of the 'buffer' filter.
+    // See: ffmpeg -h filter=buffer
+    // See: https://ffmpeg.org/ffmpeg-filters.html#buffer
+    std::stringstream buffer_filter_config;
+    buffer_filter_config << "video_size=" << params.width << "x" << params.height;
+    buffer_filter_config << ":pix_fmt=" << (int)this->get_input_format();
+    buffer_filter_config << ":time_base=" << US_RATIONAL.num << "/" << US_RATIONAL.den;
+    buffer_filter_config << ":pixel_aspect=1/1";
+    buffer_filter_config << ":sws_param=flags=fast_bilinear";
+
+    int err = avfilter_graph_create_filter(&this->videoFilterSourceCtx, source,
+        "Source", buffer_filter_config.str().c_str(), NULL, this->videoFilterGraph);
+    if (err < 0) {
+        std::cerr << "Cannot create video filter in: " << averr(err) << std::endl;;
+        exit(-1);
+    }
+
+    err = avfilter_graph_create_filter(&this->videoFilterSinkCtx, sink, "Sink",
+        NULL, NULL, this->videoFilterGraph);
+    if (err < 0) {
+        std::cerr << "Cannot create video filter out: " << averr(err) << std::endl;;
+        exit(-1);
+    }
+
+    // We also need to tell the sink which pixel formats are supported.
+    // by the video encoder. codevIndicate to our sink  pixel formats
+    // are accepted by our codec.
+    const AVPixelFormat *supported_pix_fmts = codec->pix_fmts;
+    static const AVPixelFormat only_yuv420p[] =
+    {
+        AV_PIX_FMT_YUV420P,
+        AV_PIX_FMT_NONE
+    };
+
+    // Force pixel format to yuv420p if requested and possible
+    if (params.force_yuv) {
+        if (is_fmt_supported(AV_PIX_FMT_YUV420P, supported_pix_fmts)) {
+            supported_pix_fmts = only_yuv420p ;
+        } else {
+            std::cerr << "Ignoring request to force yuv420p, " <<
+                "because it is not supported by the codec\n";
+        }
+    }
+
+    err = av_opt_set_int_list(this->videoFilterSinkCtx, "pix_fmts",
+        supported_pix_fmts, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
+
+    if (err < 0) {
+        std::cerr << "Failed to set pix_fmts: " << averr(err) << std::endl;;
+        exit(-1);
+    }
+
+    // Create the connections to the filter graph
+    //
+    // The in/out swap is not a mistake:
+    //
+    //   ----------       -----------------------------      --------
+    //   | Source | ----> | in -> filter_graph -> out | ---> | Sink |
+    //   ----------       -----------------------------      --------
+    //
+    // The 'in' of filter_graph is the output of the Source buffer
+    // The 'out' of filter_graph is the input of the Sink buffer
+    //
+
+    AVFilterInOut *outputs = avfilter_inout_alloc();
+    outputs->name       = av_strdup("in");
+    outputs->filter_ctx = this->videoFilterSourceCtx;
+    outputs->pad_idx    = 0;
+    outputs->next       = NULL;
+
+    AVFilterInOut *inputs  = avfilter_inout_alloc();
+    inputs->name       = av_strdup("out");
+    inputs->filter_ctx = this->videoFilterSinkCtx;
+    inputs->pad_idx    = 0;
+    inputs->next       = NULL;
+
+    if (!outputs->name || !inputs->name) {
+        std::cerr << "Failed to parse allocate inout filter links" << std::endl;
+        exit(-1);
+    }
+
+    std::cout << "Using video filter: " << params.video_filter << std::endl;
+
+    err = avfilter_graph_parse_ptr(this->videoFilterGraph,
+        params.video_filter.c_str(), &inputs, &outputs, NULL);
+    if (err < 0) {
+        std::cerr << "Failed to parse graph filter: " << averr(err) << std::endl;;
+        exit(-1) ;
+    }
+
+    // Filters that create HW frames ('hwupload', 'hwmap', ...) need
+    // AVBufferRef in their hw_device_ctx. Unfortunately, there is no
+    // simple API to do that for filters created by avfilter_graph_parse_ptr().
+    // The code below is inspired from ffmpeg_filter.c
+    if (this->hw_device_context) {
+        for (unsigned i=0; i< this->videoFilterGraph->nb_filters; i++) {
+            this->videoFilterGraph->filters[i]->hw_device_ctx =
+                av_buffer_ref(this->hw_device_context);
+        }
+    }
+
+    err = avfilter_graph_config(this->videoFilterGraph, NULL);
+    if (err<0) {
+        std::cerr << "Failed to configure graph filter: " << averr(err) << std::endl;;
+        exit(-1) ;
+    }
+
+    if (params.enable_ffmpeg_debug_output) {
+        std::cout << std::string(80,'#') << std::endl ;
+        std::cout << avfilter_graph_dump(this->videoFilterGraph,0) << "\n";
+        std::cout << std::string(80,'#') << std::endl ;
+    }
+
+
+    // The (input of the) sink is the output of the whole filter.
+    AVFilterLink * filter_output = this->videoFilterSinkCtx->inputs[0] ;
+
+    this->videoCodecCtx->width  = filter_output->w;
+    this->videoCodecCtx->height = filter_output->h;
+    this->videoCodecCtx->pix_fmt = (AVPixelFormat)filter_output->format;
+    this->videoCodecCtx->time_base = filter_output->time_base;
+    this->videoCodecCtx->framerate = filter_output->frame_rate; // can be 1/0 if unknown
+    this->videoCodecCtx->sample_aspect_ratio = filter_output->sample_aspect_ratio;
+
+    this->hw_frame_context = av_buffersink_get_hw_frames_ctx(
+        this->videoFilterSinkCtx);
+    avfilter_inout_free(&inputs);
+    avfilter_inout_free(&outputs);
+}
+
 void FrameWriter::init_video_stream()
 {
     AVDictionary *options = NULL;
@@ -166,32 +286,31 @@ void FrameWriter::init_video_stream()
         std::exit(-1);
     }
 
-    videoCodecCtx = videoStream->codec;
-    videoCodecCtx->width = params.width;
-    videoCodecCtx->height = params.height;
-    videoCodecCtx->time_base = (AVRational){ 1, FPS };
-
+    this->videoCodecCtx = videoStream->codec;
+    videoCodecCtx->width      = params.width;
+    videoCodecCtx->height     = params.height;
+    videoCodecCtx->time_base  = US_RATIONAL;
+    videoCodecCtx->color_range = AVCOL_RANGE_JPEG;
     if (params.bframes != -1)
         videoCodecCtx->max_b_frames = params.bframes;
 
-    if (params.codec.find("vaapi") != std::string::npos)
-    {
-        videoCodecCtx->pix_fmt = AV_PIX_FMT_VAAPI;
+    if (!params.hw_device.empty()) {
         init_hw_accel();
-        videoCodecCtx->hw_frames_ctx = av_buffer_ref(hw_frame_context);
-
-        if (params.force_yuv)
-            init_sws(AV_PIX_FMT_YUV420P);
-    } else
-    {
-        videoCodecCtx->pix_fmt = choose_sw_format(codec);
-        std::cout << "Choosing pixel format " <<
-            av_get_pix_fmt_name(videoCodecCtx->pix_fmt) << std::endl;
-        init_sws(videoCodecCtx->pix_fmt);
     }
 
-    if (fmtCtx->oformat->flags & AVFMT_GLOBALHEADER)
+    // The filters need to be initialized after we have initialized
+    // videoCodecCtx.
+    //
+    // After loading the filters, we should update the hw frames ctx.
+    init_video_filters(codec);
+
+    if (this->hw_frame_context) {
+      videoCodecCtx->hw_frames_ctx = av_buffer_ref(this->hw_frame_context);
+    }
+
+    if (fmtCtx->oformat->flags & AVFMT_GLOBALHEADER) {
         videoCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    }
 
     int ret;
     char err[256];
@@ -203,6 +322,7 @@ void FrameWriter::init_video_stream()
     }
     av_dict_free(&options);
 }
+
 #ifdef HAVE_PULSE
 static uint64_t get_codec_channel_layout(AVCodec *codec)
 {
@@ -296,13 +416,13 @@ void FrameWriter::init_codecs()
     if (params.enable_audio)
         init_audio_stream();
 #endif
+
     av_dump_format(fmtCtx, 0, params.file.c_str(), 1);
     if (avio_open(&fmtCtx->pb, params.file.c_str(), AVIO_FLAG_WRITE))
     {
         std::cerr << "avio_open failed" << std::endl;
         std::exit(-1);
     }
-
     AVDictionary *dummy = NULL;
     char err[256];
     int ret;
@@ -314,19 +434,6 @@ void FrameWriter::init_codecs()
         std::exit(-1);
     }
     av_dict_free(&dummy);
-}
-
-void FrameWriter::init_sws(AVPixelFormat format)
-{
-    swsCtx = sws_getContext(params.width, params.height, get_input_format(),
-        params.width, params.height, format,
-        SWS_FAST_BILINEAR, NULL, NULL, NULL);
-
-    if (!swsCtx)
-    {
-        std::cerr << "Failed to create sws context" << std::endl;
-        std::exit(-1);
-    }
 }
 
 static const char* determine_output_format(const FrameWriterParams& params)
@@ -371,36 +478,6 @@ FrameWriter::FrameWriter(const FrameWriterParams& _params) :
 #endif
 
     init_codecs();
-
-    encoder_frame = av_frame_alloc();
-    if (hw_device_context) {
-        encoder_frame->format = params.force_yuv ? AV_PIX_FMT_YUV420P : get_input_format();
-    } else {
-        encoder_frame->format = videoCodecCtx->pix_fmt;
-    }
-    encoder_frame->width = params.width;
-    encoder_frame->height = params.height;
-    if (av_frame_get_buffer(encoder_frame, 1))
-    {
-        std::cerr << "Failed to allocate frame buffer" << std::endl;
-        std::exit(-1);
-    }
-
-    if (hw_device_context)
-    {
-        hw_frame = av_frame_alloc();
-        AVHWFramesContext *frctx = (AVHWFramesContext*)hw_frame_context->data;
-        hw_frame->format = frctx->format;
-        hw_frame->hw_frames_ctx = av_buffer_ref(hw_frame_context);
-        hw_frame->width = params.width;
-        hw_frame->height = params.height;
-
-        if (av_hwframe_get_buffer(hw_frame_context, hw_frame, 0))
-        {
-            std::cerr << "failed to hw frame buffer" << std::endl;
-            std::exit(-1);
-        }
-    }
 }
 
 void FrameWriter::convert_pixels_to_yuv(const uint8_t *pixels,
@@ -424,17 +501,14 @@ void FrameWriter::convert_pixels_to_yuv(const uint8_t *pixels,
 
     if (!converted_with_opencl)
     {
-        sws_scale(swsCtx, &formatted_pixels, stride, 0, params.height,
-            encoder_frame->data, encoder_frame->linesize);
+        // TODO: remove
     }
 }
 
 void FrameWriter::encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt)
 {
-    int ret;
-
     /* send the frame to the encoder */
-    ret = avcodec_send_frame(enc_ctx, frame);
+    int ret = avcodec_send_frame(enc_ctx, frame);
     if (ret < 0)
     {
         fprintf(stderr, "error sending a frame for encoding\n");
@@ -458,7 +532,7 @@ void FrameWriter::encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt)
     }
 }
 
-void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
+AVFrame *FrameWriter::prepare_frame_data(const uint8_t* pixels, bool y_invert)
 {
     /* Calculate data after y-inversion */
     int stride[] = {int(params.stride)};
@@ -469,56 +543,73 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
         stride[0] *= -1;
     }
 
-    AVFrame **output_frame;
-    AVBufferRef *saved_buf0 = NULL;
-
-    if (hw_device_context)
-    {
-        if (params.force_yuv) {
-            convert_pixels_to_yuv(pixels, formatted_pixels, stride);
-        } else {
-            encoder_frame->data[0] = (uint8_t*) formatted_pixels;
-            encoder_frame->linesize[0] = stride[0];
-        }
-
-        if (av_hwframe_transfer_data(hw_frame, encoder_frame, 0))
-        {
-            std::cerr << "Failed to upload data to the gpu!" << std::endl;
-            return;
-        }
-
-        output_frame = &hw_frame;
-    } else if(get_input_format() == videoCodecCtx->pix_fmt)
-    {
-        output_frame = &encoder_frame;
-        encoder_frame->data[0] = (uint8_t*)formatted_pixels;
-        encoder_frame->linesize[0] = stride[0];
-        /* Force ffmpeg to create a copy of the frame, if the codec needs it */
-        saved_buf0 = encoder_frame->buf[0];
-        encoder_frame->buf[0] = NULL;
-    } else
-    {
-        convert_pixels_to_yuv(pixels, formatted_pixels, stride);
-
-        /* Force ffmpeg to create a copy of the frame, if the codec needs it */
-        saved_buf0 = encoder_frame->buf[0];
-        encoder_frame->buf[0] = NULL;
-        output_frame = &encoder_frame;
+    auto frame = av_frame_alloc();
+    if (!frame) {
+        std::cerr << "Failed to allocate frame!" << std::endl;
+        return NULL;
     }
 
-    (*output_frame)->pts = usec;
+    frame->data[0] = (uint8_t*)formatted_pixels;
+    frame->linesize[0] = stride[0];
+    frame->format = get_input_format();
+    frame->width = params.width;
+    frame->height = params.height;
 
-    AVPacket pkt;
-    av_init_packet(&pkt);
-    pkt.data = NULL;
-    pkt.size = 0;
-
-    encode(videoCodecCtx, *output_frame, &pkt);
-
-    /* Restore frame buffer, so that it can be properly freed in the end */
-    if (saved_buf0)
-        encoder_frame->buf[0] = saved_buf0;
+    return frame;
 }
+
+bool FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
+{
+    auto frame = prepare_frame_data(pixels, y_invert);
+    frame->pts = usec; // We use time_base = 1/US_RATE
+
+    // Push the RGB frame into the filtergraph */
+    int err = av_buffersrc_add_frame_flags(videoFilterSourceCtx, frame, 0);
+    if (err < 0) {
+        std::cerr << "Error while feeding the filtergraph!" << std::endl;
+        return false;
+    }
+
+    // Pull filtered frames from the filtergraph
+    while (true) {
+        AVFrame *filtered_frame = av_frame_alloc();
+
+        if (!filtered_frame) {
+            std::cerr << "Error av_frame_alloc" << std::endl;
+            return false;
+        }
+
+        err = av_buffersink_get_frame(videoFilterSinkCtx, filtered_frame);
+        if (err == AVERROR(EAGAIN)) {
+            // Not an error. No frame available.
+            // Try again later.
+            break;
+        } else if (err == AVERROR_EOF) {
+            // There will be no more output frames on this sink.
+            // That could happen if a filter like 'trim' is used to
+            // stop after a given time.
+            return false;
+        } else if (err < 0) {
+            av_frame_free(&filtered_frame);
+            return false;
+        }
+
+        filtered_frame->pict_type = AV_PICTURE_TYPE_NONE;
+
+        // So we have a frame. Encode it!
+        AVPacket pkt;
+        av_init_packet(&pkt);
+        pkt.data = NULL;
+        pkt.size = 0;
+
+        encode(videoCodecCtx, filtered_frame, &pkt);
+        av_frame_free(&filtered_frame);
+    }
+
+    av_frame_free(&frame);
+    return true;
+}
+
 #ifdef HAVE_PULSE
 #define SRC_RATE 1e6
 #define DST_RATE 1e3
@@ -579,13 +670,14 @@ void FrameWriter::add_audio(const void* buffer)
     av_frame_free(&outputf);
 }
 #endif
+
 void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
 {
     static std::mutex fmt_mutex, pending_mutex;
 
     if (enc_ctx == videoCodecCtx)
     {
-        av_packet_rescale_ts(&pkt, (AVRational){ 1, 1000000 }, videoStream->time_base);
+        av_packet_rescale_ts(&pkt, videoCodecCtx->time_base, videoStream->time_base);
         pkt.stream_index = videoStream->index;
     }
 #ifdef HAVE_PULSE
@@ -637,9 +729,6 @@ FrameWriter::~FrameWriter()
 
     avcodec_close(videoStream->codec);
     // Freeing all the allocated memory:
-    sws_freeContext(swsCtx);
-
-    av_frame_free(&encoder_frame);
 #ifdef HAVE_PULSE
     if (params.enable_audio)
         avcodec_close(audioStream->codec);
