@@ -568,6 +568,8 @@ Use Ctrl+C to stop.)");
 
   -h, --help                Prints this help screen.
 
+  -v, --version             Prints the version of wf-recorder.
+
   -l, --log                 Generates a log on the current terminal. Debug purposes.
 
   -o, --output              Specify the output where the video is to be recorded.
@@ -681,13 +683,14 @@ int main(int argc, char *argv[])
         { "force-yuv",       no_argument,       NULL, 't' },
         { "opencl",          optional_argument, NULL, 'e' },
         { "bframes",         required_argument, NULL, 'b' },
+        { "version",         required_argument, NULL, 'v' },
         { 0,                 0,                 NULL,  0  }
     };
 
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:d:b:la::te::h", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:d:b:la::te::hv", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -763,6 +766,10 @@ int main(int argc, char *argv[])
                     printf("Invalid codec option %s\n", optarg);
                 }
                 break;
+
+            case 'v':
+                printf("wf-recorder %s\n", WFRECORDER_VERSION);
+                return 0;
 
             default:
                 printf("Unsupported command line argument %s\n", optarg);

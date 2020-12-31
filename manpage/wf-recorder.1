@@ -1,4 +1,4 @@
-.Dd $Mdocdate: November 27 2020 $
+.Dd $Mdocdate: December 31 2020 $
 .Dt WF-RECORDER 1
 .Os
 .Sh NAME
@@ -6,7 +6,7 @@
 .Nd simple screen recording program for wlroots-based compositors
 .Sh SYNOPSIS
 .Nm wf-recorder
-.Op Fl abcdefghlmoptx
+.Op Fl abcdefghlmoptvx
 .Op Fl a , -audio Op Ar DEVICE
 .Op Fl b, -bframes Ar max_b_frames
 .Op Fl c, -codec Ar output_codec
@@ -20,6 +20,7 @@
 .Op Fl o, -output Ar output
 .Op Fl p, -codec-param Op Ar option_param=option_value
 .Op Fl t, -force-yuv
+.Op Fl v, -version
 .Op Fl x, -pixel-format
 .Sh DESCRIPTION
 .Nm
@@ -124,6 +125,9 @@ Change the codec parameters.
 .It Fl t , -force-yuv
 Use this option in addition to the vaapi options to convert
 the data in software, before sending it to the GPU.
+.Pp
+.It Fl v , -version
+Print the version of wf-recorder.
 .Pp
 .It Fl x , -pixel-format Ar pixel_format
 Set the output pixel format.
