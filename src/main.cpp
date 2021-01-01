@@ -24,10 +24,6 @@
 
 #include "config.h"
 
-#ifdef HAVE_OPENCL
-std::unique_ptr<OpenCL> opencl;
-#endif
-
 #ifdef HAVE_PULSE
 #include "pulse.hpp"
 PulseReaderParams pulseParams;
@@ -351,14 +347,6 @@ static void write_loop(FrameWriterParams params)
             params.stride = buffer.stride;
             frame_writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
 
-#ifdef HAVE_OPENCL
-            if (params.opencl && params.force_yuv)
-            {
-                frame_writer->opencl = std::move(opencl);
-                frame_writer->opencl->init(params.width, params.height);
-            }
-#endif
-
 #ifdef HAVE_PULSE
             if (params.enable_audio)
             {
@@ -590,15 +578,7 @@ Use Ctrl+C to stop.)");
   -o, --output              Specify the output where the video is to be recorded.
 
   -p, --codec-param         Change the codec parameters.
-                            -p <option_name>=<option_value>)");
-#ifdef HAVE_OPENCL
-    printf(R"(
-
-  -e, --opencl              Use the -e[#] or --opencl[=#] in conjunction with -t or --force-yuv option
-                            to use opencl for gpu accelerated conversion of data to yuv. # is one
-                            of the devices listed when running without specifying #.)");
-#endif
-    printf(R"(
+                            -p <option_name>=<option_value>
 
   -F, --filter              Specify the ffmpeg filter string to use. For example,
                             -F hwupload,scale_vaapi=format=nv12 is used for VAAPI.
@@ -679,8 +659,6 @@ int main(int argc, char *argv[])
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
     params.force_yuv = false;
-    params.opencl = false;
-    params.opencl_device = -1;
     params.bframes = -1;
 
     constexpr const char* default_cmdline_output = "interactive";
@@ -700,7 +678,6 @@ int main(int argc, char *argv[])
         { "audio",           optional_argument, NULL, 'a' },
         { "help",            no_argument,       NULL, 'h' },
         { "force-yuv",       no_argument,       NULL, 't' },
-        { "opencl",          optional_argument, NULL, 'e' },
         { "bframes",         required_argument, NULL, 'b' },
         { "version",         no_argument,       NULL, 'v' },
         { "no-damage",       no_argument,       NULL, 'D' },
@@ -710,7 +687,7 @@ int main(int argc, char *argv[])
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:d:b:la::te::hvDF:", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:d:b:la::thvDF:", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -770,11 +747,6 @@ int main(int argc, char *argv[])
 
             case 'h':
                 help();
-                break;
-
-            case 'e':
-                params.opencl = true;
-                params.opencl_device = optarg ? atoi(optarg) : -1;
                 break;
 
             case 'p':
@@ -880,11 +852,6 @@ int main(int argc, char *argv[])
     }
 
     printf("selected region %d %d %d %d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);
-
-#ifdef HAVE_OPENCL
-     if (params.opencl && params.force_yuv)
-         opencl = std::unique_ptr<OpenCL> (new OpenCL(params.opencl_device));
-#endif
 
     timespec first_frame;
     first_frame.tv_sec = -1;

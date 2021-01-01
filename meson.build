@@ -49,13 +49,6 @@ if pulse.found()
     project_sources += 'src/pulse.cpp'
 endif
 
-opencl = dependency('OpenCL', required : get_option('opencl'))
-
-if opencl.found()
-    conf_data.set('HAVE_OPENCL', true)
-    project_sources += 'src/opencl.cpp'
-endif
-
 libavutil = dependency('libavutil')
 libavcodec = dependency('libavcodec')
 libavformat = dependency('libavformat')
@@ -78,7 +71,7 @@ subdir('proto')
 dependencies = [
     wayland_client, wayland_protos,
     libavutil, libavcodec, libavformat, libavdevice, libavfilter,
-    wf_protos, threads, pulse, swr, opencl
+    wf_protos, threads, pulse, swr
 ]
 
 executable('wf-recorder', project_sources,

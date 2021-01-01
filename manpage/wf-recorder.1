@@ -12,7 +12,6 @@
 .Op Fl c, -codec Ar output_codec
 .Op Fl d, -device Ar encoding_device
 .Op Fl D, -no-damage
-.Op Fl e, -opencl Op Ar opencl_device
 .Op Fl f Ar filename.ext
 .Op Fl F Ar filter_string
 .Op Fl g, -geometry Ar geometry
@@ -84,19 +83,6 @@ only when the screen updates. This results in a much smaller output
 file, which however has a variable refresh rate. When this option is
 on, wf-recorder does not use this optimization and continuously
 records new frames, even if there are no updates on the screen.
-.Pp
-.It Fl e , -opencl Ar opencl_device
-Attempts to use OpenCL if
-.Nm
-was built with OpenCL support and
-.Fl t , -force-yuv
-are specified, even without vaapi GPU encoding.
-Use
-.Fl e , -opencl
-.Ar opencl_device
-to use a specific OpenCL device, where
-.Ar opencl_device
-is one of the devices listed.
 .Pp
 .It Fl f Ar filename.ext
 By using the
