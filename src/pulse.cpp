@@ -14,8 +14,8 @@ PulseReader::PulseReader(PulseReaderParams _p)
     pa_channel_map_init_stereo(&map);
 
     pa_buffer_attr attr;
-    attr.maxlength = params.audio_frame_size * 4;
-    attr.fragsize  = params.audio_frame_size * 4;
+    attr.maxlength = frame_writer->get_audio_nb_samples() * 4;
+    attr.fragsize  = attr.maxlength;
 
     pa_sample_spec sample_spec =
     {
@@ -39,7 +39,8 @@ PulseReader::PulseReader(PulseReaderParams _p)
 bool PulseReader::loop()
 {
     static std::vector<char> buffer;
-    buffer.resize(params.audio_frame_size);
+    // * 2 channels * 4 bytes
+    buffer.resize(frame_writer->get_audio_nb_samples() * 2 * 4);
 
     int perr;
     if (pa_simple_read(pa, buffer.data(), buffer.size(), &perr) < 0)

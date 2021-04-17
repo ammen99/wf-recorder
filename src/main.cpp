@@ -28,10 +28,10 @@
 std::unique_ptr<OpenCL> opencl;
 #endif
 
-#ifdef HAVE_PULSE
 #include "pulse.hpp"
 PulseReaderParams pulseParams;
-#endif
+#include "alsa.hpp"
+AlsaReaderParams alsaParams;
 
 #define MAX_FRAME_FAILURES 16
 
@@ -317,6 +317,61 @@ static InputFormat get_input_format(wf_buffer& buffer)
     std::exit(0);
 }
 
+std::unique_ptr<PulseReader> pulse_reader;
+std::unique_ptr<AlsaReader> alsa_reader;
+
+static void start_threads(FrameWriterParams& params, wf_buffer& buffer)
+{
+    /* This is the first time buffer attributes are available */
+    params.format = get_input_format(buffer);
+    params.width = buffer.width;
+    params.height = buffer.height;
+    params.stride = buffer.stride;
+
+    // Order is important! ALSA needs to be started first, so that we know its sample rate.
+    // However, pulseaudio requires frame_writer for initialization, so it needs to be
+    // started afterwards.
+    if (params.enable_alsa)
+    {
+        alsa_reader = std::unique_ptr<AlsaReader> (new AlsaReader(alsaParams));
+        params.audio_rate = alsa_reader->get_rate();
+        std::cout << params.audio_rate << std::endl;
+    }
+
+    if (params.enable_pulseaudio)
+    {
+        params.audio_rate = 44100;
+        params.audio_fmt = AV_SAMPLE_FMT_FLT;
+    }
+
+    frame_writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
+
+    if (params.enable_pulseaudio)
+    {
+        pulse_reader = std::unique_ptr<PulseReader> (new PulseReader(pulseParams));
+    }
+
+
+    // Start after frame_writer is initialized
+    if (params.enable_alsa)
+    {
+        alsa_reader->start();
+    }
+    if (params.enable_pulseaudio)
+    {
+        pulse_reader->start();
+    }
+
+#ifdef HAVE_OPENCL
+    if (params.opencl && params.force_yuv)
+    {
+        frame_writer->opencl = std::move(opencl);
+        frame_writer->opencl->init(params.width, params.height);
+    }
+#endif
+}
+
+
 static void write_loop(FrameWriterParams params)
 {
     /* Ignore SIGINT, main loop is responsible for the exit_main_loop signal */
@@ -326,9 +381,6 @@ static void write_loop(FrameWriterParams params)
     pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
     int last_encoded_frame = 0;
-#ifdef HAVE_PULSE
-    std::unique_ptr<PulseReader> pr;
-#endif
 
     while(!exit_main_loop)
     {
@@ -344,29 +396,7 @@ static void write_loop(FrameWriterParams params)
 
         if (!frame_writer)
         {
-            /* This is the first time buffer attributes are available */
-            params.format = get_input_format(buffer);
-            params.width = buffer.width;
-            params.height = buffer.height;
-            params.stride = buffer.stride;
-            frame_writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
-
-#ifdef HAVE_OPENCL
-            if (params.opencl && params.force_yuv)
-            {
-                frame_writer->opencl = std::move(opencl);
-                frame_writer->opencl->init(params.width, params.height);
-            }
-#endif
-
-#ifdef HAVE_PULSE
-            if (params.enable_audio)
-            {
-                pulseParams.audio_frame_size = frame_writer->get_audio_buffer_size();
-                pr = std::unique_ptr<PulseReader> (new PulseReader(pulseParams));
-                pr->start();
-            }
-#endif
+            start_threads(params, buffer);
         }
 
         frame_writer->add_frame((unsigned char*)buffer.data, buffer.base_usec,
@@ -383,9 +413,8 @@ static void write_loop(FrameWriterParams params)
     std::lock_guard<std::mutex> lock(frame_writer_mutex);
     /* Free the PulseReader connection first. This way it'd flush any remaining
      * frames to the FrameWriter */
-#ifdef HAVE_PULSE
-    pr = nullptr;
-#endif
+    pulse_reader = nullptr;
+    alsa_reader = nullptr;
     frame_writer = nullptr;
 }
 
@@ -396,7 +425,7 @@ void handle_sigint(int)
 
 static bool user_specified_overwrite(std::string filename)
 {
-    struct stat buffer;   
+    struct stat buffer;
     if (stat (filename.c_str(), &buffer) == 0)
     {
         std::string input;
@@ -548,6 +577,12 @@ Use Ctrl+C to stop.)");
                             the audio, you can run this command with the name of that device.
                             You can find your device by running: pactl list sources | grep Name)");
 #endif
+#ifdef HAVE_ALSA
+    printf(R"(
+
+  --alsa [DEVICE]           Starts recording the screen with audio from ALSA.
+                            [DEVICE] argument is the ALSA device to capture from.)");
+#endif
     printf(R"(
 
   -c, --codec               Specifies the codec of the video. Supports  GIF output also.
@@ -671,7 +706,8 @@ int main(int argc, char *argv[])
     params.file = "recording.mp4";
     params.codec = DEFAULT_CODEC;
     params.enable_ffmpeg_debug_output = false;
-    params.enable_audio = false;
+    params.enable_pulseaudio = false;
+    params.enable_alsa = false;
     params.force_yuv = false;
     params.opencl = false;
     params.opencl_device = -1;
@@ -691,6 +727,7 @@ int main(int argc, char *argv[])
         { "device",          required_argument, NULL, 'd' },
         { "log",             no_argument,       NULL, 'l' },
         { "audio",           optional_argument, NULL, 'a' },
+        { "alsa",            required_argument, NULL, '&' },
         { "help",            no_argument,       NULL, 'h' },
         { "force-yuv",       no_argument,       NULL, 't' },
         { "opencl",          optional_argument, NULL, 'e' },
@@ -745,10 +782,20 @@ int main(int argc, char *argv[])
 
             case 'a':
 #ifdef HAVE_PULSE
-                params.enable_audio = true;
+                params.enable_pulseaudio = true;
                 pulseParams.audio_source = optarg ? strdup(optarg) : NULL;
 #else
                 std::cerr << "Cannot record audio. Built without pulse support." << std::endl;
+                return EXIT_FAILURE;
+#endif
+                break;
+
+            case '&':
+#ifdef HAVE_ALSA
+                params.enable_alsa = true;
+                alsaParams.audio_device = optarg;
+#else
+                std::cerr << "Cannot record audio. Built without ALSA support." << std::endl;
                 return EXIT_FAILURE;
 #endif
                 break;

@@ -43,10 +43,16 @@ wayland_client = dependency('wayland-client')
 wayland_protos = dependency('wayland-protocols', version: '>=1.14')
 
 pulse = dependency('libpulse-simple', required : get_option('pulse'))
+alsa = dependency('alsa', required : get_option('alsa'))
 
 if pulse.found()
     conf_data.set('HAVE_PULSE', true)
     project_sources += 'src/pulse.cpp'
+endif
+
+if alsa.found()
+    conf_data.set('HAVE_ALSA', true)
+    project_sources += 'src/alsa.cpp'
 endif
 
 opencl = dependency('OpenCL', required : get_option('opencl'))
@@ -78,7 +84,7 @@ subdir('proto')
 dependencies = [
     wayland_client, wayland_protos,
     libavutil, libavcodec, libavformat, libavdevice,
-    wf_protos, sws, threads, pulse, swr, opencl
+    wf_protos, sws, threads, pulse, swr, opencl, alsa
 ]
 
 executable('wf-recorder', project_sources,

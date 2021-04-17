@@ -1,16 +1,16 @@
-#ifndef PULSE_HPP
-#define PULSE_HPP
-
-#include <pulse/simple.h>
-#include <pulse/error.h>
-#include <thread>
+#pragma once
+#include <config.h>
 
 struct PulseReaderParams
 {
-    size_t audio_frame_size;
     /* Can be NULL */
     char *audio_source;
 };
+
+#ifdef HAVE_PULSE
+#include <pulse/simple.h>
+#include <pulse/error.h>
+#include <thread>
 
 class PulseReader
 {
@@ -26,5 +26,15 @@ class PulseReader
 
     void start();
 };
+#else // => !HAVE_PULSE
 
-#endif /* end of include guard: PULSE_HPP */
+// NO-OP
+class PulseReader
+{
+  public:
+    PulseReader(PulseReaderParams) {}
+    ~PulseReader() {}
+    void start() {}
+};
+
+#endif // HAVE_PULSE

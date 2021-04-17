@@ -2,5 +2,6 @@
 
 #define DEFAULT_CODEC "@default_codec@"
 #mesondefine HAVE_PULSE
+#mesondefine HAVE_ALSA
 #mesondefine HAVE_OPENCL
 #mesondefine HAVE_LIBAVDEVICE

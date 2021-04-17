@@ -11,8 +11,6 @@
 #include <atomic>
 #include "config.h"
 
-#define AUDIO_RATE 44100
-
 extern "C"
 {
     #include <libswscale/swscale.h>
@@ -49,6 +47,9 @@ struct FrameWriterParams
     int height;
     int stride;
 
+    int audio_rate;
+    AVSampleFormat audio_fmt;
+
     InputFormat format;
 
     std::string codec;
@@ -59,7 +60,8 @@ struct FrameWriterParams
 
     int64_t audio_sync_offset;
 
-    bool enable_audio;
+    bool enable_pulseaudio;
+    bool enable_alsa;
     bool enable_ffmpeg_debug_output;
 
     bool opencl;
@@ -108,7 +110,7 @@ class FrameWriter
 
     void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt);
 
-#ifdef HAVE_PULSE
+#if defined(HAVE_PULSE) or defined(HAVE_ALSA)
     SwrContext *swrCtx;
     AVStream *audioStream;
     AVCodecContext *audioCodecCtx;
@@ -121,10 +123,10 @@ class FrameWriter
 public :
     FrameWriter(const FrameWriterParams& params);
     void add_frame(const uint8_t* pixels, int64_t usec, bool y_invert);
-#ifdef HAVE_PULSE
+#if defined(HAVE_PULSE) or defined(HAVE_ALSA)
     /* Buffer must have size get_audio_buffer_size() */
     void add_audio(const void* buffer);
-    size_t get_audio_buffer_size();
+    size_t get_audio_nb_samples();
 #endif
 #ifdef HAVE_OPENCL
     std::unique_ptr<OpenCL> opencl;

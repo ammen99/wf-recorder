@@ -11,12 +11,10 @@
 #include "averr.h"
 
 #define FPS 60
-#define AUDIO_RATE 44100
 
 class FFmpegInitialize
 {
-public :
-
+  public:
     FFmpegInitialize()
     {
         // Loads the whole database of available codecs and formats.
@@ -254,7 +252,7 @@ void FrameWriter::init_audio_stream()
     audioCodecCtx->bit_rate = lrintf(128000.0f);
     audioCodecCtx->sample_fmt = get_codec_sample_fmt(codec);
     audioCodecCtx->channel_layout = get_codec_channel_layout(codec);
-    audioCodecCtx->sample_rate = AUDIO_RATE;
+    audioCodecCtx->sample_rate = params.audio_rate;
     audioCodecCtx->time_base = (AVRational) { 1, 1000 };
     audioCodecCtx->channels = av_get_channel_layout_nb_channels(audioCodecCtx->channel_layout);
 
@@ -275,9 +273,9 @@ void FrameWriter::init_audio_stream()
         std::exit(-1);
     }
 
-    av_opt_set_int(swrCtx, "in_sample_rate", AUDIO_RATE, 0);
+    av_opt_set_int(swrCtx, "in_sample_rate", params.audio_rate, 0);
     av_opt_set_int(swrCtx, "out_sample_rate", audioCodecCtx->sample_rate, 0);
-    av_opt_set_sample_fmt(swrCtx, "in_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
+    av_opt_set_sample_fmt(swrCtx, "in_sample_fmt", params.audio_fmt, 0);
     av_opt_set_sample_fmt(swrCtx, "out_sample_fmt", audioCodecCtx->sample_fmt, 0);
     av_opt_set_channel_layout(swrCtx, "in_channel_layout", AV_CH_LAYOUT_STEREO, 0);
     av_opt_set_channel_layout(swrCtx, "out_channel_layout", audioCodecCtx->channel_layout, 0);
@@ -293,7 +291,7 @@ void FrameWriter::init_codecs()
 {
     init_video_stream();
 #ifdef HAVE_PULSE
-    if (params.enable_audio)
+    if (params.enable_pulseaudio || params.enable_alsa)
         init_audio_stream();
 #endif
     av_dump_format(fmtCtx, 0, params.file.c_str(), 1);
@@ -523,9 +521,9 @@ void FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 #define SRC_RATE 1e6
 #define DST_RATE 1e3
 
-static int64_t conv_audio_pts(SwrContext *ctx, int64_t in)
+static int64_t conv_audio_pts(FrameWriterParams params, SwrContext *ctx, int64_t in)
 {
-    int64_t d = (int64_t) AUDIO_RATE * AUDIO_RATE;
+    int64_t d = (int64_t) params.audio_rate * params.audio_rate;
 
     /* Convert from audio_src_tb to 1/(src_samplerate * dst_samplerate) */
     in = av_rescale_rnd(in, d, SRC_RATE, AV_ROUND_NEAR_INF);
@@ -547,21 +545,22 @@ void FrameWriter::send_audio_pkt(AVFrame *frame)
     encode(audioCodecCtx, frame, &pkt);
 }
 
-size_t FrameWriter::get_audio_buffer_size()
+size_t FrameWriter::get_audio_nb_samples()
 {
-    return audioCodecCtx->frame_size << 3;
+    return audioCodecCtx->frame_size;
 }
 
 void FrameWriter::add_audio(const void* buffer)
 {
     AVFrame *inputf = av_frame_alloc();
-    inputf->sample_rate    = AUDIO_RATE;
-    inputf->format         = AV_SAMPLE_FMT_FLT;
+    inputf->sample_rate    = params.audio_rate;
+    inputf->format         = params.audio_fmt;
     inputf->channel_layout = AV_CH_LAYOUT_STEREO;
     inputf->nb_samples     = audioCodecCtx->frame_size;
 
+    std::cout << inputf->data[0] << " " << buffer << std::endl;
     av_frame_get_buffer(inputf, 0);
-    memcpy(inputf->data[0], buffer, get_audio_buffer_size());
+    memcpy(inputf->data[0], buffer, get_audio_nb_samples());
 
     AVFrame *outputf = av_frame_alloc();
     outputf->format         = audioCodecCtx->sample_fmt;
@@ -570,7 +569,7 @@ void FrameWriter::add_audio(const void* buffer)
     outputf->nb_samples     = audioCodecCtx->frame_size;
     av_frame_get_buffer(outputf, 0);
 
-    outputf->pts = conv_audio_pts(swrCtx, INT64_MIN);
+    outputf->pts = conv_audio_pts(params, swrCtx, INT64_MIN);
     swr_convert_frame(swrCtx, outputf, inputf);
 
     send_audio_pkt(outputf);
@@ -598,7 +597,7 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
     /* We use two locks to ensure that if WLOG the audio thread is waiting for
      * the video one, when the video becomes ready the audio thread will be the
      * next one to obtain the lock */
-    if (params.enable_audio)
+    if (params.enable_pulseaudio || params.enable_alsa)
     {
         pending_mutex.lock();
         fmt_mutex.lock();
@@ -610,7 +609,7 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
     }
     av_packet_unref(&pkt);
 #ifdef HAVE_PULSE
-    if (params.enable_audio)
+    if (params.enable_pulseaudio || params.enable_alsa)
         fmt_mutex.unlock();
 #endif
 }
@@ -623,7 +622,7 @@ FrameWriter::~FrameWriter()
 
     encode(videoCodecCtx, NULL, &pkt);
 #ifdef HAVE_PULSE
-    if (params.enable_audio)
+    if (params.enable_pulseaudio || params.enable_alsa)
     {
         encode(audioCodecCtx, NULL, &pkt);
     }
@@ -641,7 +640,7 @@ FrameWriter::~FrameWriter()
 
     av_frame_free(&encoder_frame);
 #ifdef HAVE_PULSE
-    if (params.enable_audio)
+    if (params.enable_pulseaudio || params.enable_alsa)
         avcodec_close(audioStream->codec);
 #endif
     // TODO: free all the hw accel
