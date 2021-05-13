@@ -50,7 +50,7 @@ bool PulseReader::loop()
         return false;
     }
 
-    frame_writer->add_audio(buffer.data());
+    frame_writer->add_audio(buffer);
     return !exit_main_loop;
 }
 

@@ -550,7 +550,7 @@ size_t FrameWriter::get_audio_nb_samples()
     return audioCodecCtx->frame_size;
 }
 
-void FrameWriter::add_audio(const void* buffer)
+void FrameWriter::add_audio(const std::vector<char>& buffer)
 {
     AVFrame *inputf = av_frame_alloc();
     inputf->sample_rate    = params.audio_rate;
@@ -558,9 +558,8 @@ void FrameWriter::add_audio(const void* buffer)
     inputf->channel_layout = AV_CH_LAYOUT_STEREO;
     inputf->nb_samples     = audioCodecCtx->frame_size;
 
-    std::cout << inputf->data[0] << " " << buffer << std::endl;
     av_frame_get_buffer(inputf, 0);
-    memcpy(inputf->data[0], buffer, get_audio_nb_samples());
+    memcpy(inputf->data[0], buffer.data(), buffer.size());
 
     AVFrame *outputf = av_frame_alloc();
     outputf->format         = audioCodecCtx->sample_fmt;

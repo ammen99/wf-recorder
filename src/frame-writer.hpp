@@ -125,7 +125,7 @@ public :
     void add_frame(const uint8_t* pixels, int64_t usec, bool y_invert);
 #if defined(HAVE_PULSE) or defined(HAVE_ALSA)
     /* Buffer must have size get_audio_buffer_size() */
-    void add_audio(const void* buffer);
+    void add_audio(const std::vector<char>& buffer);
     size_t get_audio_nb_samples();
 #endif
 #ifdef HAVE_OPENCL

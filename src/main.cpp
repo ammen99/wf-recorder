@@ -335,7 +335,7 @@ static void start_threads(FrameWriterParams& params, wf_buffer& buffer)
     {
         alsa_reader = std::unique_ptr<AlsaReader> (new AlsaReader(alsaParams));
         params.audio_rate = alsa_reader->get_rate();
-        std::cout << params.audio_rate << std::endl;
+        params.audio_fmt = AV_SAMPLE_FMT_S16;
     }
 
     if (params.enable_pulseaudio)
@@ -350,7 +350,6 @@ static void start_threads(FrameWriterParams& params, wf_buffer& buffer)
     {
         pulse_reader = std::unique_ptr<PulseReader> (new PulseReader(pulseParams));
     }
-
 
     // Start after frame_writer is initialized
     if (params.enable_alsa)
