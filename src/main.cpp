@@ -576,7 +576,7 @@ Use Ctrl+C to stop.)");
   -x, --pixel-format        Set the output pixel format. These can be found by running:
                             *ffmpeg -pix_fmts*
 
-  -g, --geometry            Selects a specific part of the screen.
+  -g, --geometry            Selects a specific part of the screen. The format is "x,y WxH".
 
   -h, --help                Prints this help screen.
 
