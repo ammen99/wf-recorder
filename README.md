@@ -32,6 +32,12 @@ Fedora users can install from rpmfusion-free-updates. First [enable rpmfusion](h
 sudo dnf install wf-recorder
 ```
 
+## Gentoo Linux
+You may or may not have to adjust the USE-flags for media-video/ffmpeg prior to emerging wf-recorder. (pulseaudio, v4l, libv4l). And if you have apulse installed, it has to go. Note: The current wf-recorder code has pulseaudio as an optional feature, but the gentoo ebuild does not reflect this at the time of writing.
+```
+emerge wf-recorder
+```
+
 ## From Source
 ### Install Dependencies
 
@@ -51,7 +57,7 @@ git clone https://github.com/ammen99/wf-recorder.git && cd wf-recorder
 meson build --prefix=/usr --buildtype=release
 ninja -C build
 ```
-Optionally configure with `-Ddefault_codec='codec'`. The default is libx264. Now you can just run `./build/wf-recorder` or install it with `sudo ninja -C build install`.
+Optionally configure with `-Ddefault_codec='codec'`, or modify meson_options.txt. The default codec is libx264. Now you can just run `./build/wf-recorder` or install it with `sudo ninja -C build install`.
 
 Optionally install `scdoc`, a tool by ddevault, for building the manpage.
 
@@ -78,6 +84,20 @@ To set a specific output format, use the `--muxer` option. For example, to outpu
 ```
 wf-recorder --muxer=v4l2 --codec=rawvideo --file=/dev/video2
 ```
+
+Microsoft Teams appears to be a bit picky. Install v4l2loopback.ko like this:
+```
+modprobe v4l2loopback card_label=VirtualVideoDevice max_buffers=2 max_openers=10 max_width=2560 max_height=1600
+```
+
+According to the [documentation](https://docs.microsoft.com/en-us/microsoftteams/platform/bots/calls-and-meetings/real-time-media-concepts), MS Teams will only accept certain geometries for the video input. So try this:
+```
+wf-recorder --muxer=v4l2 --codec=rawvideo --file=/dev/video2 -x yuv420p -g "0,0 640x360"
+```
+
+Video preview is mirrored around the vertical axis. Do not worry about it, it looks ok in the other end.
+1280x720 and 1920x1080 capture *should* work, but looks distorted. 
+
 
 To use GPU encoding, use a VAAPI codec (for ex. `h264_vaapi`) and specify a GPU device to use with the `-d` option:
 ```
