@@ -576,7 +576,7 @@ Use Ctrl+C to stop.)");
   -x, --pixel-format        Set the output pixel format. These can be found by running:
                             *ffmpeg -pix_fmts*
 
-  -g, --geometry            Selects a specific part of the screen.
+  -g, --geometry            Selects a specific part of the screen. The format is "x,y WxH".
 
   -h, --help                Prints this help screen.
 
@@ -868,7 +868,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    printf("selected region %d %d %d %d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);
+    printf("selected region %d,%d %dx%d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);
 
 #ifdef HAVE_OPENCL
      if (params.opencl && params.force_yuv)
