@@ -15,6 +15,8 @@
 static const AVRational US_RATIONAL{1,1000000} ;
 #define AUDIO_RATE 44100
 
+// av_register_all was deprecated in 58.9.100, removed in 59.0.100
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(59, 0, 100)
 class FFmpegInitialize
 {
 public :
@@ -27,6 +29,7 @@ public :
 };
 
 static FFmpegInitialize ffmpegInitialize;
+#endif
 
 void FrameWriter::init_hw_accel()
 {
@@ -93,7 +96,7 @@ AVPixelFormat FrameWriter::lookup_pixel_format(std::string pix_fmt)
     std::exit(-1);
 }
 
-AVPixelFormat FrameWriter::choose_sw_format(AVCodec *codec)
+AVPixelFormat FrameWriter::choose_sw_format(const AVCodec *codec)
 {
     auto in_fmt = get_input_format();
 
@@ -117,7 +120,7 @@ AVPixelFormat FrameWriter::choose_sw_format(AVCodec *codec)
     return codec->pix_fmts[0];
 }
 
-void FrameWriter::init_video_filters(AVCodec *codec)
+void FrameWriter::init_video_filters(const AVCodec *codec)
 {
     if (params.codec.find("vaapi") != std::string::npos) {
         if (params.video_filter == "null") {
@@ -272,7 +275,7 @@ void FrameWriter::init_video_stream()
     AVDictionary *options = NULL;
     load_codec_options(&options);
 
-    AVCodec* codec = avcodec_find_encoder_by_name(params.codec.c_str());
+    const AVCodec* codec = avcodec_find_encoder_by_name(params.codec.c_str());
     if (!codec)
     {
         std::cerr << "Failed to find the given codec: " << params.codec << std::endl;
@@ -286,7 +289,7 @@ void FrameWriter::init_video_stream()
         std::exit(-1);
     }
 
-    this->videoCodecCtx = videoStream->codec;
+    videoCodecCtx = avcodec_alloc_context3(codec);
     videoCodecCtx->width      = params.width;
     videoCodecCtx->height     = params.height;
     videoCodecCtx->time_base  = US_RATIONAL;
@@ -321,10 +324,16 @@ void FrameWriter::init_video_stream()
         std::exit(-1);
     }
     av_dict_free(&options);
+
+    if ((ret = avcodec_parameters_from_context(videoStream->codecpar, videoCodecCtx)) < 0) {
+        av_strerror(ret, err, 256);
+        std::cerr << "avcodec_parameters_from_context failed: " << err << std::endl;
+        std::exit(-1);
+    }
 }
 
 #ifdef HAVE_PULSE
-static uint64_t get_codec_channel_layout(AVCodec *codec)
+static uint64_t get_codec_channel_layout(const AVCodec *codec)
 {
       int i = 0;
       if (!codec->channel_layouts)
@@ -339,7 +348,7 @@ static uint64_t get_codec_channel_layout(AVCodec *codec)
       return codec->channel_layouts[0];
 }
 
-static enum AVSampleFormat get_codec_sample_fmt(AVCodec *codec)
+static enum AVSampleFormat get_codec_sample_fmt(const AVCodec *codec)
 {
     int i = 0;
     if (!codec->sample_fmts)
@@ -356,7 +365,7 @@ static enum AVSampleFormat get_codec_sample_fmt(AVCodec *codec)
 
 void FrameWriter::init_audio_stream()
 {
-    AVCodec* codec = avcodec_find_encoder_by_name("aac");
+    const AVCodec* codec = avcodec_find_encoder_by_name("aac");
     if (!codec)
     {
         std::cerr << "Failed to find the aac codec" << std::endl;
@@ -370,7 +379,7 @@ void FrameWriter::init_audio_stream()
         std::exit(-1);
     }
 
-    audioCodecCtx = audioStream->codec;
+    audioCodecCtx = avcodec_alloc_context3(codec);
     audioCodecCtx->bit_rate = lrintf(128000.0f);
     audioCodecCtx->sample_fmt = get_codec_sample_fmt(codec);
     audioCodecCtx->channel_layout = get_codec_channel_layout(codec);
@@ -405,6 +414,14 @@ void FrameWriter::init_audio_stream()
     if (swr_init(swrCtx))
     {
         std::cerr << "Failed to initialize swr" << std::endl;
+        std::exit(-1);
+    }
+
+    int ret;
+    if ((ret = avcodec_parameters_from_context(audioStream->codecpar, audioCodecCtx)) < 0) {
+        char errmsg[256];
+        av_strerror(ret, errmsg, sizeof(errmsg));
+        std::cerr << "avcodec_parameters_from_context failed: " << err << std::endl;
         std::exit(-1);
     }
 }
@@ -697,11 +714,11 @@ FrameWriter::~FrameWriter()
     if (outputFmt && (!(outputFmt->flags & AVFMT_NOFILE)))
         avio_closep(&fmtCtx->pb);
 
-    avcodec_close(videoStream->codec);
+    avcodec_free_context(&videoCodecCtx);
     // Freeing all the allocated memory:
 #ifdef HAVE_PULSE
     if (params.enable_audio)
-        avcodec_close(audioStream->codec);
+        avcodec_free_context(&audioCodecCtx);
 #endif
     // TODO: free all the hw accel
     avformat_free_context(fmtCtx);

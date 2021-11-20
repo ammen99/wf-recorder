@@ -72,7 +72,7 @@ class FrameWriter
     FrameWriterParams params;
     void load_codec_options(AVDictionary **dict);
 
-    AVOutputFormat* outputFmt;
+    const AVOutputFormat* outputFmt;
     AVStream* videoStream;
     AVCodecContext* videoCodecCtx;
     AVFormatContext* fmtCtx;
@@ -85,11 +85,11 @@ class FrameWriter
     AVBufferRef *hw_frame_context = NULL;
 
     AVPixelFormat lookup_pixel_format(std::string pix_fmt);
-    AVPixelFormat choose_sw_format(AVCodec *codec);
+    AVPixelFormat choose_sw_format(const AVCodec *codec);
     AVPixelFormat get_input_format();
     void init_hw_accel();
     void init_codecs();
-    void init_video_filters(AVCodec *codec);
+    void init_video_filters(const AVCodec *codec);
     void init_video_stream();
 
     void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt);
