@@ -88,6 +88,10 @@ AVPixelFormat FrameWriter::get_input_format()
         return AV_PIX_FMT_RGB0;
     case INPUT_FORMAT_BGR8:
         return AV_PIX_FMT_RGB24;
+    case INPUT_FORMAT_RGB565:
+        return AV_PIX_FMT_RGB565LE;
+    case INPUT_FORMAT_BGR565:
+        return AV_PIX_FMT_BGR565LE;
     default:
         std::cerr << "Unknown format: " << params.format << std::endl;
         std::exit(-1);
