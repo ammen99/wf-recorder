@@ -128,6 +128,7 @@ void FrameWriter::init_video_filters(AVCodec *codec)
     }
 
     this->videoFilterGraph = avfilter_graph_alloc();
+    av_opt_set(videoFilterGraph, "scale_sws_opts", "flags=fast_bilinear:src_range=1:dst_range=1", 0);
 
     const AVFilter* source = avfilter_get_by_name("buffer");
     const AVFilter* sink   = avfilter_get_by_name("buffersink");
@@ -145,7 +146,6 @@ void FrameWriter::init_video_filters(AVCodec *codec)
     buffer_filter_config << ":pix_fmt=" << (int)this->get_input_format();
     buffer_filter_config << ":time_base=" << US_RATIONAL.num << "/" << US_RATIONAL.den;
     buffer_filter_config << ":pixel_aspect=1/1";
-    buffer_filter_config << ":sws_param=flags=fast_bilinear";
 
     int err = avfilter_graph_create_filter(&this->videoFilterSourceCtx, source,
         "Source", buffer_filter_config.str().c_str(), NULL, this->videoFilterGraph);
