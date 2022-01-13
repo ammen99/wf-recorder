@@ -39,6 +39,8 @@ enum InputFormat
     INPUT_FORMAT_BGR8,
     INPUT_FORMAT_RGB565,
     INPUT_FORMAT_BGR565,
+    INPUT_FORMAT_X2RGB10,
+    INPUT_FORMAT_X2BGR10,
 };
 
 struct FrameWriterParams

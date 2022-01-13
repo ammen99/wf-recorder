@@ -92,6 +92,14 @@ AVPixelFormat FrameWriter::get_input_format()
         return AV_PIX_FMT_RGB565LE;
     case INPUT_FORMAT_BGR565:
         return AV_PIX_FMT_BGR565LE;
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(56, 55, 100)
+    case INPUT_FORMAT_X2RGB10:
+        return AV_PIX_FMT_X2RGB10LE;
+#endif
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 7, 100)
+    case INPUT_FORMAT_X2BGR10:
+        return AV_PIX_FMT_X2BGR10LE;
+#endif
     default:
         std::cerr << "Unknown format: " << params.format << std::endl;
         std::exit(-1);

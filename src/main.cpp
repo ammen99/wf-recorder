@@ -312,6 +312,12 @@ static InputFormat get_input_format(wf_buffer& buffer)
         return INPUT_FORMAT_RGB565;
     case WL_SHM_FORMAT_BGR565:
         return INPUT_FORMAT_BGR565;
+    case WL_SHM_FORMAT_ARGB2101010:
+    case WL_SHM_FORMAT_XRGB2101010:
+        return INPUT_FORMAT_X2RGB10;
+    case WL_SHM_FORMAT_ABGR2101010:
+    case WL_SHM_FORMAT_XBGR2101010:
+        return INPUT_FORMAT_X2BGR10;
     default:
         fprintf(stderr, "Unsupported buffer format %d, exiting.", buffer.format);
         std::exit(0);
