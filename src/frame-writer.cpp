@@ -176,7 +176,8 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
 
     // Force pixel format to yuv420p if requested and possible
     if (params.force_yuv) {
-        if (is_fmt_supported(AV_PIX_FMT_YUV420P, supported_pix_fmts)) {
+        if (!supported_pix_fmts ||
+            is_fmt_supported(AV_PIX_FMT_YUV420P, supported_pix_fmts)) {
             supported_pix_fmts = only_yuv420p ;
         } else {
             std::cerr << "Ignoring request to force yuv420p, " <<
