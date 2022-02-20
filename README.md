@@ -18,6 +18,11 @@ Artix users can install wf-recorder from the official repos
 pacman -S wf-recorder
 ```
 
+## Gentoo Linux
+
+Gentoo users can install wf-recorder from the official (`::gentoo`) repository.
+
+
 ## Void Linux
 
 Void users can install wf-recorder from the official repos
