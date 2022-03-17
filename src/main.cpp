@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 199309L
 #include <iostream>
 
+#include <list>
 #include <string>
 #include <thread>
 #include <mutex>
@@ -47,7 +48,7 @@ struct wf_recorder_output
     int32_t x, y, width, height;
 };
 
-std::vector<wf_recorder_output> available_outputs;
+std::list<wf_recorder_output> available_outputs;
 
 static void handle_xdg_output_logical_position(void*,
     zxdg_output_v1* zxdg_output, int32_t x, int32_t y)
@@ -477,7 +478,9 @@ static wf_recorder_output* choose_interactive()
     if (scanf("%d", &choice) != 1 || choice > (int)available_outputs.size() || choice <= 0)
         return nullptr;
 
-    return &available_outputs[choice - 1];
+    auto it = available_outputs.begin();
+    std::advance(it, choice - 1);
+    return &*it;
 }
 
 struct capture_region
@@ -808,7 +811,7 @@ int main(int argc, char *argv[])
 
     if (available_outputs.size() == 1)
     {
-        chosen_output = &available_outputs[0];
+        chosen_output = &available_outputs.front();
         if (chosen_output->name != cmdline_output &&
             cmdline_output != default_cmdline_output)
         {
