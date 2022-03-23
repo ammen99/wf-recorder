@@ -299,18 +299,19 @@ static int next_frame(int frame)
 
 static InputFormat get_input_format(wf_buffer& buffer)
 {
-    if (buffer.format == WL_SHM_FORMAT_ARGB8888)
+    switch (buffer.format) {
+    case WL_SHM_FORMAT_ARGB8888:
+    case WL_SHM_FORMAT_XRGB8888:
         return INPUT_FORMAT_BGR0;
-    if (buffer.format == WL_SHM_FORMAT_XRGB8888)
-        return INPUT_FORMAT_BGR0;
-
-    if (buffer.format == WL_SHM_FORMAT_XBGR8888)
+    case WL_SHM_FORMAT_XBGR8888:
+    case WL_SHM_FORMAT_ABGR8888:
         return INPUT_FORMAT_RGB0;
-    if (buffer.format == WL_SHM_FORMAT_ABGR8888)
-        return INPUT_FORMAT_RGB0;
-
-    fprintf(stderr, "Unsupported buffer format %d, exiting.", buffer.format);
-    std::exit(0);
+    case WL_SHM_FORMAT_BGR888:
+        return INPUT_FORMAT_BGR8;
+    default:
+        fprintf(stderr, "Unsupported buffer format %d, exiting.", buffer.format);
+        std::exit(0);
+    }
 }
 
 static void write_loop(FrameWriterParams params)

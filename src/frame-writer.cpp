@@ -81,8 +81,17 @@ bool is_fmt_supported(AVPixelFormat fmt, const AVPixelFormat *supported)
 
 AVPixelFormat FrameWriter::get_input_format()
 {
-    return params.format == INPUT_FORMAT_BGR0 ?
-        AV_PIX_FMT_BGR0 : AV_PIX_FMT_RGB0;
+    switch (params.format) {
+    case INPUT_FORMAT_BGR0:
+        return AV_PIX_FMT_BGR0;
+    case INPUT_FORMAT_RGB0:
+        return AV_PIX_FMT_RGB0;
+    case INPUT_FORMAT_BGR8:
+        return AV_PIX_FMT_RGB24;
+    default:
+        std::cerr << "Unknown format: " << params.format << std::endl;
+        std::exit(-1);
+    }
 }
 
 AVPixelFormat FrameWriter::lookup_pixel_format(std::string pix_fmt)
