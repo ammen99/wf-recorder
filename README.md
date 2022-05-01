@@ -32,6 +32,13 @@ Fedora users can install from rpmfusion-free-updates. First [enable rpmfusion](h
 sudo dnf install wf-recorder
 ```
 
+## Debian GNU/Linux
+
+Debian users can install wf-recorder from official repos
+```
+apt install wf-recorder
+```
+
 ## From Source
 ### Install Dependencies
 
