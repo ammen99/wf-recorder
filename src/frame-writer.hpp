@@ -35,7 +35,8 @@ extern "C"
 enum InputFormat
 {
      INPUT_FORMAT_BGR0,
-     INPUT_FORMAT_RGB0
+     INPUT_FORMAT_RGB0,
+     INPUT_FORMAT_BGR8
 };
 
 struct FrameWriterParams
