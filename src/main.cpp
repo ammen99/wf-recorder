@@ -547,7 +547,7 @@ Use Ctrl+C to stop.)");
 #ifdef HAVE_PULSE
     printf(R"(
 
-  -a, --audio [DEVICE]      Starts recording the screen with audio.
+  -a, --audio[DEVICE]       Starts recording the screen with audio.
                             [DEVICE] argument is optional.
                             In case you want to specify the pulseaudio device which will capture
                             the audio, you can run this command with the name of that device.

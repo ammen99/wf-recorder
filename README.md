@@ -84,6 +84,8 @@ You can record screen and sound simultaneously with
 wf-recorder --audio --file=recording_with_audio.mp4
 ```
 
+To specify an audio device, use the `-a<device>` option.
+
 To specify a codec, use the `-c <codec>` option. To modify codec parameters, use `-p <option_name>=<option_value>`.
 
 To set a specific output format, use the `--muxer` option. For example, to output to a video4linux2 loopback you might use:
