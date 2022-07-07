@@ -608,6 +608,9 @@ Use Ctrl+C to stop.)");
   
   -C, --audio-codec         Specifies the codec of the audio.
 
+  -X, --sample-format       Set the output audio sample format. These can be found by running: 
+                            *ffmpeg -sample_fmts*
+  
   -R, --sample-rate         Changes the audio sample rate, in HZ. The default value is 44100.
   
   -P, --audio-codec-param   Change the audio codec parameters.
