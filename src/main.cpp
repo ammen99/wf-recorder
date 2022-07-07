@@ -678,6 +678,20 @@ void request_next_frame()
     zwlr_screencopy_frame_v1_add_listener(frame, &frame_listener, NULL);
 }
 
+static void parse_codec_opts(std::map<std::string, std::string>& options, const std::string param)
+{
+    size_t pos;
+    pos = param.find("=");
+    if (pos != std::string::npos && pos != param.length() -1)
+    {
+        auto optname = param.substr(0, pos);
+        auto optvalue = param.substr(pos + 1, param.length() - pos - 1);
+        options.insert(std::pair<std::string, std::string>(optname, optvalue));
+    } else
+    {
+        std::cerr << "Invalid codec option " + param << std::endl;
+    }
+}
 
 int main(int argc, char *argv[])
 {
@@ -802,17 +816,7 @@ int main(int argc, char *argv[])
                 break;
 
             case 'p':
-                param = optarg;
-                pos = param.find("=");
-                if (pos != std::string::npos && pos != param.length() - 1)
-                {
-                    auto optname = param.substr(0, pos);
-                    auto optvalue = param.substr(pos + 1, param.length() - pos - 1);
-                    params.codec_options[optname] = optvalue;
-                } else
-                {
-                    printf("Invalid codec option %s\n", optarg);
-                }
+                parse_codec_opts(params.codec_options, optarg);
                 break;
 
             case 'v':
@@ -824,17 +828,7 @@ int main(int argc, char *argv[])
                 break;
 
             case 'P':
-                param = optarg;
-                pos = param.find("=");
-                if (pos != std::string::npos && pos != param.length() - 1)
-                {
-                    auto optname = param.substr(0, pos);
-                    auto optvalue = param.substr(pos + 1, param.length() - pos - 1);
-                    params.audio_codec_options[optname] = optvalue;
-                } else
-                {
-                    printf("Invalid codec option %s\n", optarg);
-                }
+                parse_codec_opts(params.audio_codec_options, optarg);
                 break;
 
             default:
