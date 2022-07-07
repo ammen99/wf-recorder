@@ -704,7 +704,6 @@ size_t FrameWriter::get_audio_buffer_size()
 void FrameWriter::add_audio(const void* buffer)
 {
     AVFrame *inputf = av_frame_alloc();
-    //inputf->sample_rate    = AUDIO_RATE;
     inputf->sample_rate    = params.sample_rate;
     inputf->format         = AV_SAMPLE_FMT_FLT;
     inputf->channel_layout = AV_CH_LAYOUT_STEREO;
