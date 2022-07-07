@@ -606,11 +606,11 @@ Use Ctrl+C to stop.)");
   -b, --bframes             This option is used to set the maximum number of b-frames to be used.
                             If b-frames are not supported by your hardware, set this to 0.
   
-  -C, --acodec              Specifies the codec of the audio.
+  -C, --audio-codec         Specifies the codec of the audio.
 
   -R, --sample-rate         Changes the audio sample rate, in HZ. The default value is 44100.
   
-  -P, --acodec-param        Change the audio codec parameters.
+  -P, --audio-codec-param   Change the audio codec parameters.
                             -P <option_name>=<option_value>)
 
 Examples:)");
@@ -682,8 +682,8 @@ int main(int argc, char *argv[])
     params.file = "recording.mp4";
     params.codec = DEFAULT_CODEC;
     params.framerate = DEFAULT_FRAMERATE;
-    params.acodec = DEFAULT_ACODEC;
-    params.sample_rate = DEFAULT_SAMPLE_RATE;
+    params.audio_codec = DEFAULT_AUDIO_CODEC;
+    params.sample_rate = DEFAULT_AUDIO_SAMPLE_RATE;
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
     params.force_yuv = false;
@@ -693,28 +693,28 @@ int main(int argc, char *argv[])
     std::string cmdline_output = default_cmdline_output;
 
     struct option opts[] = {
-        { "output",          required_argument, NULL, 'o' },
-        { "file",            required_argument, NULL, 'f' },
-        { "muxer",           required_argument, NULL, 'm' },
-        { "geometry",        required_argument, NULL, 'g' },
-        { "codec",           required_argument, NULL, 'c' },
-        { "codec-param",     required_argument, NULL, 'p' },
-        { "framerate",       required_argument, NULL, 'r' },
-        { "pixel-format",    required_argument, NULL, 'x' },
-        { "acodec",          required_argument, NULL, 'C' },
-        { "acodec-param",    required_argument, NULL, 'P' },
-        { "sample-rate",     required_argument, NULL, 'R' },
-        { "sample-format",   required_argument, NULL, 'X' },
-        { "device",          required_argument, NULL, 'd' },
-        { "filter",          required_argument, NULL, 'F' },
-        { "log",             no_argument,       NULL, 'l' },
-        { "audio",           optional_argument, NULL, 'a' },
-        { "help",            no_argument,       NULL, 'h' },
-        { "force-yuv",       no_argument,       NULL, 't' },
-        { "bframes",         required_argument, NULL, 'b' },
-        { "version",         no_argument,       NULL, 'v' },
-        { "no-damage",       no_argument,       NULL, 'D' },
-        { 0,                 0,                 NULL,  0  }
+        { "output",            required_argument, NULL, 'o' },
+        { "file",              required_argument, NULL, 'f' },
+        { "muxer",             required_argument, NULL, 'm' },
+        { "geometry",          required_argument, NULL, 'g' },
+        { "codec",             required_argument, NULL, 'c' },
+        { "codec-param",       required_argument, NULL, 'p' },
+        { "framerate",         required_argument, NULL, 'r' },
+        { "pixel-format",      required_argument, NULL, 'x' },
+        { "audio-codec",       required_argument, NULL, 'C' },
+        { "audio-codec-param", required_argument, NULL, 'P' },
+        { "sample-rate",       required_argument, NULL, 'R' },
+        { "sample-format",     required_argument, NULL, 'X' },
+        { "device",            required_argument, NULL, 'd' },
+        { "filter",            required_argument, NULL, 'F' },
+        { "log",               no_argument,       NULL, 'l' },
+        { "audio",             optional_argument, NULL, 'a' },
+        { "help",              no_argument,       NULL, 'h' },
+        { "force-yuv",         no_argument,       NULL, 't' },
+        { "bframes",           required_argument, NULL, 'b' },
+        { "version",           no_argument,       NULL, 'v' },
+        { "no-damage",         no_argument,       NULL, 'D' },
+        { 0,                   0,                 NULL,  0  }
     };
 
     int c, i;
@@ -757,7 +757,7 @@ int main(int argc, char *argv[])
                 break;
 
             case 'C':
-                params.acodec = optarg;
+                params.audio_codec = optarg;
                 break;
 
             case 'R':
@@ -827,7 +827,7 @@ int main(int argc, char *argv[])
                 {
                     auto optname = param.substr(0, pos);
                     auto optvalue = param.substr(pos + 1, param.length() - pos - 1);
-                    params.acodec_options[optname] = optvalue;
+                    params.audio_codec_options[optname] = optvalue;
                 } else
                 {
                     printf("Invalid codec option %s\n", optarg);

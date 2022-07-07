@@ -53,13 +53,13 @@ struct FrameWriterParams
     std::string video_filter = "null"; // dummy filter
 
     std::string codec;
-    std::string acodec;
+    std::string audio_codec;
     std::string muxer;
     std::string pix_fmt;
     std::string sample_fmt;
     std::string hw_device; // used only if codec contains vaapi
     std::map<std::string, std::string> codec_options;
-    std::map<std::string, std::string> acodec_options;
+    std::map<std::string, std::string> audio_codec_options;
     int framerate;
     int sample_rate;
 
@@ -79,7 +79,7 @@ class FrameWriter
 {
     FrameWriterParams params;
     void load_codec_options(AVDictionary **dict);
-    void load_acodec_options(AVDictionary **dict);
+    void load_audio_codec_options(AVDictionary **dict);
 
     const AVOutputFormat* outputFmt;
     AVStream* videoStream;

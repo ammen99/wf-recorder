@@ -67,9 +67,9 @@ void FrameWriter::load_codec_options(AVDictionary **dict)
     }
 }
 
-void FrameWriter::load_acodec_options(AVDictionary **dict)
+void FrameWriter::load_audio_codec_options(AVDictionary **dict)
 {
-    for (auto& opt : params.acodec_options)
+    for (auto& opt : params.audio_codec_options)
     {
         std::cout << "Setting codec option: " << opt.first << "=" << opt.second << std::endl;
         av_dict_set(dict, opt.first.c_str(), opt.second.c_str(), 0);
@@ -384,7 +384,7 @@ static enum AVSampleFormat get_codec_auto_sample_fmt(const AVCodec *codec)
 {
     int i = 0;
     if (!codec->sample_fmts)
-        return av_get_sample_fmt(FALLBACK_SAMPLE_FMT);
+        return av_get_sample_fmt(FALLBACK_AUDIO_SAMPLE_FMT);
     while (1) {
         if (codec->sample_fmts[i] == -1)
             break;
@@ -429,10 +429,10 @@ void FrameWriter::init_audio_stream()
     AVDictionary *options = NULL;
     load_codec_options(&options);
     
-    const AVCodec* codec = avcodec_find_encoder_by_name(params.acodec.c_str());
+    const AVCodec* codec = avcodec_find_encoder_by_name(params.audio_codec.c_str());
     if (!codec)
     {
-        std::cerr << "Failed to find the given audio codec: " << params.acodec << std::endl;
+        std::cerr << "Failed to find the given audio codec: " << params.audio_codec << std::endl;
         std::exit(-1);
     }
 

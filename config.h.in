@@ -2,9 +2,9 @@
 
 #define DEFAULT_CODEC "@default_codec@"
 #define DEFAULT_FRAMERATE @default_framerate@
-#define DEFAULT_ACODEC "@default_acodec@"
-#define DEFAULT_SAMPLE_RATE @default_sample_rate@
-#define FALLBACK_SAMPLE_FMT "@fallback_sample_fmt@"
+#define DEFAULT_AUDIO_CODEC "@default_audio_codec@"
+#define DEFAULT_AUDIO_SAMPLE_RATE @default_audio_sample_rate@
+#define FALLBACK_AUDIO_SAMPLE_FMT "@fallback_audio_sample_fmt@"
 #mesondefine HAVE_PULSE
 #mesondefine HAVE_OPENCL
 #mesondefine HAVE_LIBAVDEVICE
