@@ -13,7 +13,7 @@
 
 
 static const AVRational US_RATIONAL{1,1000000} ;
-#define AUDIO_RATE 44100
+#define AUDIO_RATE 48000
 
 // av_register_all was deprecated in 58.9.100, removed in 59.0.100
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(59, 0, 100)

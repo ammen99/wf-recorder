@@ -11,7 +11,7 @@
 #include <atomic>
 #include "config.h"
 
-#define AUDIO_RATE 44100
+#define AUDIO_RATE 48000
 
 extern "C"
 {
