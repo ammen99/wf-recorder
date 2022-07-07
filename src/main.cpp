@@ -720,7 +720,7 @@ int main(int argc, char *argv[])
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:la::te::h", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:la::thvDF:", opts, &i)) != -1)
     {
         switch(c)
         {

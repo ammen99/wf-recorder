@@ -395,7 +395,7 @@ static enum AVSampleFormat get_codec_auto_sample_fmt(const AVCodec *codec)
     return codec->sample_fmts[0];
 }
 
-bool check_fmt_available(AVCodec *codec, AVSampleFormat fmt){
+bool check_fmt_available(const AVCodec *codec, AVSampleFormat fmt){
     for (const enum AVSampleFormat *sample_ptr = codec -> sample_fmts; *sample_ptr != -1; sample_ptr++)
     {
         if (*sample_ptr == fmt)
@@ -406,7 +406,7 @@ bool check_fmt_available(AVCodec *codec, AVSampleFormat fmt){
     return false;
 }
 
-static enum AVSampleFormat convert_codec_sample_fmt(AVCodec *codec, std::string requested_fmt)
+static enum AVSampleFormat convert_codec_sample_fmt(const AVCodec *codec, std::string requested_fmt)
 {
     static enum AVSampleFormat converted_fmt = av_get_sample_fmt(requested_fmt.c_str());
     if (converted_fmt == AV_SAMPLE_FMT_NONE)
@@ -429,7 +429,7 @@ void FrameWriter::init_audio_stream()
     AVDictionary *options = NULL;
     load_codec_options(&options);
     
-    AVCodec* codec = avcodec_find_encoder_by_name(params.acodec.c_str());
+    const AVCodec* codec = avcodec_find_encoder_by_name(params.acodec.c_str());
     if (!codec)
     {
         std::cerr << "Failed to find the given audio codec: " << params.acodec << std::endl;
@@ -444,10 +444,12 @@ void FrameWriter::init_audio_stream()
     }
 
     audioCodecCtx = avcodec_alloc_context3(codec);
-    if (params.sample_fmt.size() == 0) {
+    if (params.sample_fmt.size() == 0) 
+    {
         audioCodecCtx->sample_fmt = get_codec_auto_sample_fmt(codec);
         std::cout << "Choosing sample format " << av_get_sample_fmt_name(audioCodecCtx->sample_fmt) << " for audio codec " << codec->name << std::endl;
-    } else {
+    } else 
+    {
         audioCodecCtx->sample_fmt = convert_codec_sample_fmt(codec, params.sample_fmt);
     }
     audioCodecCtx->channel_layout = get_codec_channel_layout(codec);
