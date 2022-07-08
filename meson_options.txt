@@ -1,2 +1,6 @@
 option('default_codec', type: 'string', value: 'libx264', description: 'Codec that will be used by default')
+option('default_framerate', type: 'integer', value: 60, description: 'Video framerate that will be used by default')
+option('default_audio_codec', type: 'string', value: 'aac', description: 'Audio codec that will be used by default')
+option('default_audio_sample_rate', type: 'integer', value: 48000, description: 'Audio sample rate that will be used by default')
+option('fallback_audio_sample_fmt', type: 'string', value: 's16', description: 'Fallback audio sample format that will be used if wf-recorder cannot determine the sample formats supported by a codec')
 option('pulse', type: 'feature', value: 'auto', description: 'Enable Pulseaudio')

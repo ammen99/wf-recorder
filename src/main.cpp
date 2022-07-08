@@ -363,6 +363,7 @@ static void write_loop(FrameWriterParams params)
             if (params.enable_audio)
             {
                 pulseParams.audio_frame_size = frame_writer->get_audio_buffer_size();
+                pulseParams.sample_rate = params.sample_rate;
                 pr = std::unique_ptr<PulseReader> (new PulseReader(pulseParams));
                 pr->start();
             }
@@ -557,7 +558,9 @@ Use Ctrl+C to stop.)");
 
   -c, --codec               Specifies the codec of the video. Supports  GIF output also.
                             To modify codec parameters, use -p <option_name>=<option_value>
-
+  
+  -r, --framerate           Changes an approximation of the video framerate. The default is 60.
+  
   -d, --device              Selects the device to use when encoding the video
                             Some drivers report support for rgb0 data for vaapi input but
                             really only support yuv.
@@ -599,9 +602,20 @@ Use Ctrl+C to stop.)");
 
   -t, --force-yuv           Use the -t or --force-yuv option to force conversion of the data to
                             yuv format, before sending it to the gpu.
-
+  
   -b, --bframes             This option is used to set the maximum number of b-frames to be used.
-                            If b-frames are not supported by your hardware, set this to 0.)" "\n\n" R"(
+                            If b-frames are not supported by your hardware, set this to 0.
+  
+  -C, --audio-codec         Specifies the codec of the audio.
+
+  -X, --sample-format       Set the output audio sample format. These can be found by running: 
+                            *ffmpeg -sample_fmts*
+  
+  -R, --sample-rate         Changes the audio sample rate, in HZ. The default value is 48000.
+  
+  -P, --audio-codec-param   Change the audio codec parameters.
+                            -P <option_name>=<option_value>)
+
 Examples:)");
 #ifdef HAVE_PULSE
     printf(R"(
@@ -664,12 +678,29 @@ void request_next_frame()
     zwlr_screencopy_frame_v1_add_listener(frame, &frame_listener, NULL);
 }
 
+static void parse_codec_opts(std::map<std::string, std::string>& options, const std::string param)
+{
+    size_t pos;
+    pos = param.find("=");
+    if (pos != std::string::npos && pos != param.length() -1)
+    {
+        auto optname = param.substr(0, pos);
+        auto optvalue = param.substr(pos + 1, param.length() - pos - 1);
+        options.insert(std::pair<std::string, std::string>(optname, optvalue));
+    } else
+    {
+        std::cerr << "Invalid codec option " + param << std::endl;
+    }
+}
 
 int main(int argc, char *argv[])
 {
     FrameWriterParams params = FrameWriterParams(exit_main_loop);
     params.file = "recording.mp4";
     params.codec = DEFAULT_CODEC;
+    params.framerate = DEFAULT_FRAMERATE;
+    params.audio_codec = DEFAULT_AUDIO_CODEC;
+    params.sample_rate = DEFAULT_AUDIO_SAMPLE_RATE;
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
     params.force_yuv = false;
@@ -679,29 +710,34 @@ int main(int argc, char *argv[])
     std::string cmdline_output = default_cmdline_output;
 
     struct option opts[] = {
-        { "output",          required_argument, NULL, 'o' },
-        { "file",            required_argument, NULL, 'f' },
-        { "muxer",           required_argument, NULL, 'm' },
-        { "pixel-format",    required_argument, NULL, 'x' },
-        { "geometry",        required_argument, NULL, 'g' },
-        { "codec",           required_argument, NULL, 'c' },
-        { "codec-param",     required_argument, NULL, 'p' },
-        { "device",          required_argument, NULL, 'd' },
-        { "filter",          required_argument, NULL, 'F' },
-        { "log",             no_argument,       NULL, 'l' },
-        { "audio",           optional_argument, NULL, 'a' },
-        { "help",            no_argument,       NULL, 'h' },
-        { "force-yuv",       no_argument,       NULL, 't' },
-        { "bframes",         required_argument, NULL, 'b' },
-        { "version",         no_argument,       NULL, 'v' },
-        { "no-damage",       no_argument,       NULL, 'D' },
-        { 0,                 0,                 NULL,  0  }
+        { "output",            required_argument, NULL, 'o' },
+        { "file",              required_argument, NULL, 'f' },
+        { "muxer",             required_argument, NULL, 'm' },
+        { "geometry",          required_argument, NULL, 'g' },
+        { "codec",             required_argument, NULL, 'c' },
+        { "codec-param",       required_argument, NULL, 'p' },
+        { "framerate",         required_argument, NULL, 'r' },
+        { "pixel-format",      required_argument, NULL, 'x' },
+        { "audio-codec",       required_argument, NULL, 'C' },
+        { "audio-codec-param", required_argument, NULL, 'P' },
+        { "sample-rate",       required_argument, NULL, 'R' },
+        { "sample-format",     required_argument, NULL, 'X' },
+        { "device",            required_argument, NULL, 'd' },
+        { "filter",            required_argument, NULL, 'F' },
+        { "log",               no_argument,       NULL, 'l' },
+        { "audio",             optional_argument, NULL, 'a' },
+        { "help",              no_argument,       NULL, 'h' },
+        { "force-yuv",         no_argument,       NULL, 't' },
+        { "bframes",           required_argument, NULL, 'b' },
+        { "version",           no_argument,       NULL, 'v' },
+        { "no-damage",         no_argument,       NULL, 'D' },
+        { 0,                   0,                 NULL,  0  }
     };
 
     int c, i;
     std::string param;
     size_t pos;
-    while((c = getopt_long(argc, argv, "o:f:m:x:g:c:p:d:b:la::thvDF:", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:la::thvDF:", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -721,16 +757,32 @@ int main(int argc, char *argv[])
                 params.muxer = optarg;
                 break;
 
-            case 'x':
-                params.pix_fmt = optarg;
-                break;
-
             case 'g':
                 selected_region.set_from_string(optarg);
                 break;
 
             case 'c':
                 params.codec = optarg;
+                break;
+
+            case 'r':
+                params.framerate = atoi(optarg);
+                break;
+
+            case 'x':
+                params.pix_fmt = optarg;
+                break;
+
+            case 'C':
+                params.audio_codec = optarg;
+                break;
+
+            case 'R':
+                params.sample_rate = atoi(optarg);
+                break;
+
+            case 'X':
+                params.sample_fmt = optarg;
                 break;
 
             case 'd':
@@ -764,17 +816,7 @@ int main(int argc, char *argv[])
                 break;
 
             case 'p':
-                param = optarg;
-                pos = param.find("=");
-                if (pos != std::string::npos && pos != param.length() - 1)
-                {
-                    auto optname = param.substr(0, pos);
-                    auto optvalue = param.substr(pos + 1, param.length() - pos - 1);
-                    params.codec_options[optname] = optvalue;
-                } else
-                {
-                    printf("Invalid codec option %s\n", optarg);
-                }
+                parse_codec_opts(params.codec_options, optarg);
                 break;
 
             case 'v':
@@ -783,6 +825,10 @@ int main(int argc, char *argv[])
 
             case 'D':
                 use_damage = false;
+                break;
+
+            case 'P':
+                parse_codec_opts(params.audio_codec_options, optarg);
                 break;
 
             default:

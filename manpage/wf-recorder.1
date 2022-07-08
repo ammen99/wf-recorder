@@ -1,4 +1,4 @@
-.Dd $Mdocdate: December 31 2020 $
+.Dd $Mdocdate: July 07 2022 $
 .Dt WF-RECORDER 1
 .Os
 .Sh NAME
@@ -10,6 +10,7 @@
 .Op Fl a , -audio Op Ar DEVICE
 .Op Fl b, -bframes Ar max_b_frames
 .Op Fl c, -codec Ar output_codec
+.Op Fl r, -framerate Ar framerate
 .Op Fl d, -device Ar encoding_device
 .Op Fl D, -no-damage
 .Op Fl f Ar filename.ext
@@ -23,6 +24,10 @@
 .Op Fl t, -force-yuv
 .Op Fl v, -version
 .Op Fl x, -pixel-format
+.Op Fl C, -audio-codec Ar output_audio_codec
+.Op Fl P, -audio-codec-param Op Ar option_param=option_value
+.Op Fl R, -sample-rate Ar sample_rate
+.Op Fl X, -sample-format Ar sample_format
 .Sh DESCRIPTION
 .Nm
 is a tool built to record your screen on Wayland compositors.
@@ -65,6 +70,10 @@ Specifies the codec of the video. Supports GIF output as well.
 To modify codec parameters, use
 .Fl p
 .Ar option_name=option_value
+.Pp
+.It Fl r , -framerate
+.Ar framerate
+Changes an approximation of the video framerate. The default is 60.
 .Pp
 .It Fl d , -device Ar encoding_device
 Selects the device to use when encoding the video.
@@ -132,6 +141,23 @@ Set the output pixel format.
 .Pp
 List available formats using
 .Dl $ ffmpeg -pix_fmts
+.Pp
+.It Fl C , -audio-codec
+.Ar output_audio_codec
+Specifies the codec of the audio.
+.Pp
+.It Fl P , -audio-codec-param Op Ar option_name=option_value
+Change the audio codec parameters.
+.Pp
+.It Fl R , -sample-rate
+.Ar sample_rate
+Changes the audio sample rate, in HZ. The default value is 48000.
+.Pp
+.It Fl X , -sample-format Ar sample_format Set the output audio sample format.
+.Pp
+List available formats using
+.Dl $ ffmpeg -sample_fmts
+
 .El
 .Sh EXAMPLES
 To select a specific part of the screen you can either use

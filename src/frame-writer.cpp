@@ -13,7 +13,6 @@
 
 
 static const AVRational US_RATIONAL{1,1000000} ;
-#define AUDIO_RATE 44100
 
 // av_register_all was deprecated in 58.9.100, removed in 59.0.100
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(59, 0, 100)
@@ -62,6 +61,15 @@ void FrameWriter::load_codec_options(AVDictionary **dict)
     }
 
     for (auto& opt : params.codec_options)
+    {
+        std::cout << "Setting codec option: " << opt.first << "=" << opt.second << std::endl;
+        av_dict_set(dict, opt.first.c_str(), opt.second.c_str(), 0);
+    }
+}
+
+void FrameWriter::load_audio_codec_options(AVDictionary **dict)
+{
+    for (auto& opt : params.audio_codec_options)
     {
         std::cout << "Setting codec option: " << opt.first << "=" << opt.second << std::endl;
         av_dict_set(dict, opt.first.c_str(), opt.second.c_str(), 0);
@@ -316,6 +324,8 @@ void FrameWriter::init_video_stream()
     videoCodecCtx->height     = params.height;
     videoCodecCtx->time_base  = US_RATIONAL;
     videoCodecCtx->color_range = AVCOL_RANGE_JPEG;
+    std::cout << "Framerate: " << params.framerate << std::endl;
+
     if (params.bframes != -1)
         videoCodecCtx->max_b_frames = params.bframes;
 
@@ -370,11 +380,11 @@ static uint64_t get_codec_channel_layout(const AVCodec *codec)
       return codec->channel_layouts[0];
 }
 
-static enum AVSampleFormat get_codec_sample_fmt(const AVCodec *codec)
+static enum AVSampleFormat get_codec_auto_sample_fmt(const AVCodec *codec)
 {
     int i = 0;
     if (!codec->sample_fmts)
-        return AV_SAMPLE_FMT_S16;
+        return av_get_sample_fmt(FALLBACK_AUDIO_SAMPLE_FMT);
     while (1) {
         if (codec->sample_fmts[i] == -1)
             break;
@@ -385,12 +395,44 @@ static enum AVSampleFormat get_codec_sample_fmt(const AVCodec *codec)
     return codec->sample_fmts[0];
 }
 
+bool check_fmt_available(const AVCodec *codec, AVSampleFormat fmt){
+    for (const enum AVSampleFormat *sample_ptr = codec -> sample_fmts; *sample_ptr != -1; sample_ptr++)
+    {
+        if (*sample_ptr == fmt)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+static enum AVSampleFormat convert_codec_sample_fmt(const AVCodec *codec, std::string requested_fmt)
+{
+    static enum AVSampleFormat converted_fmt = av_get_sample_fmt(requested_fmt.c_str());
+    if (converted_fmt == AV_SAMPLE_FMT_NONE)
+    {
+	std::cout << "Failed to find the given sample format: " << requested_fmt << std::endl;
+	std::exit(-1);
+    } else if (!codec->sample_fmts || check_fmt_available(codec, converted_fmt))
+    {
+        std::cout << "Using sample format " << av_get_sample_fmt_name(converted_fmt) << " for audio codec " << codec->name << std::endl;
+        return converted_fmt;
+    } else
+    {
+	std::cout << "Codec " << codec->name << " does not support sample format " << av_get_sample_fmt_name(converted_fmt) << std::endl;
+	std::exit(-1);
+    }
+}
+
 void FrameWriter::init_audio_stream()
 {
-    const AVCodec* codec = avcodec_find_encoder_by_name("aac");
+    AVDictionary *options = NULL;
+    load_codec_options(&options);
+    
+    const AVCodec* codec = avcodec_find_encoder_by_name(params.audio_codec.c_str());
     if (!codec)
     {
-        std::cerr << "Failed to find the aac codec" << std::endl;
+        std::cerr << "Failed to find the given audio codec: " << params.audio_codec << std::endl;
         std::exit(-1);
     }
 
@@ -402,10 +444,16 @@ void FrameWriter::init_audio_stream()
     }
 
     audioCodecCtx = avcodec_alloc_context3(codec);
-    audioCodecCtx->bit_rate = lrintf(128000.0f);
-    audioCodecCtx->sample_fmt = get_codec_sample_fmt(codec);
+    if (params.sample_fmt.size() == 0) 
+    {
+        audioCodecCtx->sample_fmt = get_codec_auto_sample_fmt(codec);
+        std::cout << "Choosing sample format " << av_get_sample_fmt_name(audioCodecCtx->sample_fmt) << " for audio codec " << codec->name << std::endl;
+    } else 
+    {
+        audioCodecCtx->sample_fmt = convert_codec_sample_fmt(codec, params.sample_fmt);
+    }
     audioCodecCtx->channel_layout = get_codec_channel_layout(codec);
-    audioCodecCtx->sample_rate = AUDIO_RATE;
+    audioCodecCtx->sample_rate = params.sample_rate;
     audioCodecCtx->time_base = (AVRational) { 1, 1000 };
     audioCodecCtx->channels = av_get_channel_layout_nb_channels(audioCodecCtx->channel_layout);
 
@@ -426,7 +474,7 @@ void FrameWriter::init_audio_stream()
         std::exit(-1);
     }
 
-    av_opt_set_int(swrCtx, "in_sample_rate", AUDIO_RATE, 0);
+    av_opt_set_int(swrCtx, "in_sample_rate", params.sample_rate, 0);
     av_opt_set_int(swrCtx, "out_sample_rate", audioCodecCtx->sample_rate, 0);
     av_opt_set_sample_fmt(swrCtx, "in_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
     av_opt_set_sample_fmt(swrCtx, "out_sample_fmt", audioCodecCtx->sample_fmt, 0);
@@ -623,9 +671,10 @@ bool FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 #define SRC_RATE 1e6
 #define DST_RATE 1e3
 
-static int64_t conv_audio_pts(SwrContext *ctx, int64_t in)
+static int64_t conv_audio_pts(SwrContext *ctx, int64_t in, int sample_rate)
 {
-    int64_t d = (int64_t) AUDIO_RATE * AUDIO_RATE;
+    //int64_t d = (int64_t) AUDIO_RATE * AUDIO_RATE;
+    int64_t d = (int64_t) sample_rate * sample_rate;
 
     /* Convert from audio_src_tb to 1/(src_samplerate * dst_samplerate) */
     in = av_rescale_rnd(in, d, SRC_RATE, AV_ROUND_NEAR_INF);
@@ -655,7 +704,7 @@ size_t FrameWriter::get_audio_buffer_size()
 void FrameWriter::add_audio(const void* buffer)
 {
     AVFrame *inputf = av_frame_alloc();
-    inputf->sample_rate    = AUDIO_RATE;
+    inputf->sample_rate    = params.sample_rate;
     inputf->format         = AV_SAMPLE_FMT_FLT;
     inputf->channel_layout = AV_CH_LAYOUT_STEREO;
     inputf->nb_samples     = audioCodecCtx->frame_size;
@@ -670,7 +719,7 @@ void FrameWriter::add_audio(const void* buffer)
     outputf->nb_samples     = audioCodecCtx->frame_size;
     av_frame_get_buffer(outputf, 0);
 
-    outputf->pts = conv_audio_pts(swrCtx, INT64_MIN);
+    outputf->pts = conv_audio_pts(swrCtx, INT64_MIN, params.sample_rate);
     swr_convert_frame(swrCtx, outputf, inputf);
 
     send_audio_pkt(outputf);
