@@ -644,8 +644,7 @@ bool FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
         filtered_frame->pict_type = AV_PICTURE_TYPE_NONE;
 
         // So we have a frame. Encode it!
-        AVPacket pkt;
-        av_init_packet(&pkt);
+        AVPacket pkt = *av_packet_alloc();
         pkt.data = NULL;
         pkt.size = 0;
 
@@ -678,8 +677,7 @@ static int64_t conv_audio_pts(SwrContext *ctx, int64_t in, int sample_rate)
 
 void FrameWriter::send_audio_pkt(AVFrame *frame)
 {
-    AVPacket pkt;
-    av_init_packet(&pkt);
+    AVPacket pkt = *av_packet_alloc();
     pkt.data = NULL;
     pkt.size = 0;
 
@@ -758,8 +756,7 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
 FrameWriter::~FrameWriter()
 {
     // Writing the delayed frames:
-    AVPacket pkt;
-    av_init_packet(&pkt);
+    AVPacket pkt = *av_packet_alloc();
 
     encode(videoCodecCtx, NULL, &pkt);
 #ifdef HAVE_PULSE
