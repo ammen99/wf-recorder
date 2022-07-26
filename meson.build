@@ -39,7 +39,7 @@ add_project_arguments('-DWFRECORDER_VERSION=@0@'.format(version), language: 'cpp
 
 include_directories(['.'])
 
-add_project_arguments(['-Wno-deprecated-declarations'], language: 'cpp')
+add_project_arguments(['-Wall'], language: 'cpp')
 
 project_sources = ['src/frame-writer.cpp', 'src/main.cpp', 'src/averr.c']
 
