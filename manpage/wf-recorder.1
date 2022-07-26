@@ -1,4 +1,4 @@
-.Dd $Mdocdate: July 07 2022 $
+.Dd $Mdocdate: July 26 2022 $
 .Dt WF-RECORDER 1
 .Os
 .Sh NAME
@@ -6,8 +6,8 @@
 .Nd simple screen recording program for wlroots-based compositors
 .Sh SYNOPSIS
 .Nm wf-recorder
-.Op Fl abcdDefghlmoptvx
-.Op Fl a , -audio Op Ar DEVICE
+.Op Fl abcCdDefFghlmopPrRtvxX
+.Op Fl a, -audio Op Ar =DEVICE
 .Op Fl b, -bframes Ar max_b_frames
 .Op Fl c, -codec Ar output_codec
 .Op Fl r, -framerate Ar framerate
@@ -50,7 +50,7 @@ in the current working directory using the default
 The options are as follows:
 .Pp
 .Bl -tag -width Ds -compact
-.It Fl a , -audio Op Ar DEVICE
+.It Fl a , -audio Op Ar =DEVICE
 Starts recording the screen with audio.
 .Pp
 .Ar DEVICE
@@ -169,6 +169,12 @@ screen area that will be recorded:
 .Pp
 You can record screen and sound simultaneously with
 .Dl $ wf-recorder --audio --file=recording_with_audio.mp4
+.Pp
+To specify an audio device, use the
+.Fl -a<DEVICE>
+or
+.Fl --audio=<DEVICE>
+options.
 .Pp
 To specify a
 .Ar codec
