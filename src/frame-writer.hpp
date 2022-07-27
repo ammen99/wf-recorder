@@ -94,7 +94,7 @@ class FrameWriter
     AVBufferRef *hw_frame_context = NULL;
 
     AVPixelFormat lookup_pixel_format(std::string pix_fmt);
-    AVPixelFormat choose_sw_format(const AVCodec *codec);
+    AVPixelFormat handle_buffersink_pix_fmt(const AVCodec *codec);
     AVPixelFormat get_input_format();
     void init_hw_accel();
     void init_codecs();

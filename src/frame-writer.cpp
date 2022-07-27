@@ -125,12 +125,25 @@ AVPixelFormat FrameWriter::lookup_pixel_format(std::string pix_fmt)
     std::exit(-1);
 }
 
-AVPixelFormat FrameWriter::choose_sw_format(const AVCodec *codec)
+AVPixelFormat FrameWriter::handle_buffersink_pix_fmt(const AVCodec *codec)
 {
-    auto in_fmt = get_input_format();
 
+    // Force pixel format to yuv420p if requested and possible
+    if (params.force_yuv) {
+        if (!codec->pix_fmts ||
+            is_fmt_supported(AV_PIX_FMT_YUV420P, codec->pix_fmts)) {
+            return AV_PIX_FMT_YUV420P;
+        } else {
+            std::cerr << "Ignoring request to force yuv420p, " <<
+                "because it is not supported by the codec\n";
+        }
+    }
+
+    // Return with user chosen format
     if (!params.pix_fmt.empty())
         return lookup_pixel_format(params.pix_fmt);
+
+    auto in_fmt = get_input_format();
 
     /* For codecs such as rawvideo no supported formats are listed */
     if (!codec->pix_fmts)
@@ -196,26 +209,14 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     // We also need to tell the sink which pixel formats are supported.
     // by the video encoder. codevIndicate to our sink  pixel formats
     // are accepted by our codec.
-    const AVPixelFormat *supported_pix_fmts = codec->pix_fmts;
-    static const AVPixelFormat only_yuv420p[] =
+    const AVPixelFormat picked_pix_fmt[] =
     {
-        AV_PIX_FMT_YUV420P,
+        handle_buffersink_pix_fmt(codec),
         AV_PIX_FMT_NONE
     };
 
-    // Force pixel format to yuv420p if requested and possible
-    if (params.force_yuv) {
-        if (!supported_pix_fmts ||
-            is_fmt_supported(AV_PIX_FMT_YUV420P, supported_pix_fmts)) {
-            supported_pix_fmts = only_yuv420p ;
-        } else {
-            std::cerr << "Ignoring request to force yuv420p, " <<
-                "because it is not supported by the codec\n";
-        }
-    }
-
     err = av_opt_set_int_list(this->videoFilterSinkCtx, "pix_fmts",
-        supported_pix_fmts, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
+        picked_pix_fmt, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
 
     if (err < 0) {
         std::cerr << "Failed to set pix_fmts: " << averr(err) << std::endl;;
