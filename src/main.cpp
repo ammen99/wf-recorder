@@ -602,9 +602,6 @@ Use Ctrl+C to stop.)");
   -F, --filter              Specify the ffmpeg filter string to use. For example,
                             -F hwupload,scale_vaapi=format=nv12 is used for VAAPI.
 
-  -t, --force-yuv           Use the -t or --force-yuv option to force conversion of the data to
-                            yuv format, before sending it to the gpu.
-  
   -b, --bframes             This option is used to set the maximum number of b-frames to be used.
                             If b-frames are not supported by your hardware, set this to 0.
   
@@ -707,7 +704,6 @@ int main(int argc, char *argv[])
     params.sample_rate = DEFAULT_AUDIO_SAMPLE_RATE;
     params.enable_ffmpeg_debug_output = false;
     params.enable_audio = false;
-    params.force_yuv = false;
     params.bframes = -1;
 
     constexpr const char* default_cmdline_output = "interactive";
@@ -731,7 +727,6 @@ int main(int argc, char *argv[])
         { "log",               no_argument,       NULL, 'l' },
         { "audio",             optional_argument, NULL, 'a' },
         { "help",              no_argument,       NULL, 'h' },
-        { "force-yuv",         no_argument,       NULL, 't' },
         { "bframes",           required_argument, NULL, 'b' },
         { "version",           no_argument,       NULL, 'v' },
         { "no-damage",         no_argument,       NULL, 'D' },
@@ -739,7 +734,7 @@ int main(int argc, char *argv[])
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:la::thvDF:", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:la::hvDF:", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -807,10 +802,6 @@ int main(int argc, char *argv[])
                 std::cerr << "Cannot record audio. Built without pulse support." << std::endl;
                 return EXIT_FAILURE;
 #endif
-                break;
-
-            case 't':
-                params.force_yuv = true;
                 break;
 
             case 'h':

@@ -128,17 +128,6 @@ AVPixelFormat FrameWriter::lookup_pixel_format(std::string pix_fmt)
 AVPixelFormat FrameWriter::handle_buffersink_pix_fmt(const AVCodec *codec)
 {
 
-    // Force pixel format to yuv420p if requested and possible
-    if (params.force_yuv) {
-        if (!codec->pix_fmts ||
-            is_fmt_supported(AV_PIX_FMT_YUV420P, codec->pix_fmts)) {
-            return AV_PIX_FMT_YUV420P;
-        } else {
-            std::cerr << "Ignoring request to force yuv420p, " <<
-                "because it is not supported by the codec\n";
-        }
-    }
-
     // Return with user chosen format
     if (!params.pix_fmt.empty())
         return lookup_pixel_format(params.pix_fmt);

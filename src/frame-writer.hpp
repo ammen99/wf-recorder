@@ -68,7 +68,6 @@ struct FrameWriterParams
     bool enable_audio;
     bool enable_ffmpeg_debug_output;
 
-    bool force_yuv;
     int bframes;
 
     std::atomic<bool>& write_aborted_flag;
