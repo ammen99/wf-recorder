@@ -1,4 +1,4 @@
-.Dd $Mdocdate: July 26 2022 $
+.Dd $Mdocdate: July 30 2022 $
 .Dt WF-RECORDER 1
 .Os
 .Sh NAME
@@ -6,7 +6,7 @@
 .Nd simple screen recording program for wlroots-based compositors
 .Sh SYNOPSIS
 .Nm wf-recorder
-.Op Fl abcCdDefFghlmopPrRtvxX
+.Op Fl abcCdDefFghlmopPrRvxX
 .Op Fl a, -audio Op Ar =DEVICE
 .Op Fl b, -bframes Ar max_b_frames
 .Op Fl c, -codec Ar output_codec
@@ -21,7 +21,6 @@
 .Op Fl m, -muxer Ar muxer
 .Op Fl o, -output Ar output
 .Op Fl p, -codec-param Op Ar option_param=option_value
-.Op Fl t, -force-yuv
 .Op Fl v, -version
 .Op Fl x, -pixel-format
 .Op Fl C, -audio-codec Ar output_audio_codec
@@ -82,7 +81,7 @@ Some drivers report support for
 .Ql rgb0
 data for vaapi input but really only support yuv.
 Use the
-.Fl t , -force-yuv
+.Fl x yuv420 , -pixel-format yuv420p
 option in addition to the vaapi options to convert the
 data in software, before sending it to the GPU.
 .Pp
@@ -128,10 +127,6 @@ Specify the output where the video is to be recorded.
 .Pp
 .It Fl p , -codec-param Op Ar option_name=option_value
 Change the codec parameters.
-.Pp
-.It Fl t , -force-yuv
-Use this option in addition to the vaapi options to convert
-the data in software, before sending it to the GPU.
 .Pp
 .It Fl v , -version
 Print the version of wf-recorder.
@@ -206,7 +201,7 @@ data for
 .Ql vaapi
 input but really only support yuv planar formats.
 In this case, use the
-.Fl t , -force-yuv
+.Fl x yuv420p
 option in addition to the
 .Ql vaapi
 options to convert the data to yuv planar data before sending it to the GPU.
