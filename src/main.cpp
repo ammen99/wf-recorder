@@ -548,15 +548,17 @@ Use Ctrl+C to stop.)");
 #ifdef HAVE_PULSE
     printf(R"(
 
-  -a, --audio [DEVICE]      Starts recording the screen with audio.
-                            [DEVICE] argument is optional.
+  -a, --audio[=DEVICE]      Starts recording the screen with audio.
+                            [=DEVICE] argument is optional.
                             In case you want to specify the pulseaudio device which will capture
                             the audio, you can run this command with the name of that device.
-                            You can find your device by running: pactl list sources | grep Name)");
+                            You can find your device by running: pactl list sources | grep Name
+                            Specify device like this: -a<device> or --audio=<device>)");
 #endif
     printf(R"(
 
-  -c, --codec               Specifies the codec of the video. Supports  GIF output also.
+  -c, --codec               Specifies the codec of the video. These can be found by using:
+                            ffmpeg -encoders
                             To modify codec parameters, use -p <option_name>=<option_value>
   
   -r, --framerate           Changes an approximation of the video framerate. The default is 60.
@@ -576,13 +578,13 @@ Use Ctrl+C to stop.)");
                             while extension .ext . If the extension .ext provided is not
                             recognized by your FFmpeg muxers, the command will fail.
                             You can check the muxers that your FFmpeg installation supports by
-                            running  : ffmpeg -muxers
+                            running: ffmpeg -muxers
 
   -m, --muxer               Set the output format to a specific muxer instead of detecting it
                             from the filename.
 
   -x, --pixel-format        Set the output pixel format. These can be found by running:
-                            *ffmpeg -pix_fmts*
+                            ffmpeg -pix_fmts
 
   -g, --geometry            Selects a specific part of the screen. The format is "x,y WxH".
 
@@ -606,15 +608,17 @@ Use Ctrl+C to stop.)");
   -b, --bframes             This option is used to set the maximum number of b-frames to be used.
                             If b-frames are not supported by your hardware, set this to 0.
   
-  -C, --audio-codec         Specifies the codec of the audio.
+  -C, --audio-codec         Specifies the codec of the audio. These can be found by running:
+                            ffmpeg -encoders
+                            To modify codec parameters, use -P <option_name>=<option_value>
 
   -X, --sample-format       Set the output audio sample format. These can be found by running: 
-                            *ffmpeg -sample_fmts*
+                            ffmpeg -sample_fmts
   
-  -R, --sample-rate         Changes the audio sample rate, in HZ. The default value is 48000.
+  -R, --sample-rate         Changes the audio sample rate in HZ. The default value is 48000.
   
   -P, --audio-codec-param   Change the audio codec parameters.
-                            -P <option_name>=<option_value>)
+                            -P <option_name>=<option_value>
 
 Examples:)");
 #ifdef HAVE_PULSE
@@ -629,19 +633,19 @@ Examples:)");
                                         current working directory.
 
   - wf-recorder -f <filename>.ext       Records the video. Use Ctrl+C to stop recording.
-                                        The video file will be stored as <outputname>.ext in the
+                                        The video file will be stored as <filename>.ext in the
                                         current working directory.)");
 #ifdef HAVE_PULSE
     printf(R"(
 
   Video and Audio:
 
-  - wf-recorder -a                      Records the audio. Use Ctrl+C to stop recording.
+  - wf-recorder -a                      Records the video and audio. Use Ctrl+C to stop recording.
                                         The video file will be stored as recording.mp4 in the
                                         current working directory.
 
-  - wf-recorder -a -f <filename>.ext    Records the audio. Use Ctrl+C to stop recording.
-                                        The video file will be stored as <outputname>.ext in the
+  - wf-recorder -a -f <filename>.ext    Records the video and audio. Use Ctrl+C to stop recording.
+                                        The video file will be stored as <filename>.ext in the
                                         current working directory.)");
 #endif
     printf(R"(
