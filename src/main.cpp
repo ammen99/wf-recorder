@@ -32,6 +32,8 @@ PulseReaderParams pulseParams;
 
 #define MAX_FRAME_FAILURES 16
 
+static const int GRACEFUL_TERMINATION_SIGNALS[] = { SIGTERM, SIGINT, SIGHUP };
+
 std::mutex frame_writer_mutex, frame_writer_pending_mutex;
 std::unique_ptr<FrameWriter> frame_writer;
 
@@ -327,10 +329,13 @@ static InputFormat get_input_format(wf_buffer& buffer)
 
 static void write_loop(FrameWriterParams params)
 {
-    /* Ignore SIGINT, main loop is responsible for the exit_main_loop signal */
+    /* Ignore SIGTERM/SIGINT/SIGHUP, main loop is responsible for the exit_main_loop signal */
     sigset_t sigset;
     sigemptyset(&sigset);
-    sigaddset(&sigset, SIGINT);
+    for (auto signo : GRACEFUL_TERMINATION_SIGNALS)
+    {
+        sigaddset(&sigset, signo);
+    }
     pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
     int last_encoded_frame = 0;
@@ -393,7 +398,7 @@ static void write_loop(FrameWriterParams params)
     frame_writer = nullptr;
 }
 
-void handle_sigint(int)
+void handle_graceful_termination(int)
 {
     exit_main_loop = true;
 }
@@ -929,7 +934,10 @@ int main(int argc, char *argv[])
     bool spawned_thread = false;
     std::thread writer_thread;
 
-    signal(SIGINT, handle_sigint);
+    for (auto signo : GRACEFUL_TERMINATION_SIGNALS)
+    {
+        signal(signo, handle_graceful_termination);
+    }
 
     while(!exit_main_loop)
     {
