@@ -62,16 +62,13 @@ You can find your device by running
 .It Fl b , -bframes Ar max_b_frames
 Sets the maximum number of B-Frames to use.
 .Pp
-.It Fl c , -codec
-.Ar output_codec
+.It Fl c , -codec Ar output_codec
 Specifies the codec of the video. Supports GIF output as well.
 .Pp
 To modify codec parameters, use
-.Fl p
-.Ar option_name=option_value
+.Fl p Ar option_name=option_value
 .Pp
-.It Fl r , -framerate
-.Ar framerate
+.It Fl r , -framerate Ar framerate
 Changes an approximation of the video framerate. The default is 60.
 .Pp
 .It Fl d , -device Ar encoding_device
@@ -81,7 +78,7 @@ Some drivers report support for
 .Ql rgb0
 data for vaapi input but really only support yuv.
 Use the
-.Fl x yuv420 , -pixel-format yuv420p
+.Fl x Ar yuv420
 option in addition to the vaapi options to convert the
 data in software, before sending it to the GPU.
 .Pp
@@ -137,18 +134,17 @@ Set the output pixel format.
 List available formats using
 .Dl $ ffmpeg -pix_fmts
 .Pp
-.It Fl C , -audio-codec
-.Ar output_audio_codec
+.It Fl C , -audio-codec Ar output_audio_codec
 Specifies the codec of the audio.
 .Pp
 .It Fl P , -audio-codec-param Op Ar option_name=option_value
 Change the audio codec parameters.
 .Pp
-.It Fl R , -sample-rate
-.Ar sample_rate
+.It Fl R , -sample-rate Ar sample_rate
 Changes the audio sample rate, in HZ. The default value is 48000.
 .Pp
-.It Fl X , -sample-format Ar sample_format Set the output audio sample format.
+.It Fl X , -sample-format Ar sample_format
+Set the output audio sample format.
 .Pp
 List available formats using
 .Dl $ ffmpeg -sample_fmts
@@ -180,10 +176,10 @@ option. To modify codec parameters,
 .Ar option_name=option_value.
 .Pp
 To set a specific output format, use the
-.Fl m muxer
+.Fl m, muxer
 option. For example, to
-output to a v
-.Sy ideo4linux2
+output to a
+.Sy video4linux2
 loopback you might use:
 .Dl $ wf-recorder --muxer=v4l2 --codec=rawvideo --file=/dev/video2
 .Pp
@@ -201,7 +197,7 @@ data for
 .Ql vaapi
 input but really only support yuv planar formats.
 In this case, use the
-.Fl x yuv420p
+.Fl x Ar yuv420p
 option in addition to the
 .Ql vaapi
 options to convert the data to yuv planar data before sending it to the GPU.
