@@ -179,6 +179,9 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     buffer_filter_config << "video_size=" << params.width << "x" << params.height;
     buffer_filter_config << ":pix_fmt=" << (int)this->get_input_format();
     buffer_filter_config << ":time_base=" << US_RATIONAL.num << "/" << US_RATIONAL.den;
+    if (params.framerate) {
+    buffer_filter_config << ":frame_rate=" << params.framerate;
+    }
     buffer_filter_config << ":pixel_aspect=1/1";
 
     int err = avfilter_graph_create_filter(&this->videoFilterSourceCtx, source,
@@ -314,7 +317,7 @@ void FrameWriter::init_video_stream()
     videoCodecCtx->height     = params.height;
     videoCodecCtx->time_base  = US_RATIONAL;
     videoCodecCtx->color_range = AVCOL_RANGE_JPEG;
-    std::cout << "Framerate: " << params.framerate << std::endl;
+    //std::cout << "Framerate: " << av_q2d(videoCodecCtx->framerate) << std::endl;
 
     if (params.bframes != -1)
         videoCodecCtx->max_b_frames = params.bframes;

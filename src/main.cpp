@@ -561,7 +561,7 @@ Use Ctrl+C to stop.)");
                             ffmpeg -encoders
                             To modify codec parameters, use -p <option_name>=<option_value>
   
-  -r, --framerate           Changes an approximation of the video framerate. The default is 60.
+  -r, --framerate           Changes an approximation of the video framerate.
   
   -d, --device              Selects the device to use when encoding the video
                             Some drivers report support for rgb0 data for vaapi input but
@@ -699,7 +699,6 @@ int main(int argc, char *argv[])
     FrameWriterParams params = FrameWriterParams(exit_main_loop);
     params.file = "recording.mp4";
     params.codec = DEFAULT_CODEC;
-    params.framerate = DEFAULT_FRAMERATE;
     params.audio_codec = DEFAULT_AUDIO_CODEC;
     params.sample_rate = DEFAULT_AUDIO_SAMPLE_RATE;
     params.enable_ffmpeg_debug_output = false;
