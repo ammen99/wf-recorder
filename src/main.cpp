@@ -561,7 +561,7 @@ Use Ctrl+C to stop.)");
                             ffmpeg -encoders
                             To modify codec parameters, use -p <option_name>=<option_value>
   
-  -r, --framerate           Changes an approximation of the video framerate.
+  -r, --framerate           Changes framerate to constant framerate with a given value.
   
   -d, --device              Selects the device to use when encoding the video
                             Some drivers report support for rgb0 data for vaapi input but
@@ -604,6 +604,9 @@ Use Ctrl+C to stop.)");
 
   -b, --bframes             This option is used to set the maximum number of b-frames to be used.
                             If b-frames are not supported by your hardware, set this to 0.
+    
+  -B. --buffrate            This option is used to specify the buffers expected framerate. this 
+                            may help when encoders are expecting specifc or limited framerate.
   
   -C, --audio-codec         Specifies the codec of the audio. These can be found by running:
                             ffmpeg -encoders
@@ -727,13 +730,14 @@ int main(int argc, char *argv[])
         { "audio",             optional_argument, NULL, 'a' },
         { "help",              no_argument,       NULL, 'h' },
         { "bframes",           required_argument, NULL, 'b' },
+        { "buffrate",          required_argument, NULL, 'B' },
         { "version",           no_argument,       NULL, 'v' },
         { "no-damage",         no_argument,       NULL, 'D' },
         { 0,                   0,                 NULL,  0  }
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:la::hvDF:", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -787,6 +791,10 @@ int main(int argc, char *argv[])
 
             case 'b':
                 params.bframes = atoi(optarg);
+                break;
+
+            case 'B':
+                params.buffrate = atoi(optarg);
                 break;
 
             case 'l':
