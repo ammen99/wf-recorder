@@ -163,7 +163,7 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
 
     if (params.framerate != 0){
         if (params.video_filter != "null" && params.video_filter.find("fps") == std::string::npos) {
-            params.video_filter += ":fps=" + std::to_string(params.framerate);
+            params.video_filter += ",fps=" + std::to_string(params.framerate);
         }
         else if (params.video_filter == "null"){
             params.video_filter = "fps=" + std::to_string(params.framerate);
