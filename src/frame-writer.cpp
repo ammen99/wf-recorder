@@ -644,13 +644,13 @@ bool FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
         filtered_frame->pict_type = AV_PICTURE_TYPE_NONE;
 
         // So we have a frame. Encode it!
-        AVPacket pkt;
-        av_init_packet(&pkt);
-        pkt.data = NULL;
-        pkt.size = 0;
+        AVPacket *pkt = av_packet_alloc();
+        pkt->data = NULL;
+        pkt->size = 0;
 
-        encode(videoCodecCtx, filtered_frame, &pkt);
+        encode(videoCodecCtx, filtered_frame, pkt);
         av_frame_free(&filtered_frame);
+        av_packet_free(&pkt);
     }
 
     av_frame_free(&frame);
@@ -678,12 +678,12 @@ static int64_t conv_audio_pts(SwrContext *ctx, int64_t in, int sample_rate)
 
 void FrameWriter::send_audio_pkt(AVFrame *frame)
 {
-    AVPacket pkt;
-    av_init_packet(&pkt);
-    pkt.data = NULL;
-    pkt.size = 0;
+    AVPacket *pkt = av_packet_alloc();
+    pkt->data = NULL;
+    pkt->size = 0;
 
-    encode(audioCodecCtx, frame, &pkt);
+    encode(audioCodecCtx, frame, pkt);
+    av_packet_free(&pkt);
 }
 
 size_t FrameWriter::get_audio_buffer_size()
@@ -758,14 +758,13 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
 FrameWriter::~FrameWriter()
 {
     // Writing the delayed frames:
-    AVPacket pkt;
-    av_init_packet(&pkt);
+    AVPacket *pkt = av_packet_alloc();
 
-    encode(videoCodecCtx, NULL, &pkt);
+    encode(videoCodecCtx, NULL, pkt);
 #ifdef HAVE_PULSE
     if (params.enable_audio)
     {
-        encode(audioCodecCtx, NULL, &pkt);
+        encode(audioCodecCtx, NULL, pkt);
     }
 #endif
     // Writing the end of the file.
@@ -775,12 +774,13 @@ FrameWriter::~FrameWriter()
     if (outputFmt && (!(outputFmt->flags & AVFMT_NOFILE)))
         avio_closep(&fmtCtx->pb);
 
-    avcodec_free_context(&videoCodecCtx);
     // Freeing all the allocated memory:
+    avcodec_free_context(&videoCodecCtx);
 #ifdef HAVE_PULSE
     if (params.enable_audio)
         avcodec_free_context(&audioCodecCtx);
 #endif
+    av_packet_free(&pkt);
     // TODO: free all the hw accel
     avformat_free_context(fmtCtx);
 }
