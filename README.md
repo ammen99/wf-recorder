@@ -63,12 +63,12 @@ git clone https://github.com/ammen99/wf-recorder.git && cd wf-recorder
 meson build --prefix=/usr --buildtype=release
 ninja -C build
 ```
-Optionally configure with `-Ddefault_codec='codec'`. The default is libx264. Now you can just run `./build/wf-recorder` or install it with `sudo ninja -C build install`.
+Optionally configure with `-Ddefault_codec='codec'`. The default is libvpx-vp9. Now you can just run `./build/wf-recorder` or install it with `sudo ninja -C build install`.
 
 The man page can be read with `man ./manpage/wf-recorder.1`.
 
 # Usage
-In its simplest form, run `wf-recorder` to start recording and use Ctrl+C to stop. This will create a file called `recording.mp4` in the current working directory using the default codec.
+In its simplest form, run `wf-recorder` to start recording and use Ctrl+C to stop. This will create a file called `recording.mkv` in the current working directory using the default codec.
 
 Use `-f <filename>` to specify the output file. In case of multiple outputs, you'll first be prompted to select the output you want to record. If you know the output name beforehand, you can use the `-o <output name>` option.
 
@@ -81,7 +81,7 @@ wf-recorder -g "$(slurp)"
 You can record screen and sound simultaneously with
 
 ```
-wf-recorder --audio --file=recording_with_audio.mp4
+wf-recorder --audio --file=recording_with_audio.mkv
 ```
 
 To specify an audio device, use the `-a<device>` or `--audio=<device>` options.
