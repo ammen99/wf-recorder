@@ -32,7 +32,7 @@ xbps-install -S wf-recorder
 
 ## Fedora Linux
 
-Fedora users can install from rpmfusion-free-updates. First [enable rpmfusion](https://rpmfusion.org/Configuration) and then
+Fedora users can install wf-recorder from the official repos
 ```
 sudo dnf install wf-recorder
 ```
@@ -54,7 +54,7 @@ sudo apt install libavutil-dev libavcodec-dev libavformat-dev libswscale-dev lib
 
 #### Fedora
 ```
-$ sudo dnf install wayland-devel wayland-protocols-devel ffmpeg-devel
+$ sudo dnf install wayland-devel wayland-protocols-devel ffmpeg-free-devel
 ```
 
 ### Download & Build
