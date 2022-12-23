@@ -6,8 +6,8 @@ project(
 	license: 'MIT',
 	meson_version: '>=0.47.0',
 	default_options: [
-		'cpp_std=c++11',
-        'c_std=c11',
+		'cpp_std=gnu++11',
+		'c_std=gnu11',
 		'warning_level=2',
 		'werror=false',
 	],
