@@ -697,7 +697,7 @@ static void parse_codec_opts(std::map<std::string, std::string>& options, const 
 int main(int argc, char *argv[])
 {
     FrameWriterParams params = FrameWriterParams(exit_main_loop);
-    params.file = "recording" + "." + DEFAULT_CONTAINER_FORMAT;
+    params.file = "recording." + std::string(DEFAULT_CONTAINER_FORMAT);
     params.codec = DEFAULT_CODEC;
     params.framerate = DEFAULT_FRAMERATE;
     params.audio_codec = DEFAULT_AUDIO_CODEC;
