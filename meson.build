@@ -19,6 +19,7 @@ conf_data.set('default_codec', get_option('default_codec'))
 conf_data.set('default_framerate', get_option('default_framerate'))
 conf_data.set('default_audio_codec', get_option('default_audio_codec'))
 conf_data.set('default_audio_sample_rate', get_option('default_audio_sample_rate'))
+conf_data.set('default_container_format', get_option('default_container_format'))
 conf_data.set('fallback_audio_sample_fmt', get_option('fallback_audio_sample_fmt'))
 
 version = '"@0@"'.format(meson.project_version())
