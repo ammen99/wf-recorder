@@ -44,19 +44,35 @@ void FrameWriter::init_hw_accel()
 
 void FrameWriter::load_codec_options(AVDictionary **dict)
 {
-    static const std::map<std::string, std::string> default_x264_options = {
-         {"tune", "zerolatency"},
-         {"preset", "ultrafast"},
-         {"crf", "20"},
+    using CodecOptions = std::map<std::string, std::string>;
+
+    static const CodecOptions default_x264_options = {
+        {"tune", "zerolatency"},
+        {"preset", "ultrafast"},
+        {"crf", "20"},
     };
 
-    if (params.codec.find("libx264") != std::string::npos ||
-        params.codec.find("libx265") != std::string::npos)
+    static const CodecOptions default_libvpx_options = {
+        {"cpu-used", "5"},
+        {"deadline", "realtime"},
+    };
+
+    static const std::map<std::string, const CodecOptions&> default_codec_options = {
+        {"libx264", default_x264_options},
+        {"libx265", default_x264_options},
+        {"libvpx", default_libvpx_options},
+    };
+
+    for (const auto& opts : default_codec_options)
     {
-        for (const auto& param : default_x264_options)
+        if (params.codec.find(opts.first) != std::string::npos)
         {
-            if (!params.codec_options.count(param.first))
-                params.codec_options[param.first] = param.second;
+            for (const auto& param : opts.second)
+            {
+                if (!params.codec_options.count(param.first))
+                    params.codec_options[param.first] = param.second;
+            }
+            break;
         }
     }
 
