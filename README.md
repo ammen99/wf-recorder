@@ -49,12 +49,12 @@ apt install wf-recorder
 
 #### Ubuntu
 ```
-sudo apt install libavutil-dev libavcodec-dev libavformat-dev libswscale-dev libpulse-dev
+sudo apt install g++ meson libavutil-dev libavcodec-dev libavformat-dev libswscale-dev libpulse-dev
 ```
 
 #### Fedora
 ```
-$ sudo dnf install wayland-devel wayland-protocols-devel ffmpeg-free-devel
+$ sudo dnf install gcc-c++ meson wayland-devel wayland-protocols-devel ffmpeg-free-devel pulseaudio-libs-devel
 ```
 
 ### Download & Build
