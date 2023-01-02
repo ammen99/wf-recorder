@@ -60,8 +60,9 @@ struct FrameWriterParams
     std::string hw_device; // used only if codec contains vaapi
     std::map<std::string, std::string> codec_options;
     std::map<std::string, std::string> audio_codec_options;
-    int framerate;
+    int framerate = 0;
     int sample_rate;
+    int buffrate = 0;
 
     int64_t audio_sync_offset;
 

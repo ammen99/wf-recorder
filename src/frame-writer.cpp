@@ -177,6 +177,15 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
         }
     }
 
+    if (params.framerate != 0){
+        if (params.video_filter != "null" && params.video_filter.find("fps") == std::string::npos) {
+            params.video_filter += ",fps=" + std::to_string(params.framerate);
+        }
+        else if (params.video_filter == "null"){
+            params.video_filter = "fps=" + std::to_string(params.framerate);
+        } 
+    }
+
     this->videoFilterGraph = avfilter_graph_alloc();
     av_opt_set(videoFilterGraph, "scale_sws_opts", "flags=fast_bilinear:src_range=1:dst_range=1", 0);
 
@@ -195,6 +204,9 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     buffer_filter_config << "video_size=" << params.width << "x" << params.height;
     buffer_filter_config << ":pix_fmt=" << (int)this->get_input_format();
     buffer_filter_config << ":time_base=" << US_RATIONAL.num << "/" << US_RATIONAL.den;
+    if (params.buffrate != 0) {
+        buffer_filter_config << ":frame_rate=" << params.buffrate;
+    }
     buffer_filter_config << ":pixel_aspect=1/1";
 
     int err = avfilter_graph_create_filter(&this->videoFilterSourceCtx, source,
@@ -330,7 +342,9 @@ void FrameWriter::init_video_stream()
     videoCodecCtx->height     = params.height;
     videoCodecCtx->time_base  = US_RATIONAL;
     videoCodecCtx->color_range = AVCOL_RANGE_JPEG;
+    if (params.framerate) {
     std::cout << "Framerate: " << params.framerate << std::endl;
+    }
 
     if (params.bframes != -1)
         videoCodecCtx->max_b_frames = params.bframes;
