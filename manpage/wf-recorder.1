@@ -9,7 +9,7 @@
 .Op Fl abcCdDefFghlmopPrRvxX
 .Op Fl a, -audio Op Ar =DEVICE
 .Op Fl b, -bframes Ar max_b_frames
-.Op Fl r, -buffrate Ar buffrate
+.Op Fl B, -buffrate Ar buffrate
 .Op Fl c, -codec Ar output_codec
 .Op Fl r, -framerate Ar framerate
 .Op Fl d, -device Ar encoding_device
@@ -62,8 +62,10 @@ You can find your device by running
 .Pp
 .It Fl b , -bframes Ar max_b_frames
 Sets the maximum number of B-Frames to use.
-.It Fl r , -buffrate Ar buffrate
-sets the buffer's predicted framerate.
+.It Fl B , -buffrate Ar buffrate
+Tells the encoder a prediction of what framerate to expect. 
+This preserves VFR and Solves FPS limit issue of some encoders (like svt-av1).
+Should be set to the same framerate as display.
 .Pp
 .It Fl c , -codec Ar output_codec
 Specifies the codec of the video. Supports GIF output as well.
@@ -72,7 +74,8 @@ To modify codec parameters, use
 .Fl p Ar option_name=option_value
 .Pp
 .It Fl r , -framerate Ar framerate
-Sets constant framerate.
+Sets hard constant framerate. Will duplicate frames to reach it. 
+This makes the resulting video CFR. Solves FPS limit issue of some encoders.
 .Pp
 .It Fl d , -device Ar encoding_device
 Selects the device to use when encoding the video.
