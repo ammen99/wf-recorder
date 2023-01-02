@@ -629,7 +629,7 @@ Examples:)");
     printf(R"(
 
   - wf-recorder                         Records the video. Use Ctrl+C to stop recording.
-                                        The video file will be stored as recording.mp4 in the
+                                        The video file will be stored as recording.webm in the
                                         current working directory.
 
   - wf-recorder -f <filename>.ext       Records the video. Use Ctrl+C to stop recording.
@@ -641,7 +641,7 @@ Examples:)");
   Video and Audio:
 
   - wf-recorder -a                      Records the video and audio. Use Ctrl+C to stop recording.
-                                        The video file will be stored as recording.mp4 in the
+                                        The video file will be stored as recording.webm in the
                                         current working directory.
 
   - wf-recorder -a -f <filename>.ext    Records the video and audio. Use Ctrl+C to stop recording.
@@ -700,7 +700,7 @@ static void parse_codec_opts(std::map<std::string, std::string>& options, const 
 int main(int argc, char *argv[])
 {
     FrameWriterParams params = FrameWriterParams(exit_main_loop);
-    params.file = "recording.mp4";
+    params.file = "recording." + std::string(DEFAULT_CONTAINER_FORMAT);
     params.codec = DEFAULT_CODEC;
     params.audio_codec = DEFAULT_AUDIO_CODEC;
     params.sample_rate = DEFAULT_AUDIO_SAMPLE_RATE;
