@@ -21,6 +21,7 @@ jobs:
               'pkgconfig(wayland-client)' 'pkgconfig(wayland-protocols)' 'pkgconfig(libpulse-simple)'
               'pkgconfig(libavutil)' 'pkgconfig(libavcodec)' 'pkgconfig(libavformat)'
               'pkgconfig(libavdevice)' 'pkgconfig(libavfilter)' 'pkgconfig(libswresample)'
+              'pkgconfig(gbm)'
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0  # Shallow clones speed things up

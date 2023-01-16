@@ -18,10 +18,14 @@
 #include <signal.h>
 #include <unistd.h>
 #include <wayland-client-protocol.h>
+#include <gbm.h>
+#include <fcntl.h>
 
 #include "frame-writer.hpp"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 #include "xdg-output-unstable-v1-client-protocol.h"
+#include "linux-dmabuf-unstable-v1-client-protocol.h"
+#include "wl-drm-client-protocol.h"
 
 #include "config.h"
 
@@ -37,9 +41,15 @@ static const int GRACEFUL_TERMINATION_SIGNALS[] = { SIGTERM, SIGINT, SIGHUP };
 std::mutex frame_writer_mutex, frame_writer_pending_mutex;
 std::unique_ptr<FrameWriter> frame_writer;
 
+static int drm_fd = -1;
+static struct gbm_device *gbm_device = NULL;
+static std::string drm_device_name;
+
 static struct wl_shm *shm = NULL;
 static struct zxdg_output_manager_v1 *xdg_output_manager = NULL;
 static struct zwlr_screencopy_manager_v1 *screencopy_manager = NULL;
+static struct zwp_linux_dmabuf_v1 *dmabuf = NULL;
+static struct wl_drm *drm = NULL;
 void request_next_frame();
 
 struct wf_recorder_output
@@ -111,9 +121,11 @@ const zxdg_output_v1_listener xdg_output_implementation = {
 
 struct wf_buffer
 {
+    struct gbm_bo *bo;
     struct wl_buffer *wl_buffer;
     void *data;
     enum wl_shm_format format;
+    int drm_format;
     int width, height, stride;
     bool y_invert;
 
@@ -182,10 +194,16 @@ static struct wl_buffer *create_shm_buffer(uint32_t fmt,
 }
 
 static bool use_damage = true;
+static bool use_dmabuf = false;
+static bool use_hwupload = false;
 
 static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, uint32_t format,
     uint32_t width, uint32_t height, uint32_t stride)
 {
+    if (use_dmabuf) {
+        return;
+    }
+
     auto& buffer = buffers[active_buffer];
 
     buffer.format = (wl_shm_format)format;
@@ -234,6 +252,7 @@ static void frame_handle_ready(void *, struct zwlr_screencopy_frame_v1 *,
 
 static void frame_handle_failed(void *, struct zwlr_screencopy_frame_v1 *) {
     std::cerr << "Failed to copy frame, retrying..." << std::endl;
+    buffer_copy_done = true;
     ++frame_failed_cnt;
     if (frame_failed_cnt > MAX_FRAME_FAILURES)
     {
@@ -247,12 +266,122 @@ static void frame_handle_damage(void *, struct zwlr_screencopy_frame_v1 *,
 {
 }
 
+static void dmabuf_created(void *data, struct zwp_linux_buffer_params_v1 *,
+    struct wl_buffer *wl_buffer) {
+
+    auto& buffer = buffers[active_buffer];
+    buffer.wl_buffer = wl_buffer;
+
+    zwlr_screencopy_frame_v1 *frame = (zwlr_screencopy_frame_v1*) data;
+
+    if (use_damage) {
+        zwlr_screencopy_frame_v1_copy_with_damage(frame, buffer.wl_buffer);
+    } else {
+        zwlr_screencopy_frame_v1_copy(frame, buffer.wl_buffer);
+    }
+}
+
+static void dmabuf_failed(void *, struct zwp_linux_buffer_params_v1 *) {
+    std::cerr << "Failed to create dmabuf" << std::endl;
+    exit_main_loop = true;
+}
+
+static const struct zwp_linux_buffer_params_v1_listener params_listener = {
+    .created = dmabuf_created,
+    .failed = dmabuf_failed,
+};
+
+static wl_shm_format drm_to_wl_shm_format(uint32_t format)
+{
+    if (format == GBM_FORMAT_ARGB8888) {
+        return WL_SHM_FORMAT_ARGB8888;
+    } else if (format == GBM_FORMAT_XRGB8888) {
+        return WL_SHM_FORMAT_XRGB8888;
+    } else {
+        return (wl_shm_format)format;
+    }
+}
+
+static void frame_handle_linux_dmabuf(void *, struct zwlr_screencopy_frame_v1 *frame,
+    uint32_t format, uint32_t width, uint32_t height)
+{
+    if (!use_dmabuf) {
+        return;
+    }
+
+    auto& buffer = buffers[active_buffer];
+
+    buffer.format = drm_to_wl_shm_format(format);
+    buffer.drm_format = format;
+    buffer.width = width;
+    buffer.height = height;
+
+    if (!buffer.wl_buffer) {
+        buffer.bo = gbm_bo_create(gbm_device, buffer.width,
+            buffer.height, format, GBM_BO_USE_LINEAR | GBM_BO_USE_RENDERING);
+        if (buffer.bo == NULL)
+        {
+            std::cerr << "Failed to create gbm bo" << std::endl;
+            exit_main_loop = true;
+            return;
+        }
+
+        buffer.stride = gbm_bo_get_stride(buffer.bo);
+
+        struct zwp_linux_buffer_params_v1 *params =
+            zwp_linux_dmabuf_v1_create_params(dmabuf);
+
+        uint64_t mod = gbm_bo_get_modifier(buffer.bo);
+        zwp_linux_buffer_params_v1_add(params,
+            gbm_bo_get_fd(buffer.bo), 0,
+            gbm_bo_get_offset(buffer.bo, 0),
+            gbm_bo_get_stride(buffer.bo),
+            mod >> 32, mod & 0xffffffff);
+
+        zwp_linux_buffer_params_v1_add_listener(params, &params_listener, frame);
+
+        zwp_linux_buffer_params_v1_create(params, buffer.width,
+            buffer.height, format, 0);
+    } else {
+        if (use_damage) {
+            zwlr_screencopy_frame_v1_copy_with_damage(frame, buffer.wl_buffer);
+        } else {
+            zwlr_screencopy_frame_v1_copy(frame, buffer.wl_buffer);
+        }
+    }
+}
+
+static void frame_handle_buffer_done(void *, struct zwlr_screencopy_frame_v1 *) {
+}
+
 static const struct zwlr_screencopy_frame_v1_listener frame_listener = {
     .buffer = frame_handle_buffer,
     .flags = frame_handle_flags,
     .ready = frame_handle_ready,
     .failed = frame_handle_failed,
     .damage = frame_handle_damage,
+    .linux_dmabuf = frame_handle_linux_dmabuf,
+    .buffer_done = frame_handle_buffer_done,
+};
+
+static void drm_handle_device(void *, struct wl_drm *, const char *name) {
+    drm_device_name = name;
+}
+
+static void drm_handle_format(void *, struct wl_drm *, uint32_t) {
+}
+
+static void drm_handle_authenticated(void *, struct wl_drm *) {
+}
+
+static void drm_handle_capabilities(void *, struct wl_drm *, uint32_t) {
+}
+
+static const struct wl_drm_listener drm_listener = {
+    .device = drm_handle_device,
+    .format = drm_handle_format,
+    .authenticated = drm_handle_authenticated,
+    .capabilities = drm_handle_capabilities,
 };
 
 static void handle_global(void*, struct wl_registry *registry,
@@ -272,12 +401,22 @@ static void handle_global(void*, struct wl_registry *registry,
     else if (strcmp(interface, zwlr_screencopy_manager_v1_interface.name) == 0)
     {
         screencopy_manager = (zwlr_screencopy_manager_v1*) wl_registry_bind(registry, name,
-            &zwlr_screencopy_manager_v1_interface, 2);
+            &zwlr_screencopy_manager_v1_interface, 3);
     }
     else if (strcmp(interface, zxdg_output_manager_v1_interface.name) == 0)
     {
         xdg_output_manager = (zxdg_output_manager_v1*) wl_registry_bind(registry, name,
             &zxdg_output_manager_v1_interface, 2); // version 2 for name & description, if available
+    }
+    else if (strcmp(interface, zwp_linux_dmabuf_v1_interface.name) == 0)
+    {
+        dmabuf = (zwp_linux_dmabuf_v1*) wl_registry_bind(registry, name,
+            &zwp_linux_dmabuf_v1_interface, 3);
+    }
+    else if (strcmp(interface, wl_drm_interface.name) == 0)
+    {
+        drm = (wl_drm*) wl_registry_bind(registry, name, &wl_drm_interface, 1);
+        wl_drm_add_listener(drm, &drm_listener, NULL);
     }
 }
 
@@ -302,6 +441,9 @@ static int next_frame(int frame)
 
 static InputFormat get_input_format(wf_buffer& buffer)
 {
+    if (use_dmabuf && !use_hwupload) {
+        return INPUT_FORMAT_DMABUF;
+    }
     switch (buffer.format) {
     case WL_SHM_FORMAT_ARGB8888:
     case WL_SHM_FORMAT_XRGB8888:
@@ -359,6 +501,7 @@ static void write_loop(FrameWriterParams params)
         {
             /* This is the first time buffer attributes are available */
             params.format = get_input_format(buffer);
+            params.drm_format = buffer.drm_format;
             params.width = buffer.width;
             params.height = buffer.height;
             params.stride = buffer.stride;
@@ -375,8 +518,30 @@ static void write_loop(FrameWriterParams params)
 #endif
         }
 
-        bool do_cont = frame_writer->add_frame((unsigned char*)buffer.data,
-            buffer.base_usec, buffer.y_invert);
+        bool do_cont = false;
+
+        if (use_dmabuf) {
+            if (use_hwupload) {
+                uint32_t stride = 0;
+                void *map_data = NULL;
+                void *data = gbm_bo_map(buffer.bo, 0, 0, buffer.width, buffer.height,
+                    GBM_BO_TRANSFER_READ, &stride, &map_data);
+                if (!data) {
+                    std::cerr << "Failed to map bo" << std::endl;
+                    break;
+                }
+                do_cont = frame_writer->add_frame((unsigned char*)data,
+                    buffer.base_usec, buffer.y_invert);
+                gbm_bo_unmap(buffer.bo, map_data);
+            } else {
+                do_cont = frame_writer->add_frame(buffer.bo,
+                    buffer.base_usec, buffer.y_invert);
+            }
+        } else {
+            do_cont = frame_writer->add_frame((unsigned char*)buffer.data,
+                buffer.base_usec, buffer.y_invert);
+        }
+
         if (!do_cont) {
             break;
         }
@@ -435,6 +600,11 @@ static void check_has_protos()
     if (xdg_output_manager == NULL)
     {
         fprintf(stderr, "compositor doesn't support xdg-output-unstable-v1\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (use_dmabuf && dmabuf == NULL) {
+        fprintf(stderr, "compositor doesn't support linux-dmabuf-unstable-v1\n");
         exit(EXIT_FAILURE);
     }
 
@@ -605,7 +775,7 @@ Use Ctrl+C to stop.)");
                             -p <option_name>=<option_value>
 
   -F, --filter              Specify the ffmpeg filter string to use. For example,
-                            -F hwupload,scale_vaapi=format=nv12 is used for VAAPI.
+                            -F scale_vaapi=format=nv12 is used for VAAPI.
 
   -b, --bframes             This option is used to set the maximum number of b-frames to be used.
                             If b-frames are not supported by your hardware, set this to 0.
@@ -857,6 +1027,62 @@ int main(int argc, char *argv[])
     wl_registry_add_listener(registry, &registry_listener, NULL);
     sync_wayland();
 
+    if (params.codec.find("vaapi") != std::string::npos)
+    {
+        std::cout << "using VA-API, trying to enable DMA-BUF capture..." << std::endl;
+
+        // try compositor device if not explicitly set
+        if (params.hw_device.empty())
+        {
+            params.hw_device = drm_device_name;
+        }
+
+        // check we use same device as compositor
+        if (!params.hw_device.empty() && params.hw_device == drm_device_name)
+        {
+            use_dmabuf = true;
+        } else {
+            std::cout << "compositor running on different device, disabling DMA-BUF" << std::endl;
+        }
+
+        // region with dmabuf not implemented in wlroots
+        if (selected_region.is_selected())
+        {
+            use_dmabuf = false;
+            std::cout << "region capture not supported with DMA-BUF" << std::endl;
+        }
+
+        if (params.video_filter == "null")
+        {
+            params.video_filter = "scale_vaapi=format=nv12:out_range=full";
+            if (!use_dmabuf)
+            {
+                params.video_filter.insert(0, "hwupload,");
+            }
+        }
+
+        if (use_dmabuf)
+        {
+            std::cout << "enabled DMA-BUF capture, device " << params.hw_device.c_str() << std::endl;
+
+            drm_fd = open(params.hw_device.c_str(), O_RDWR);
+            if (drm_fd < 0)
+            {
+                fprintf(stderr, "failed to open drm device: %m\n");
+                return EXIT_FAILURE;
+            }
+
+            gbm_device = gbm_create_device(drm_fd);
+            if (gbm_device == NULL)
+            {
+                fprintf(stderr, "failed to create gbm device: %m\n");
+                return EXIT_FAILURE;
+            }
+
+            use_hwupload = params.video_filter.find("hwupload") != std::string::npos;
+        }
+    }
+
     check_has_protos();
     load_output_info();
 
@@ -924,6 +1150,7 @@ int main(int argc, char *argv[])
     active_buffer = 0;
     for (auto& buffer : buffers)
     {
+        buffer.bo = NULL;
         buffer.wl_buffer = NULL;
         buffer.available = false;
         buffer.released = true;
@@ -985,6 +1212,11 @@ int main(int argc, char *argv[])
     {
         if (buffer.wl_buffer)
             wl_buffer_destroy(buffer.wl_buffer);
+    }
+
+    if (gbm_device) {
+        gbm_device_destroy(gbm_device);
+        close(drm_fd);
     }
 
     return EXIT_SUCCESS;

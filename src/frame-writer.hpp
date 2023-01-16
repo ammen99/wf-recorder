@@ -26,6 +26,7 @@ extern "C"
     #include <libavutil/pixdesc.h>
     #include <libavutil/hwcontext.h>
     #include <libavutil/opt.h>
+    #include <libavutil/hwcontext_drm.h>
 }
 
 #include "config.h"
@@ -39,6 +40,7 @@ enum InputFormat
     INPUT_FORMAT_BGR565,
     INPUT_FORMAT_X2RGB10,
     INPUT_FORMAT_X2BGR10,
+    INPUT_FORMAT_DMABUF,
 };
 
 struct FrameWriterParams
@@ -49,6 +51,7 @@ struct FrameWriterParams
     int stride;
 
     InputFormat format;
+    int drm_format;
 
     std::string video_filter = "null"; // dummy filter
 
@@ -92,6 +95,9 @@ class FrameWriter
 
     AVBufferRef *hw_device_context = NULL;
     AVBufferRef *hw_frame_context = NULL;
+    AVBufferRef *hw_frame_context_in = NULL;
+
+    std::map<struct gbm_bo*, AVFrame*> mapped_frames;
 
     AVPixelFormat lookup_pixel_format(std::string pix_fmt);
     AVPixelFormat handle_buffersink_pix_fmt(const AVCodec *codec);
@@ -112,15 +118,12 @@ class FrameWriter
     void send_audio_pkt(AVFrame *frame);
 #endif
     void finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt);
-
-    /**
-     * Upload data to a frame.
-     */
-     AVFrame *prepare_frame_data(const uint8_t* pixels, bool y_invert);
+    bool push_frame(AVFrame *frame, int64_t usec);
 
   public:
     FrameWriter(const FrameWriterParams& params);
     bool add_frame(const uint8_t* pixels, int64_t usec, bool y_invert);
+    bool add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert);
 
 #ifdef HAVE_PULSE
     /* Buffer must have size get_audio_buffer_size() */
