@@ -605,7 +605,7 @@ Use Ctrl+C to stop.)");
                             -p <option_name>=<option_value>
 
   -F, --filter              Specify the ffmpeg filter string to use. For example,
-                            -F hwupload,scale_vaapi=format=nv12 is used for VAAPI.
+                            -F format=nv12,hwupload is used for VAAPI.
 
   -b, --bframes             This option is used to set the maximum number of b-frames to be used.
                             If b-frames are not supported by your hardware, set this to 0.

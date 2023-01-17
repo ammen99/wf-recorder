@@ -171,9 +171,9 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
 {
     if (params.codec.find("vaapi") != std::string::npos) {
         if (params.video_filter == "null") {
-            // Add `hwupload,scale_vaapi=format=nv12` by default
+            // Add `format=nv12,hwupload` by default
             // It is necessary for conversion to a proper format.
-            params.video_filter = "hwupload,scale_vaapi=format=nv12";
+            params.video_filter = "format=nv12,hwupload";
         }
     }
 
