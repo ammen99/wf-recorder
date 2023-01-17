@@ -341,7 +341,6 @@ void FrameWriter::init_video_stream()
     videoCodecCtx->width      = params.width;
     videoCodecCtx->height     = params.height;
     videoCodecCtx->time_base  = US_RATIONAL;
-    videoCodecCtx->color_range = AVCOL_RANGE_JPEG;
     if (params.framerate) {
     std::cout << "Framerate: " << params.framerate << std::endl;
     }
