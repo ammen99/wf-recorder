@@ -24,6 +24,7 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0  # Shallow clones speed things up
+      - run: git config --global --add safe.directory '*' # Needed for git rev-parse
       - name: meson configure
         run: meson ./Build
       - name: compile with ninja
