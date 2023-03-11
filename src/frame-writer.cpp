@@ -187,12 +187,15 @@ AVPixelFormat FrameWriter::handle_buffersink_pix_fmt(const AVCodec *codec)
     if (is_fmt_supported(in_fmt, codec->pix_fmts))
         return in_fmt;
 
-    /* Otherwise, try to use the already tested YUV420p */
-    if (is_fmt_supported(AV_PIX_FMT_YUV420P, codec->pix_fmts))
-        return AV_PIX_FMT_YUV420P;
-
-    /* Lastly, use the first supported format */
-    return codec->pix_fmts[0];
+    /* Choose the format supported by the codec which best approximates the
+     * input fmt. */
+    AVPixelFormat best_format = AV_PIX_FMT_NONE;
+    for (int i = 0; codec->pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
+        int loss = 0;
+        best_format = av_find_best_pix_fmt_of_2(best_format,
+            codec->pix_fmts[i], in_fmt, false, &loss);
+    }
+    return best_format;
 }
 
 void FrameWriter::init_video_filters(const AVCodec *codec)
