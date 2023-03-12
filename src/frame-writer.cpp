@@ -54,6 +54,8 @@ void FrameWriter::load_codec_options(AVDictionary **dict)
 
     static const CodecOptions default_libvpx_options = {
         {"cpu-used", "5"},
+        {"preset", "ultrafast"},
+        {"tune-content", "screen"},
         {"deadline", "realtime"},
     };
 

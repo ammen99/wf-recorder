@@ -63,7 +63,7 @@ git clone https://github.com/ammen99/wf-recorder.git && cd wf-recorder
 meson build --prefix=/usr --buildtype=release
 ninja -C build
 ```
-Optionally configure with `-Ddefault_codec='codec'`. The default is libvpx. Now you can just run `./build/wf-recorder` or install it with `sudo ninja -C build install`.
+Optionally configure with `-Ddefault_codec='codec'`. The default is libvpx-vp9. Now you can just run `./build/wf-recorder` or install it with `sudo ninja -C build install`.
 
 The man page can be read with `man ./manpage/wf-recorder.1`.
 
@@ -108,8 +108,8 @@ To set a specific output format, use the `--muxer` option. For example, to outpu
 wf-recorder --muxer=v4l2 --codec=rawvideo --file=/dev/video2
 ```
 
-To use GPU encoding, use a VAAPI codec (for ex. `vp8_vaapi`) and specify a GPU device to use with the `-d` option:
+To use GPU encoding, use a VAAPI codec (for ex. `vp9_vaapi`) and specify a GPU device to use with the `-d` option:
 ```
-wf-recorder -f test-vaapi.webm -c vp8_vaapi -d /dev/dri/renderD128
+wf-recorder -f test-vaapi.webm -c vp9_vaapi -d /dev/dri/renderD128
 ```
 Some drivers report support for rgb0 data for vaapi input but really only support yuv planar formats. In this case, use the `-x yuv420p` or `--pixel-format yuv420p` option in addition to the vaapi options to convert the data to yuv planar data before sending it to the GPU.
