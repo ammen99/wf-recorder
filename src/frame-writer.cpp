@@ -790,13 +790,16 @@ FrameWriter::~FrameWriter()
     // Writing the delayed frames:
     AVPacket *pkt = av_packet_alloc();
 
-    encode(videoCodecCtx, NULL, pkt);
-#ifdef HAVE_PULSE
-    if (params.enable_audio)
+    if (videoCodecCtx->delay)
     {
-        encode(audioCodecCtx, NULL, pkt);
-    }
+        encode(videoCodecCtx, NULL, pkt);
+#ifdef HAVE_PULSE
+        if (params.enable_audio)
+        {
+            encode(audioCodecCtx, NULL, pkt);
+        }
 #endif
+    }
     // Writing the end of the file.
     av_write_trailer(fmtCtx);
 
