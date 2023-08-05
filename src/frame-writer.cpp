@@ -10,6 +10,7 @@
 #include <cstring>
 #include <sstream>
 #include "averr.h"
+#include <gbm.h>
 
 
 static const AVRational US_RATIONAL{1,1000000} ;
@@ -124,10 +125,37 @@ AVPixelFormat FrameWriter::get_input_format()
     case INPUT_FORMAT_X2BGR10:
         return AV_PIX_FMT_X2BGR10LE;
 #endif
+    case INPUT_FORMAT_DMABUF:
+        return AV_PIX_FMT_VAAPI;
     default:
         std::cerr << "Unknown format: " << params.format << std::endl;
         std::exit(-1);
     }
+}
+
+static const struct {
+    int drm;
+    AVPixelFormat av;
+} drm_av_format_table [] = {
+    { GBM_FORMAT_ARGB8888, AV_PIX_FMT_BGRA },
+    { GBM_FORMAT_XRGB8888, AV_PIX_FMT_BGR0 },
+    { GBM_FORMAT_ABGR8888, AV_PIX_FMT_RGBA },
+    { GBM_FORMAT_XBGR8888, AV_PIX_FMT_RGB0 },
+    { GBM_FORMAT_RGBA8888, AV_PIX_FMT_ABGR },
+    { GBM_FORMAT_RGBX8888, AV_PIX_FMT_0BGR },
+    { GBM_FORMAT_BGRA8888, AV_PIX_FMT_ARGB },
+    { GBM_FORMAT_BGRX8888, AV_PIX_FMT_0RGB },
+};
+
+static AVPixelFormat get_drm_av_format(int fmt)
+{
+    for (size_t i = 0; i < sizeof(drm_av_format_table) / sizeof(drm_av_format_table[0]); ++i) {
+        if (drm_av_format_table[i].drm == fmt) {
+            return drm_av_format_table[i].av;
+        }
+    }
+    std::cerr << "Failed to find AV format for" << fmt;
+    return AV_PIX_FMT_RGBA;
 }
 
 AVPixelFormat FrameWriter::lookup_pixel_format(std::string pix_fmt)
@@ -169,14 +197,6 @@ AVPixelFormat FrameWriter::handle_buffersink_pix_fmt(const AVCodec *codec)
 
 void FrameWriter::init_video_filters(const AVCodec *codec)
 {
-    if (params.codec.find("vaapi") != std::string::npos) {
-        if (params.video_filter == "null") {
-            // Add `hwupload,scale_vaapi=format=nv12` by default
-            // It is necessary for conversion to a proper format.
-            params.video_filter = "hwupload,scale_vaapi=format=nv12";
-        }
-    }
-
     if (params.framerate != 0){
         if (params.video_filter != "null" && params.video_filter.find("fps") == std::string::npos) {
             params.video_filter += ",fps=" + std::to_string(params.framerate);
@@ -197,6 +217,33 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
         exit(-1);
     }
 
+    if (this->hw_device_context) {
+        this->hw_frame_context = av_hwframe_ctx_alloc(this->hw_device_context);
+        AVHWFramesContext *hwfc = reinterpret_cast<AVHWFramesContext*>(this->hw_frame_context->data);
+        hwfc->format = AV_PIX_FMT_VAAPI;
+        hwfc->sw_format = AV_PIX_FMT_NV12;
+        hwfc->width = params.width;
+        hwfc->height = params.height;
+        hwfc->initial_pool_size = 16;
+        int err = av_hwframe_ctx_init(this->hw_frame_context);
+        if (err < 0) {
+            std::cerr << "Cannot create hw frames context: " << averr(err) << std::endl;
+            exit(-1);
+        }
+
+        this->hw_frame_context_in = av_hwframe_ctx_alloc(this->hw_device_context);
+        hwfc = reinterpret_cast<AVHWFramesContext*>(this->hw_frame_context_in->data);
+        hwfc->format = AV_PIX_FMT_VAAPI;
+        hwfc->sw_format = get_drm_av_format(params.drm_format);
+        hwfc->width = params.width;
+        hwfc->height = params.height;
+        err = av_hwframe_ctx_init(this->hw_frame_context_in);
+        if (err < 0) {
+            std::cerr << "Cannot create hw frames context: " << averr(err) << std::endl;
+            exit(-1);
+        }
+    }
+
     // Build the configuration of the 'buffer' filter.
     // See: ffmpeg -h filter=buffer
     // See: https://ffmpeg.org/ffmpeg-filters.html#buffer
@@ -214,6 +261,17 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     if (err < 0) {
         std::cerr << "Cannot create video filter in: " << averr(err) << std::endl;;
         exit(-1);
+    }
+
+    AVBufferSrcParameters *p = av_buffersrc_parameters_alloc();
+    memset(p, 0, sizeof(*p));
+    p->format = AV_PIX_FMT_NONE;
+    p->hw_frames_ctx = this->hw_frame_context_in;
+    err = av_buffersrc_parameters_set(this->videoFilterSourceCtx, p);
+    av_free(p);
+    if (err < 0) {
+         std::cerr << "Cannot set hwcontext filter in: " << averr(err) << std::endl;;
+         exit(-1);
     }
 
     err = avfilter_graph_create_filter(&this->videoFilterSinkCtx, sink, "Sink",
@@ -312,8 +370,6 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     this->videoCodecCtx->framerate = filter_output->frame_rate; // can be 1/0 if unknown
     this->videoCodecCtx->sample_aspect_ratio = filter_output->sample_aspect_ratio;
 
-    this->hw_frame_context = av_buffersink_get_hw_frames_ctx(
-        this->videoFilterSinkCtx);
     avfilter_inout_free(&inputs);
     avfilter_inout_free(&outputs);
 }
@@ -609,35 +665,8 @@ void FrameWriter::encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt)
     }
 }
 
-AVFrame *FrameWriter::prepare_frame_data(const uint8_t* pixels, bool y_invert)
+bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
 {
-    /* Calculate data after y-inversion */
-    int stride[] = {int(params.stride)};
-    const uint8_t *formatted_pixels = pixels;
-    if (y_invert)
-    {
-        formatted_pixels += stride[0] * (params.height - 1);
-        stride[0] *= -1;
-    }
-
-    auto frame = av_frame_alloc();
-    if (!frame) {
-        std::cerr << "Failed to allocate frame!" << std::endl;
-        return NULL;
-    }
-
-    frame->data[0] = (uint8_t*)formatted_pixels;
-    frame->linesize[0] = stride[0];
-    frame->format = get_input_format();
-    frame->width = params.width;
-    frame->height = params.height;
-
-    return frame;
-}
-
-bool FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
-{
-    auto frame = prepare_frame_data(pixels, y_invert);
     frame->pts = usec; // We use time_base = 1/US_RATE
 
     // Push the RGB frame into the filtergraph */
@@ -660,6 +689,7 @@ bool FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
         if (err == AVERROR(EAGAIN)) {
             // Not an error. No frame available.
             // Try again later.
+            av_frame_free(&filtered_frame);
             break;
         } else if (err == AVERROR_EOF) {
             // There will be no more output frames on this sink.
@@ -685,6 +715,99 @@ bool FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 
     av_frame_free(&frame);
     return true;
+}
+
+bool FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
+{
+    /* Calculate data after y-inversion */
+    int stride[] = {int(params.stride)};
+    const uint8_t *formatted_pixels = pixels;
+    if (y_invert)
+    {
+        formatted_pixels += stride[0] * (params.height - 1);
+        stride[0] *= -1;
+    }
+
+    auto frame = av_frame_alloc();
+    if (!frame) {
+        std::cerr << "Failed to allocate frame!" << std::endl;
+        return false;
+    }
+
+    frame->data[0] = (uint8_t*)formatted_pixels;
+    frame->linesize[0] = stride[0];
+    frame->format = get_input_format();
+    frame->width = params.width;
+    frame->height = params.height;
+
+    return push_frame(frame, usec);
+}
+
+bool FrameWriter::add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert)
+{
+    if (y_invert)
+    {
+        std::cerr << "Y_INVERT not supported with dmabuf" << std::endl;
+        return false;
+    }
+
+    auto frame = av_frame_alloc();
+    if (!frame)
+    {
+        std::cerr << "Failed to allocate frame!" << std::endl;
+        return false;
+    }
+
+    if (mapped_frames.find(bo) == mapped_frames.end()) {
+        auto vaapi_frame = av_frame_alloc();
+        if (!vaapi_frame) {
+            std::cerr << "Failed to allocate frame!" << std::endl;
+            return false;
+        }
+
+        AVDRMFrameDescriptor *desc = (AVDRMFrameDescriptor*) av_mallocz(sizeof(AVDRMFrameDescriptor));
+        desc->nb_layers = 1;
+        desc->nb_objects = 1;
+        desc->objects[0].fd = gbm_bo_get_fd(bo);
+        desc->objects[0].format_modifier = gbm_bo_get_modifier(bo);
+        desc->objects[0].size = gbm_bo_get_stride(bo) * gbm_bo_get_height(bo);
+        desc->layers[0].format = gbm_bo_get_format(bo);
+        desc->layers[0].nb_planes = gbm_bo_get_plane_count(bo);
+        for (int i = 0; i < gbm_bo_get_plane_count(bo); ++i) {
+            desc->layers[0].planes[i].object_index = 0;
+            desc->layers[0].planes[i].pitch = gbm_bo_get_stride_for_plane(bo, i);
+            desc->layers[0].planes[i].offset = gbm_bo_get_offset(bo, i);
+        }
+
+        frame->width = gbm_bo_get_width(bo);
+        frame->height = gbm_bo_get_height(bo);
+        frame->format = AV_PIX_FMT_DRM_PRIME;
+        frame->data[0] = reinterpret_cast<uint8_t*>(desc);
+        frame->buf[0] = av_buffer_create(frame->data[0], sizeof(*desc),
+            [](void *, uint8_t *data) {
+                av_free(data);
+        }, frame, 0);
+
+        int ret = av_hwframe_get_buffer(this->hw_frame_context_in, vaapi_frame, 0);
+        if (ret < 0)
+        {
+            std::cerr << "Failed to allocate vaapi buffer " << averr(ret) << std::endl;
+            return false;
+        }
+
+        ret = av_hwframe_map(vaapi_frame, frame, AV_HWFRAME_MAP_READ);
+        av_frame_unref(frame);
+        if (ret < 0)
+        {
+            std::cerr << "Failed to map vaapi frame " << averr(ret) << std::endl;
+            return false;
+        }
+
+        mapped_frames[bo] = vaapi_frame;
+    }
+
+    av_frame_ref(frame, mapped_frames[bo]);
+    return push_frame(frame, usec);
 }
 
 #ifdef HAVE_PULSE

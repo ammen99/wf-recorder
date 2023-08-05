@@ -111,7 +111,7 @@ installation supports by running
 .Dl $ ffmpeg -muxers
 .Pp
 .It Fl F , -filter Ar filter_string
-Set the ffmpeg filter to use. VAAPI requires `hwupload,scale_vaapi=nv12` to work.
+Set the ffmpeg filter to use. VAAPI requires `scale_vaapi=format=nv12:out_range=full` to work.
 .Pp
 .It Fl g , -geometry Ar screen_geometry
 Selects a specific part of the screen. The format is "x,y WxH".
