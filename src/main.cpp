@@ -317,8 +317,14 @@ static void frame_handle_linux_dmabuf(void *, struct zwlr_screencopy_frame_v1 *f
     buffer.height = height;
 
     if (!buffer.wl_buffer) {
-        buffer.bo = gbm_bo_create(gbm_device, buffer.width,
-            buffer.height, format, GBM_BO_USE_LINEAR | GBM_BO_USE_RENDERING);
+        const uint64_t modifier = 0; // DRM_FORMAT_MOD_LINEAR
+        buffer.bo = gbm_bo_create_with_modifiers(gbm_device, buffer.width,
+            buffer.height, format, &modifier, 1);
+        if (buffer.bo == NULL)
+        {
+            buffer.bo = gbm_bo_create(gbm_device, buffer.width,
+                buffer.height, format, GBM_BO_USE_LINEAR | GBM_BO_USE_RENDERING);
+        }
         if (buffer.bo == NULL)
         {
             std::cerr << "Failed to create gbm bo" << std::endl;
