@@ -252,8 +252,8 @@ static void frame_handle_ready(void *, struct zwlr_screencopy_frame_v1 *,
 
 static void frame_handle_failed(void *, struct zwlr_screencopy_frame_v1 *) {
     std::cerr << "Failed to copy frame, retrying..." << std::endl;
-    buffer_copy_done = true;
     ++frame_failed_cnt;
+    request_next_frame();
     if (frame_failed_cnt > MAX_FRAME_FAILURES)
     {
         std::cerr << "Failed to copy frame too many times, exiting!" << std::endl;
@@ -548,11 +548,11 @@ static void write_loop(FrameWriterParams params)
                 buffer.base_usec, buffer.y_invert);
         }
 
+        frame_writer_mutex.unlock();
+
         if (!do_cont) {
             break;
         }
-
-        frame_writer_mutex.unlock();
 
         buffer.available = false;
         buffer.released = true;
@@ -1212,7 +1212,10 @@ int main(int argc, char *argv[])
         active_buffer = next_frame(active_buffer);
     }
 
-    writer_thread.join();
+    if (writer_thread.joinable())
+    {
+        writer_thread.join();
+    }
 
     for (auto& buffer : buffers)
     {
