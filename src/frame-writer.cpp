@@ -145,6 +145,7 @@ static const struct {
     { GBM_FORMAT_RGBX8888, AV_PIX_FMT_0BGR },
     { GBM_FORMAT_BGRA8888, AV_PIX_FMT_ARGB },
     { GBM_FORMAT_BGRX8888, AV_PIX_FMT_0RGB },
+    { GBM_FORMAT_XRGB2101010, AV_PIX_FMT_X2RGB10 },
 };
 
 static AVPixelFormat get_drm_av_format(int fmt)
