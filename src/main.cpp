@@ -469,6 +469,15 @@ static InputFormat get_input_format(wf_buffer& buffer)
     case WL_SHM_FORMAT_ABGR2101010:
     case WL_SHM_FORMAT_XBGR2101010:
         return INPUT_FORMAT_X2BGR10;
+    case WL_SHM_FORMAT_ABGR16161616:
+    case WL_SHM_FORMAT_XBGR16161616:
+        return INPUT_FORMAT_RGBX64;
+    case WL_SHM_FORMAT_ARGB16161616:
+    case WL_SHM_FORMAT_XRGB16161616:
+        return INPUT_FORMAT_BGRX64;
+    case WL_SHM_FORMAT_ABGR16161616F:
+    case WL_SHM_FORMAT_XBGR16161616F:
+        return INPUT_FORMAT_RGBX64F;
     default:
         fprintf(stderr, "Unsupported buffer format %d, exiting.", buffer.format);
         std::exit(0);

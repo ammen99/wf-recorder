@@ -125,6 +125,14 @@ AVPixelFormat FrameWriter::get_input_format()
     case INPUT_FORMAT_X2BGR10:
         return AV_PIX_FMT_X2BGR10LE;
 #endif
+    case INPUT_FORMAT_RGBX64:
+        return AV_PIX_FMT_RGBA64LE;
+    case INPUT_FORMAT_BGRX64:
+        return AV_PIX_FMT_BGRA64LE;
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 33, 101)
+    case INPUT_FORMAT_RGBX64F:
+        return AV_PIX_FMT_RGBAF16LE;
+#endif
     case INPUT_FORMAT_DMABUF:
         return AV_PIX_FMT_VAAPI;
     default:
