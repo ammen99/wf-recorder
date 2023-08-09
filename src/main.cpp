@@ -496,6 +496,10 @@ static void write_loop(FrameWriterParams params)
         while(buffers.encode().ready_encode() != true && !exit_main_loop) {
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
         }
+        if (exit_main_loop) {
+            break;
+        }
+
         auto& buffer = buffers.encode();
 
         frame_writer_pending_mutex.lock();
