@@ -804,7 +804,7 @@ Examples:)");
     printf(R"(
 
   - wf-recorder                         Records the video. Use Ctrl+C to stop recording.
-                                        The video file will be stored as recording.webm in the
+                                        The video file will be stored as recording.mkv in the
                                         current working directory.
 
   - wf-recorder -f <filename>.ext       Records the video. Use Ctrl+C to stop recording.
@@ -816,7 +816,7 @@ Examples:)");
   Video and Audio:
 
   - wf-recorder -a                      Records the video and audio. Use Ctrl+C to stop recording.
-                                        The video file will be stored as recording.webm in the
+                                        The video file will be stored as recording.mkv in the
                                         current working directory.
 
   - wf-recorder -a -f <filename>.ext    Records the video and audio. Use Ctrl+C to stop recording.

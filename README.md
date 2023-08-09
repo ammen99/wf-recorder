@@ -63,12 +63,12 @@ git clone https://github.com/ammen99/wf-recorder.git && cd wf-recorder
 meson build --prefix=/usr --buildtype=release
 ninja -C build
 ```
-Optionally configure with `-Ddefault_codec='codec'`. The default is libvpx. Now you can just run `./build/wf-recorder` or install it with `sudo ninja -C build install`.
+Optionally configure with `-Ddefault_codec='codec'`. The default is libvpx-vp9. Now you can just run `./build/wf-recorder` or install it with `sudo ninja -C build install`.
 
 The man page can be read with `man ./manpage/wf-recorder.1`.
 
 # Usage
-In its simplest form, run `wf-recorder` to start recording and use Ctrl+C to stop. This will create a file called `recording.webm` in the current working directory using the default codec.
+In its simplest form, run `wf-recorder` to start recording and use Ctrl+C to stop. This will create a file called `recording.mkv` in the current working directory using the default codec.
 
 Use `-f <filename>` to specify the output file. In case of multiple outputs, you'll first be prompted to select the output you want to record. If you know the output name beforehand, you can use the `-o <output name>` option.
 
@@ -81,7 +81,7 @@ wf-recorder -g "$(slurp)"
 You can record screen and sound simultaneously with
 
 ```
-wf-recorder --audio --file=recording_with_audio.webm
+wf-recorder --audio --file=recording_with_audio.mkv
 ```
 
 To specify an audio device, use the `-a<device>` or `--audio=<device>` options.
@@ -108,8 +108,8 @@ To set a specific output format, use the `--muxer` option. For example, to outpu
 wf-recorder --muxer=v4l2 --codec=rawvideo --file=/dev/video2
 ```
 
-To use GPU encoding, use a VAAPI codec (for ex. `vp8_vaapi`) and specify a GPU device to use with the `-d` option:
+To use GPU encoding, use a VAAPI codec (for ex. `h264_vaapi`) and specify a GPU device to use with the `-d` option:
 ```
-wf-recorder -f test-vaapi.webm -c vp8_vaapi -d /dev/dri/renderD128
+wf-recorder -f test-vaapi.mkv -c h264_vaapi -d /dev/dri/renderD128
 ```
 Some drivers report support for rgb0 data for vaapi input but really only support yuv planar formats. In this case, use the `-x yuv420p` or `--pixel-format yuv420p` option in addition to the vaapi options to convert the data to yuv planar data before sending it to the GPU.
