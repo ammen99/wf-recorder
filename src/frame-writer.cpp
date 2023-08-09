@@ -224,7 +224,6 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
         hwfc->sw_format = AV_PIX_FMT_NV12;
         hwfc->width = params.width;
         hwfc->height = params.height;
-        hwfc->initial_pool_size = 16;
         int err = av_hwframe_ctx_init(this->hw_frame_context);
         if (err < 0) {
             std::cerr << "Cannot create hw frames context: " << averr(err) << std::endl;
@@ -788,14 +787,10 @@ bool FrameWriter::add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert)
                 av_free(data);
         }, frame, 0);
 
-        int ret = av_hwframe_get_buffer(this->hw_frame_context_in, vaapi_frame, 0);
-        if (ret < 0)
-        {
-            std::cerr << "Failed to allocate vaapi buffer " << averr(ret) << std::endl;
-            return false;
-        }
+        vaapi_frame->format = AV_PIX_FMT_VAAPI;
+        vaapi_frame->hw_frames_ctx = av_buffer_ref(this->hw_frame_context_in);
 
-        ret = av_hwframe_map(vaapi_frame, frame, AV_HWFRAME_MAP_READ);
+        int ret = av_hwframe_map(vaapi_frame, frame, AV_HWFRAME_MAP_READ);
         av_frame_unref(frame);
         if (ret < 0)
         {
