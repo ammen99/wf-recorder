@@ -1194,8 +1194,9 @@ int main(int argc, char *argv[])
 
     for (size_t i = 0; i < buffers.size(); ++i)
     {
-        if (buffers.at(i).wl_buffer)
-            wl_buffer_destroy(buffers.at(i).wl_buffer);
+        auto buffer = buffers.at(i);
+        if (buffer && buffer->wl_buffer)
+            wl_buffer_destroy(buffer->wl_buffer);
     }
 
     if (gbm_device) {
