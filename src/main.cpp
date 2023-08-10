@@ -22,6 +22,7 @@
 #include <fcntl.h>
 
 #include "frame-writer.hpp"
+#include "buffer-pool.hpp"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 #include "xdg-output-unstable-v1-client-protocol.h"
 #include "linux-dmabuf-unstable-v1-client-protocol.h"
@@ -119,11 +120,11 @@ const zxdg_output_v1_listener xdg_output_implementation = {
     .description = handle_xdg_output_description
 };
 
-struct wf_buffer
+struct wf_buffer : public buffer_pool_buf
 {
-    struct gbm_bo *bo;
-    struct wl_buffer *wl_buffer;
-    void *data;
+    struct gbm_bo *bo = nullptr;
+    struct wl_buffer *wl_buffer = nullptr;
+    void *data = nullptr;
     enum wl_shm_format format;
     int drm_format;
     int width, height, stride;
@@ -131,16 +132,11 @@ struct wf_buffer
 
     timespec presented;
     uint64_t base_usec;
-
-    std::atomic<bool> released{true}; // if the buffer can be used to store new pending frames
-    std::atomic<bool> available{false}; // if the buffer can be used to feed the encoder
 };
 
 std::atomic<bool> exit_main_loop{false};
 
-#define MAX_BUFFERS 16
-wf_buffer buffers[MAX_BUFFERS];
-size_t active_buffer = 0;
+buffer_pool<wf_buffer, 16> buffers;
 
 bool buffer_copy_done = false;
 
@@ -204,7 +200,7 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
         return;
     }
 
-    auto& buffer = buffers[active_buffer];
+    auto& buffer = buffers.capture();
 
     buffer.format = (wl_shm_format)format;
     buffer.width = width;
@@ -235,7 +231,7 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
 }
 
 static void frame_handle_flags(void*, struct zwlr_screencopy_frame_v1 *, uint32_t flags) {
-    buffers[active_buffer].y_invert = flags & ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT;
+    buffers.capture().y_invert = flags & ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT;
 }
 
 int32_t frame_failed_cnt = 0;
@@ -243,7 +239,7 @@ int32_t frame_failed_cnt = 0;
 static void frame_handle_ready(void *, struct zwlr_screencopy_frame_v1 *,
     uint32_t tv_sec_hi, uint32_t tv_sec_low, uint32_t tv_nsec) {
 
-    auto& buffer = buffers[active_buffer];
+    auto& buffer = buffers.capture();
     buffer_copy_done = true;
     buffer.presented.tv_sec = ((1ll * tv_sec_hi) << 32ll) | tv_sec_low;
     buffer.presented.tv_nsec = tv_nsec;
@@ -269,7 +265,7 @@ static void frame_handle_damage(void *, struct zwlr_screencopy_frame_v1 *,
 static void dmabuf_created(void *data, struct zwp_linux_buffer_params_v1 *,
     struct wl_buffer *wl_buffer) {
 
-    auto& buffer = buffers[active_buffer];
+    auto& buffer = buffers.capture();
     buffer.wl_buffer = wl_buffer;
 
     zwlr_screencopy_frame_v1 *frame = (zwlr_screencopy_frame_v1*) data;
@@ -309,7 +305,7 @@ static void frame_handle_linux_dmabuf(void *, struct zwlr_screencopy_frame_v1 *f
         return;
     }
 
-    auto& buffer = buffers[active_buffer];
+    auto& buffer = buffers.capture();
 
     buffer.format = drm_to_wl_shm_format(format);
     buffer.drm_format = format;
@@ -440,11 +436,6 @@ static uint64_t timespec_to_usec (const timespec& ts)
     return ts.tv_sec * 1000000ll + 1ll * ts.tv_nsec / 1000ll;
 }
 
-static int next_frame(int frame)
-{
-    return (frame + 1) % MAX_BUFFERS;
-}
-
 static InputFormat get_input_format(wf_buffer& buffer)
 {
     if (use_dmabuf && !use_hwupload) {
@@ -486,7 +477,6 @@ static void write_loop(FrameWriterParams params)
     }
     pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
-    int last_encoded_frame = 0;
 #ifdef HAVE_PULSE
     std::unique_ptr<PulseReader> pr;
 #endif
@@ -494,10 +484,10 @@ static void write_loop(FrameWriterParams params)
     while(!exit_main_loop)
     {
         // wait for frame to become available
-        while(buffers[last_encoded_frame].available != true && !exit_main_loop) {
+        while(buffers.encode().ready_encode() != true && !exit_main_loop) {
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
         }
-        auto& buffer = buffers[last_encoded_frame];
+        auto& buffer = buffers.encode();
 
         frame_writer_pending_mutex.lock();
         frame_writer_mutex.lock();
@@ -554,10 +544,7 @@ static void write_loop(FrameWriterParams params)
             break;
         }
 
-        buffer.available = false;
-        buffer.released = true;
-
-        last_encoded_frame = next_frame(last_encoded_frame);
+        buffers.next_encode();
     }
 
     std::lock_guard<std::mutex> lock(frame_writer_mutex);
@@ -1153,15 +1140,6 @@ int main(int argc, char *argv[])
     timespec first_frame;
     first_frame.tv_sec = -1;
 
-    active_buffer = 0;
-    for (auto& buffer : buffers)
-    {
-        buffer.bo = NULL;
-        buffer.wl_buffer = NULL;
-        buffer.available = false;
-        buffer.released = true;
-    }
-
     bool spawned_thread = false;
     std::thread writer_thread;
 
@@ -1173,7 +1151,7 @@ int main(int argc, char *argv[])
     while(!exit_main_loop)
     {
         // wait for a free buffer
-        while(buffers[active_buffer].released != true) {
+        while(buffers.capture().ready_capture() != true) {
             std::this_thread::sleep_for(std::chrono::microseconds(500));
         }
 
@@ -1188,7 +1166,7 @@ int main(int argc, char *argv[])
             break;
         }
 
-        auto& buffer = buffers[active_buffer];
+        auto& buffer = buffers.capture();
         //std::cout << "first buffer at " << timespec_to_usec(get_ct()) / 1.0e6<< std::endl;
 
         if (!spawned_thread)
@@ -1206,10 +1184,7 @@ int main(int argc, char *argv[])
         buffer.base_usec = timespec_to_usec(buffer.presented)
             - timespec_to_usec(first_frame);
 
-        buffer.released = false;
-        buffer.available = true;
-
-        active_buffer = next_frame(active_buffer);
+        buffers.next_capture();
     }
 
     if (writer_thread.joinable())
@@ -1217,10 +1192,10 @@ int main(int argc, char *argv[])
         writer_thread.join();
     }
 
-    for (auto& buffer : buffers)
+    for (size_t i = 0; i < buffers.size(); ++i)
     {
-        if (buffer.wl_buffer)
-            wl_buffer_destroy(buffer.wl_buffer);
+        if (buffers.at(i).wl_buffer)
+            wl_buffer_destroy(buffers.at(i).wl_buffer);
     }
 
     if (gbm_device) {
