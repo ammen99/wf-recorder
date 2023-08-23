@@ -13,6 +13,7 @@
 .Op Fl c, -codec Ar output_codec
 .Op Fl r, -framerate Ar framerate
 .Op Fl d, -device Ar encoding_device
+.Op Fl -no-dmabuf
 .Op Fl D, -no-damage
 .Op Fl f Ar filename.ext
 .Op Fl F Ar filter_string
@@ -87,6 +88,11 @@ Use the
 .Fl x Ar yuv420
 option in addition to the vaapi options to convert the
 data in software, before sending it to the GPU.
+.Pp
+.It Fl -no-dmabuf
+By default, wf-recorder will try to use only GPU buffers and copies if using a GPU encoder.
+However, this can cause issues on some systems.
+In such cases, this option will disable the GPU copy and force a CPU one.
 .Pp
 .It Fl D , -no-damage
 By default, wf-recorder will request a new frame from the compositor
