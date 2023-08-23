@@ -748,6 +748,10 @@ Use Ctrl+C to stop.)");
                             Some drivers report support for rgb0 data for vaapi input but
                             really only support yuv.
 
+  --no-dmabuf               By default, wf-recorder will try to use only GPU buffers and copies if
+                            using a GPU encoder. However, this can cause issues on some systems. In such
+                            cases, this option will disable the GPU copy and force a CPU one.
+
   -D, --no-damage           By default, wf-recorder will request a new frame from the compositor
                             only when the screen updates. This results in a much smaller output
                             file, which however has a variable refresh rate. When this option is
@@ -891,6 +895,7 @@ int main(int argc, char *argv[])
 
     constexpr const char* default_cmdline_output = "interactive";
     std::string cmdline_output = default_cmdline_output;
+    bool force_no_dmabuf = false;
 
     struct option opts[] = {
         { "output",            required_argument, NULL, 'o' },
@@ -906,6 +911,7 @@ int main(int argc, char *argv[])
         { "sample-rate",       required_argument, NULL, 'R' },
         { "sample-format",     required_argument, NULL, 'X' },
         { "device",            required_argument, NULL, 'd' },
+        { "no-dmabuf",         no_argument,       NULL, '&' },
         { "filter",            required_argument, NULL, 'F' },
         { "log",               no_argument,       NULL, 'l' },
         { "audio",             optional_argument, NULL, 'a' },
@@ -1012,6 +1018,10 @@ int main(int argc, char *argv[])
                 parse_codec_opts(params.audio_codec_options, optarg);
                 break;
 
+            case '&':
+                force_no_dmabuf = true;
+                break;
+
             default:
                 printf("Unsupported command line argument %s\n", optarg);
         }
@@ -1044,9 +1054,11 @@ int main(int argc, char *argv[])
         }
 
         // check we use same device as compositor
-        if (!params.hw_device.empty() && params.hw_device == drm_device_name)
+        if (!params.hw_device.empty() && params.hw_device == drm_device_name && !force_no_dmabuf)
         {
             use_dmabuf = true;
+        } else if (force_no_dmabuf) {
+            std::cout << "Disabling DMA-BUF as requested on command line" << std::endl;
         } else {
             std::cout << "compositor running on different device, disabling DMA-BUF" << std::endl;
         }
