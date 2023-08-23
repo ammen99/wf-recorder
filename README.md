@@ -4,6 +4,13 @@ wf-recorder is a utility program for screen recording of `wlroots`-based composi
 
 # installation
 
+## Alpine Linux
+
+wf-recorder is available in the community repositories:
+```
+apk add wf-recorder
+```
+
 ## Arch Linux
 
 Arch users can install wf-recorder from the Community repo.
