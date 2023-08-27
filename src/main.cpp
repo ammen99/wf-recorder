@@ -791,7 +791,7 @@ Use Ctrl+C to stop.)");
                             If b-frames are not supported by your hardware, set this to 0.
     
   -B. --buffrate            This option is used to specify the buffers expected framerate. this 
-                            may help when encoders are expecting specifc or limited framerate.
+                            may help when encoders are expecting specific or limited framerate.
   
   -C, --audio-codec         Specifies the codec of the audio. These can be found by running:
                             ffmpeg -encoders
