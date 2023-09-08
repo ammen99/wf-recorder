@@ -163,7 +163,7 @@ static AVPixelFormat get_drm_av_format(int fmt)
             return drm_av_format_table[i].av;
         }
     }
-    std::cerr << "Failed to find AV format for" << fmt;
+    std::cerr << "Failed to find AV format for" << fmt << std::endl;
     return AV_PIX_FMT_RGBA;
 }
 
