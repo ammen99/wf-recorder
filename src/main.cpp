@@ -193,6 +193,17 @@ static bool use_damage = true;
 static bool use_dmabuf = false;
 static bool use_hwupload = false;
 
+static uint32_t wl_shm_to_drm_format(uint32_t format)
+{
+    if (format == WL_SHM_FORMAT_ARGB8888) {
+        return GBM_FORMAT_ARGB8888;
+    } else if (format == WL_SHM_FORMAT_XRGB8888) {
+        return GBM_FORMAT_XRGB8888;
+    } else {
+        return format;
+    }
+}
+
 static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, uint32_t format,
     uint32_t width, uint32_t height, uint32_t stride)
 {
@@ -203,6 +214,7 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
     auto& buffer = buffers.capture();
 
     buffer.format = (wl_shm_format)format;
+    buffer.drm_format = wl_shm_to_drm_format(format);
     buffer.width = width;
     buffer.height = height;
     buffer.stride = stride;
