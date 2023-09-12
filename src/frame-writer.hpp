@@ -69,9 +69,10 @@ struct FrameWriterParams
     int framerate = 0;
     int sample_rate;
     int buffrate = 0;
-
+    
     int64_t audio_sync_offset;
 
+    bool enable_mouse = true;
     bool enable_audio;
     bool enable_ffmpeg_debug_output;
 

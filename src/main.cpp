@@ -51,7 +51,7 @@ static struct zxdg_output_manager_v1 *xdg_output_manager = NULL;
 static struct zwlr_screencopy_manager_v1 *screencopy_manager = NULL;
 static struct zwp_linux_dmabuf_v1 *dmabuf = NULL;
 static struct wl_drm *drm = NULL;
-void request_next_frame();
+void request_next_frame(bool enable_mouse);
 
 struct wf_recorder_output
 {
@@ -259,12 +259,12 @@ static void frame_handle_ready(void *, struct zwlr_screencopy_frame_v1 *,
 }
 
 static void frame_handle_failed(void *, struct zwlr_screencopy_frame_v1 *) {
-    std::cerr << "Failed to copy frame, retrying..." << std::endl;
+    std::cerr << "Failed to copy frame, retrying...\n";
     ++frame_failed_cnt;
-    request_next_frame();
+    request_next_frame(false);
     if (frame_failed_cnt > MAX_FRAME_FAILURES)
     {
-        std::cerr << "Failed to copy frame too many times, exiting!" << std::endl;
+        std::cerr << "Failed to copy frame too many times, exiting!\n";
         exit_main_loop = true;
     }
 }
@@ -780,6 +780,10 @@ Use Ctrl+C to stop.)");
   -m, --muxer               Set the output format to a specific muxer instead of detecting it
                             from the filename.
 
+  -s, --show-mouse          Shows the mouse in the output file. This is the default behavior.
+
+  -e, --hide-mouse          Hides the mouse in the output file.
+
   -x, --pixel-format        Set the output pixel format. These can be found by running:
                             ffmpeg -pix_fmts
 
@@ -855,7 +859,7 @@ capture_region selected_region{};
 wf_recorder_output *chosen_output = nullptr;
 zwlr_screencopy_frame_v1 *frame = NULL;
 
-void request_next_frame()
+void request_next_frame(bool show_mouse = false)
 {
     if (frame != NULL)
     {
@@ -866,11 +870,11 @@ void request_next_frame()
     if (!selected_region.is_selected())
     {
         frame = zwlr_screencopy_manager_v1_capture_output(
-            screencopy_manager, 1, chosen_output->output);
+            screencopy_manager, show_mouse ? 1 : 0, chosen_output->output);
     } else
     {
         frame = zwlr_screencopy_manager_v1_capture_output_region(
-            screencopy_manager, 1, chosen_output->output,
+            screencopy_manager, show_mouse ? 1 : 0, chosen_output->output,
             selected_region.x - chosen_output->x,
             selected_region.y - chosen_output->y,
             selected_region.width, selected_region.height);
@@ -932,11 +936,13 @@ int main(int argc, char *argv[])
         { "buffrate",          required_argument, NULL, 'B' },
         { "version",           no_argument,       NULL, 'v' },
         { "no-damage",         no_argument,       NULL, 'D' },
+        { "show-mouse",        no_argument,       NULL, 's' },
+        { "hide-mouse",        no_argument,       NULL, 'e' },
         { 0,                   0,                 NULL,  0  }
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hsevDF:", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -954,6 +960,14 @@ int main(int argc, char *argv[])
 
             case 'm':
                 params.muxer = optarg;
+                break;
+
+            case 's':
+                params.enable_mouse = true;
+                break;
+
+            case 'e':
+                params.enable_mouse = false;
                 break;
 
             case 'g':
@@ -1193,7 +1207,7 @@ int main(int argc, char *argv[])
         }
 
         buffer_copy_done = false;
-        request_next_frame();
+        request_next_frame(params.enable_mouse);
 
         while (!buffer_copy_done && !exit_main_loop && wl_display_dispatch(display) != -1) {
             // This space is intentionally left blank
