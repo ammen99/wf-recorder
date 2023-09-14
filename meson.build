@@ -61,6 +61,7 @@ libavfilter = dependency('libavfilter')
 swr = dependency('libswresample')
 threads = dependency('threads')
 gbm = dependency('gbm')
+drm = dependency('libdrm')
 
 conf_data.set('HAVE_LIBAVDEVICE', libavdevice.found())
 
@@ -76,7 +77,7 @@ subdir('proto')
 dependencies = [
     wayland_client, wayland_protos,
     libavutil, libavcodec, libavformat, libavdevice, libavfilter,
-    wf_protos, threads, pulse, swr, gbm
+    wf_protos, threads, pulse, swr, gbm, drm
 ]
 
 executable('wf-recorder', project_sources,
