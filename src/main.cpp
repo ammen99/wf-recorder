@@ -899,6 +899,7 @@ int main(int argc, char *argv[])
     FrameWriterParams params = FrameWriterParams(exit_main_loop);
     params.file = "recording." + std::string(DEFAULT_CONTAINER_FORMAT);
     params.codec = DEFAULT_CODEC;
+    params.pix_fmt = DEFAULT_PIX_FMT;
     params.audio_codec = DEFAULT_AUDIO_CODEC;
     params.sample_rate = DEFAULT_AUDIO_SAMPLE_RATE;
     params.enable_ffmpeg_debug_output = false;
