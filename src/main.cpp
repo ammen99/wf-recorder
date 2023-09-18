@@ -7,6 +7,7 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <unordered_map>
 #include <getopt.h>
 
 #include <limits.h>
@@ -20,13 +21,14 @@
 #include <wayland-client-protocol.h>
 #include <gbm.h>
 #include <fcntl.h>
+#include <xf86drm.h>
+#include <libdrm/drm_fourcc.h>
 
 #include "frame-writer.hpp"
 #include "buffer-pool.hpp"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 #include "xdg-output-unstable-v1-client-protocol.h"
 #include "linux-dmabuf-unstable-v1-client-protocol.h"
-#include "wl-drm-client-protocol.h"
 
 #include "config.h"
 
@@ -50,8 +52,17 @@ static struct wl_shm *shm = NULL;
 static struct zxdg_output_manager_v1 *xdg_output_manager = NULL;
 static struct zwlr_screencopy_manager_v1 *screencopy_manager = NULL;
 static struct zwp_linux_dmabuf_v1 *dmabuf = NULL;
-static struct wl_drm *drm = NULL;
 void request_next_frame();
+
+static struct {
+   unsigned int size;
+   struct {
+      uint32_t format;
+      uint32_t padding;
+      uint64_t modifier;
+   } *data;
+} dmabuf_format_table;
+static std::unordered_map<uint32_t, std::vector<uint64_t>> dmabuf_modifier_map;
 
 struct wf_recorder_output
 {
@@ -325,9 +336,12 @@ static void frame_handle_linux_dmabuf(void *, struct zwlr_screencopy_frame_v1 *f
     buffer.height = height;
 
     if (!buffer.wl_buffer) {
-        const uint64_t modifier = 0; // DRM_FORMAT_MOD_LINEAR
+        std::vector<uint64_t> modifiers = dmabuf_modifier_map[format];
+        if (modifiers.empty()) {
+            modifiers.push_back(DRM_FORMAT_MOD_LINEAR);
+        }
         buffer.bo = gbm_bo_create_with_modifiers(gbm_device, buffer.width,
-            buffer.height, format, &modifier, 1);
+            buffer.height, format, modifiers.data(), modifiers.size());
         if (buffer.bo == NULL)
         {
             buffer.bo = gbm_bo_create(gbm_device, buffer.width,
@@ -346,11 +360,13 @@ static void frame_handle_linux_dmabuf(void *, struct zwlr_screencopy_frame_v1 *f
             zwp_linux_dmabuf_v1_create_params(dmabuf);
 
         uint64_t mod = gbm_bo_get_modifier(buffer.bo);
-        zwp_linux_buffer_params_v1_add(params,
-            gbm_bo_get_fd(buffer.bo), 0,
-            gbm_bo_get_offset(buffer.bo, 0),
-            gbm_bo_get_stride(buffer.bo),
-            mod >> 32, mod & 0xffffffff);
+        for (int i = 0; i < gbm_bo_get_plane_count(buffer.bo); ++i) {
+            zwp_linux_buffer_params_v1_add(params,
+                gbm_bo_get_fd(buffer.bo), i,
+                gbm_bo_get_offset(buffer.bo, i),
+                gbm_bo_get_stride_for_plane(buffer.bo, i),
+                mod >> 32, mod & 0xffffffff);
+        }
 
         zwp_linux_buffer_params_v1_add_listener(params, &params_listener, frame);
 
@@ -378,24 +394,85 @@ static const struct zwlr_screencopy_frame_v1_listener frame_listener = {
     .buffer_done = frame_handle_buffer_done,
 };
 
-static void drm_handle_device(void *, struct wl_drm *, const char *name) {
-    drm_device_name = name;
+static void dmabuf_feedback_done(void *, struct zwp_linux_dmabuf_feedback_v1 *feedback)
+{
+    zwp_linux_dmabuf_feedback_v1_destroy(feedback);
 }
 
-static void drm_handle_format(void *, struct wl_drm *, uint32_t) {
+static void dmabuf_feedback_format_table(void *, struct zwp_linux_dmabuf_feedback_v1 *,
+    int32_t fd, uint32_t size)
+{
+    dmabuf_format_table.size = size;
+    dmabuf_format_table.data = reinterpret_cast<decltype(dmabuf_format_table.data)>(mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0));
+
+    close(fd);
 }
 
-static void drm_handle_authenticated(void *, struct wl_drm *) {
+static void dmabuf_feedback_main_device(void *, struct zwp_linux_dmabuf_feedback_v1 *,
+    struct wl_array *device)
+{
+    dev_t dev_id;
+    memcpy(&dev_id, device->data, device->size);
+
+    drmDevice *dev = NULL;
+    if (drmGetDeviceFromDevId(dev_id, 0, &dev) != 0) {
+        std::cerr << "Failed to get DRM device from dev id " << strerror(errno) << std::endl;
+        return;
+    }
+
+    if (dev->available_nodes & (1 << DRM_NODE_RENDER)) {
+        drm_device_name = dev->nodes[DRM_NODE_RENDER];
+    } else if (dev->available_nodes & (1 << DRM_NODE_PRIMARY)) {
+        drm_device_name = dev->nodes[DRM_NODE_PRIMARY];
+    }
+
+    drmFreeDevice(&dev);
 }
 
-static void drm_handle_capabilities(void *, struct wl_drm *, uint32_t) {
+static void dmabuf_feedback_tranche_done(void *, struct zwp_linux_dmabuf_feedback_v1 *)
+{
 }
 
-static const struct wl_drm_listener drm_listener = {
-    .device = drm_handle_device,
-    .format = drm_handle_format,
-    .authenticated = drm_handle_authenticated,
-    .capabilities = drm_handle_capabilities,
+static void dmabuf_feedback_tranche_target_device(void *, struct zwp_linux_dmabuf_feedback_v1 *,
+    struct wl_array *)
+{
+}
+
+static void dmabuf_feedback_tranche_formats(void *, struct zwp_linux_dmabuf_feedback_v1 *,
+    struct wl_array *indices)
+{
+    if (!dmabuf_format_table.data || dmabuf_format_table.data == MAP_FAILED) {
+       return;
+    }
+
+#define WL_ARRAY_FOR_EACH(pos, array) \
+    for (pos = (decltype(pos))(array)->data; \
+        (const char *) pos < ((const char *) (array)->data + (array)->size); \
+        (pos)++)
+
+    uint16_t *index;
+    WL_ARRAY_FOR_EACH(index, indices) {
+       uint32_t format = dmabuf_format_table.data[*index].format;
+       uint64_t modifier = dmabuf_format_table.data[*index].modifier;
+       dmabuf_modifier_map[format].push_back(modifier);
+    }
+
+#undef WL_ARRAY_FOR_EACH
+}
+
+static void dmabuf_feedback_tranche_flags(void *, struct zwp_linux_dmabuf_feedback_v1 *,
+    uint32_t)
+{
+}
+
+static const struct zwp_linux_dmabuf_feedback_v1_listener dmabuf_feedback_listener = {
+    .done = dmabuf_feedback_done,
+    .format_table = dmabuf_feedback_format_table,
+    .main_device = dmabuf_feedback_main_device,
+    .tranche_done = dmabuf_feedback_tranche_done,
+    .tranche_target_device = dmabuf_feedback_tranche_target_device,
+    .tranche_formats = dmabuf_feedback_tranche_formats,
+    .tranche_flags = dmabuf_feedback_tranche_flags,
 };
 
 static void handle_global(void*, struct wl_registry *registry,
@@ -425,12 +502,12 @@ static void handle_global(void*, struct wl_registry *registry,
     else if (strcmp(interface, zwp_linux_dmabuf_v1_interface.name) == 0)
     {
         dmabuf = (zwp_linux_dmabuf_v1*) wl_registry_bind(registry, name,
-            &zwp_linux_dmabuf_v1_interface, 3);
-    }
-    else if (strcmp(interface, wl_drm_interface.name) == 0)
-    {
-        drm = (wl_drm*) wl_registry_bind(registry, name, &wl_drm_interface, 1);
-        wl_drm_add_listener(drm, &drm_listener, NULL);
+            &zwp_linux_dmabuf_v1_interface, 4);
+        if (dmabuf) {
+            struct zwp_linux_dmabuf_feedback_v1 *feedback =
+                zwp_linux_dmabuf_v1_get_default_feedback(dmabuf);
+            zwp_linux_dmabuf_feedback_v1_add_listener(feedback, &dmabuf_feedback_listener, NULL);
+        }
     }
 }
 
@@ -1234,6 +1311,10 @@ int main(int argc, char *argv[])
         auto buffer = buffers.at(i);
         if (buffer && buffer->wl_buffer)
             wl_buffer_destroy(buffer->wl_buffer);
+    }
+
+    if (dmabuf_format_table.data && dmabuf_format_table.data != MAP_FAILED) {
+        munmap(dmabuf_format_table.data, dmabuf_format_table.size);
     }
 
     if (gbm_device) {
