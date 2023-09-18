@@ -7,6 +7,7 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <unordered_map>
 #include <getopt.h>
 
 #include <limits.h>
@@ -21,6 +22,7 @@
 #include <gbm.h>
 #include <fcntl.h>
 #include <xf86drm.h>
+#include <libdrm/drm_fourcc.h>
 
 #include "frame-writer.hpp"
 #include "buffer-pool.hpp"
@@ -51,6 +53,16 @@ static struct zxdg_output_manager_v1 *xdg_output_manager = NULL;
 static struct zwlr_screencopy_manager_v1 *screencopy_manager = NULL;
 static struct zwp_linux_dmabuf_v1 *dmabuf = NULL;
 void request_next_frame();
+
+static struct {
+   unsigned int size;
+   struct {
+      uint32_t format;
+      uint32_t padding;
+      uint64_t modifier;
+   } *data;
+} dmabuf_format_table;
+static std::unordered_map<uint32_t, std::vector<uint64_t>> dmabuf_modifier_map;
 
 struct wf_recorder_output
 {
@@ -324,9 +336,12 @@ static void frame_handle_linux_dmabuf(void *, struct zwlr_screencopy_frame_v1 *f
     buffer.height = height;
 
     if (!buffer.wl_buffer) {
-        const uint64_t modifier = 0; // DRM_FORMAT_MOD_LINEAR
+        std::vector<uint64_t> modifiers = dmabuf_modifier_map[format];
+        if (modifiers.empty()) {
+            modifiers.push_back(DRM_FORMAT_MOD_LINEAR);
+        }
         buffer.bo = gbm_bo_create_with_modifiers(gbm_device, buffer.width,
-            buffer.height, format, &modifier, 1);
+            buffer.height, format, modifiers.data(), modifiers.size());
         if (buffer.bo == NULL)
         {
             buffer.bo = gbm_bo_create(gbm_device, buffer.width,
@@ -345,11 +360,13 @@ static void frame_handle_linux_dmabuf(void *, struct zwlr_screencopy_frame_v1 *f
             zwp_linux_dmabuf_v1_create_params(dmabuf);
 
         uint64_t mod = gbm_bo_get_modifier(buffer.bo);
-        zwp_linux_buffer_params_v1_add(params,
-            gbm_bo_get_fd(buffer.bo), 0,
-            gbm_bo_get_offset(buffer.bo, 0),
-            gbm_bo_get_stride(buffer.bo),
-            mod >> 32, mod & 0xffffffff);
+        for (int i = 0; i < gbm_bo_get_plane_count(buffer.bo); ++i) {
+            zwp_linux_buffer_params_v1_add(params,
+                gbm_bo_get_fd(buffer.bo), i,
+                gbm_bo_get_offset(buffer.bo, i),
+                gbm_bo_get_stride_for_plane(buffer.bo, i),
+                mod >> 32, mod & 0xffffffff);
+        }
 
         zwp_linux_buffer_params_v1_add_listener(params, &params_listener, frame);
 
@@ -383,8 +400,11 @@ static void dmabuf_feedback_done(void *, struct zwp_linux_dmabuf_feedback_v1 *fe
 }
 
 static void dmabuf_feedback_format_table(void *, struct zwp_linux_dmabuf_feedback_v1 *,
-    int32_t fd, uint32_t)
+    int32_t fd, uint32_t size)
 {
+    dmabuf_format_table.size = size;
+    dmabuf_format_table.data = reinterpret_cast<decltype(dmabuf_format_table.data)>(mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0));
+
     close(fd);
 }
 
@@ -419,8 +439,25 @@ static void dmabuf_feedback_tranche_target_device(void *, struct zwp_linux_dmabu
 }
 
 static void dmabuf_feedback_tranche_formats(void *, struct zwp_linux_dmabuf_feedback_v1 *,
-    struct wl_array *)
+    struct wl_array *indices)
 {
+    if (!dmabuf_format_table.data || dmabuf_format_table.data == MAP_FAILED) {
+       return;
+    }
+
+#define WL_ARRAY_FOR_EACH(pos, array) \
+    for (pos = (decltype(pos))(array)->data; \
+        (const char *) pos < ((const char *) (array)->data + (array)->size); \
+        (pos)++)
+
+    uint16_t *index;
+    WL_ARRAY_FOR_EACH(index, indices) {
+       uint32_t format = dmabuf_format_table.data[*index].format;
+       uint64_t modifier = dmabuf_format_table.data[*index].modifier;
+       dmabuf_modifier_map[format].push_back(modifier);
+    }
+
+#undef WL_ARRAY_FOR_EACH
 }
 
 static void dmabuf_feedback_tranche_flags(void *, struct zwp_linux_dmabuf_feedback_v1 *,
@@ -1274,6 +1311,10 @@ int main(int argc, char *argv[])
         auto buffer = buffers.at(i);
         if (buffer && buffer->wl_buffer)
             wl_buffer_destroy(buffer->wl_buffer);
+    }
+
+    if (dmabuf_format_table.data && dmabuf_format_table.data != MAP_FAILED) {
+        munmap(dmabuf_format_table.data, dmabuf_format_table.size);
     }
 
     if (gbm_device) {
