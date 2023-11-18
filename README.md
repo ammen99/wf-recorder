@@ -4,6 +4,8 @@ wf-recorder is a utility program for screen recording of `wlroots`-based composi
 
 # installation
 
+[comment]: <> (List ordered alphabetically)
+
 ## Alpine Linux
 
 wf-recorder is available in the community repositories:
@@ -25,16 +27,11 @@ Artix users can install wf-recorder from the official repos
 pacman -S wf-recorder
 ```
 
-## Gentoo Linux
+## Debian GNU/Linux
 
-Gentoo users can install wf-recorder from the official (`::gentoo`) repository.
-
-
-## Void Linux
-
-Void users can install wf-recorder from the official repos
+Debian users can install wf-recorder from official repos
 ```
-xbps-install -S wf-recorder
+apt install wf-recorder
 ```
 
 ## Fedora Linux
@@ -44,12 +41,29 @@ Fedora users can install wf-recorder from the official repos
 sudo dnf install wf-recorder
 ```
 
-## Debian GNU/Linux
+## Gentoo Linux
 
-Debian users can install wf-recorder from official repos
+Gentoo users can install wf-recorder from the official (`::gentoo`) repository.
+
+## NixOS / Nix
+
+Users of the Nix package manager can add the `wf-recorder` package to their system configurations, or use `nix-shell` / `nix shell` / `nix run`:
+
 ```
-apt install wf-recorder
+nix-shell -p wf-recorder
+# OR
+nix shell nixpkgs#wf-recorder
+# OR
+nix run nixpkgs#wf-recorder
 ```
+
+## Void Linux
+
+Void users can install wf-recorder from the official repos
+```
+xbps-install -S wf-recorder
+```
+
 
 ## From Source
 ### Install Dependencies
