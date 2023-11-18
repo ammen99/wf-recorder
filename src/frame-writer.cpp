@@ -234,25 +234,13 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     }
 
     if (this->hw_device_context) {
-        this->hw_frame_context = av_hwframe_ctx_alloc(this->hw_device_context);
-        AVHWFramesContext *hwfc = reinterpret_cast<AVHWFramesContext*>(this->hw_frame_context->data);
-        hwfc->format = AV_PIX_FMT_VAAPI;
-        hwfc->sw_format = AV_PIX_FMT_NV12;
-        hwfc->width = params.width;
-        hwfc->height = params.height;
-        int err = av_hwframe_ctx_init(this->hw_frame_context);
-        if (err < 0) {
-            std::cerr << "Cannot create hw frames context: " << averr(err) << std::endl;
-            exit(-1);
-        }
-
         this->hw_frame_context_in = av_hwframe_ctx_alloc(this->hw_device_context);
-        hwfc = reinterpret_cast<AVHWFramesContext*>(this->hw_frame_context_in->data);
+        AVHWFramesContext *hwfc = reinterpret_cast<AVHWFramesContext*>(this->hw_frame_context_in->data);
         hwfc->format = AV_PIX_FMT_VAAPI;
         hwfc->sw_format = get_drm_av_format(params.drm_format);
         hwfc->width = params.width;
         hwfc->height = params.height;
-        err = av_hwframe_ctx_init(this->hw_frame_context_in);
+        int err = av_hwframe_ctx_init(this->hw_frame_context_in);
         if (err < 0) {
             std::cerr << "Cannot create hw frames context: " << averr(err) << std::endl;
             exit(-1);
@@ -385,6 +373,8 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     this->videoCodecCtx->framerate = filter_output->frame_rate; // can be 1/0 if unknown
     this->videoCodecCtx->sample_aspect_ratio = filter_output->sample_aspect_ratio;
 
+    this->hw_frame_context = av_buffersink_get_hw_frames_ctx(
+        this->videoFilterSinkCtx);
     avfilter_inout_free(&inputs);
     avfilter_inout_free(&outputs);
 }
