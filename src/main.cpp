@@ -20,13 +20,13 @@
 #include <wayland-client-protocol.h>
 #include <gbm.h>
 #include <fcntl.h>
+#include <xf86drm.h>
 
 #include "frame-writer.hpp"
 #include "buffer-pool.hpp"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 #include "xdg-output-unstable-v1-client-protocol.h"
 #include "linux-dmabuf-unstable-v1-client-protocol.h"
-#include "wl-drm-client-protocol.h"
 
 #include "config.h"
 
@@ -50,7 +50,6 @@ static struct wl_shm *shm = NULL;
 static struct zxdg_output_manager_v1 *xdg_output_manager = NULL;
 static struct zwlr_screencopy_manager_v1 *screencopy_manager = NULL;
 static struct zwp_linux_dmabuf_v1 *dmabuf = NULL;
-static struct wl_drm *drm = NULL;
 void request_next_frame();
 
 struct wf_recorder_output
@@ -378,24 +377,65 @@ static const struct zwlr_screencopy_frame_v1_listener frame_listener = {
     .buffer_done = frame_handle_buffer_done,
 };
 
-static void drm_handle_device(void *, struct wl_drm *, const char *name) {
-    drm_device_name = name;
+static void dmabuf_feedback_done(void *, struct zwp_linux_dmabuf_feedback_v1 *feedback)
+{
+    zwp_linux_dmabuf_feedback_v1_destroy(feedback);
 }
 
-static void drm_handle_format(void *, struct wl_drm *, uint32_t) {
+static void dmabuf_feedback_format_table(void *, struct zwp_linux_dmabuf_feedback_v1 *,
+    int32_t fd, uint32_t)
+{
+    close(fd);
 }
 
-static void drm_handle_authenticated(void *, struct wl_drm *) {
+static void dmabuf_feedback_main_device(void *, struct zwp_linux_dmabuf_feedback_v1 *,
+    struct wl_array *device)
+{
+    dev_t dev_id;
+    memcpy(&dev_id, device->data, device->size);
+
+    drmDevice *dev = NULL;
+    if (drmGetDeviceFromDevId(dev_id, 0, &dev) != 0) {
+        std::cerr << "Failed to get DRM device from dev id " << strerror(errno) << std::endl;
+        return;
+    }
+
+    if (dev->available_nodes & (1 << DRM_NODE_RENDER)) {
+        drm_device_name = dev->nodes[DRM_NODE_RENDER];
+    } else if (dev->available_nodes & (1 << DRM_NODE_PRIMARY)) {
+        drm_device_name = dev->nodes[DRM_NODE_PRIMARY];
+    }
+
+    drmFreeDevice(&dev);
 }
 
-static void drm_handle_capabilities(void *, struct wl_drm *, uint32_t) {
+static void dmabuf_feedback_tranche_done(void *, struct zwp_linux_dmabuf_feedback_v1 *)
+{
 }
 
-static const struct wl_drm_listener drm_listener = {
-    .device = drm_handle_device,
-    .format = drm_handle_format,
-    .authenticated = drm_handle_authenticated,
-    .capabilities = drm_handle_capabilities,
+static void dmabuf_feedback_tranche_target_device(void *, struct zwp_linux_dmabuf_feedback_v1 *,
+    struct wl_array *)
+{
+}
+
+static void dmabuf_feedback_tranche_formats(void *, struct zwp_linux_dmabuf_feedback_v1 *,
+    struct wl_array *)
+{
+}
+
+static void dmabuf_feedback_tranche_flags(void *, struct zwp_linux_dmabuf_feedback_v1 *,
+    uint32_t)
+{
+}
+
+static const struct zwp_linux_dmabuf_feedback_v1_listener dmabuf_feedback_listener = {
+    .done = dmabuf_feedback_done,
+    .format_table = dmabuf_feedback_format_table,
+    .main_device = dmabuf_feedback_main_device,
+    .tranche_done = dmabuf_feedback_tranche_done,
+    .tranche_target_device = dmabuf_feedback_tranche_target_device,
+    .tranche_formats = dmabuf_feedback_tranche_formats,
+    .tranche_flags = dmabuf_feedback_tranche_flags,
 };
 
 static void handle_global(void*, struct wl_registry *registry,
@@ -425,12 +465,12 @@ static void handle_global(void*, struct wl_registry *registry,
     else if (strcmp(interface, zwp_linux_dmabuf_v1_interface.name) == 0)
     {
         dmabuf = (zwp_linux_dmabuf_v1*) wl_registry_bind(registry, name,
-            &zwp_linux_dmabuf_v1_interface, 3);
-    }
-    else if (strcmp(interface, wl_drm_interface.name) == 0)
-    {
-        drm = (wl_drm*) wl_registry_bind(registry, name, &wl_drm_interface, 1);
-        wl_drm_add_listener(drm, &drm_listener, NULL);
+            &zwp_linux_dmabuf_v1_interface, 4);
+        if (dmabuf) {
+            struct zwp_linux_dmabuf_feedback_v1 *feedback =
+                zwp_linux_dmabuf_v1_get_default_feedback(dmabuf);
+            zwp_linux_dmabuf_feedback_v1_add_listener(feedback, &dmabuf_feedback_listener, NULL);
+        }
     }
 }
 
