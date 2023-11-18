@@ -1,4 +1,5 @@
 option('default_codec', type: 'string', value: 'libx264', description: 'Codec that will be used by default')
+option('default_pixel_format', type: 'string', value: '', description: 'Pixel format that will be used by default')
 option('default_audio_codec', type: 'string', value: 'aac', description: 'Audio codec that will be used by default')
 option('default_audio_sample_rate', type: 'integer', value: 48000, description: 'Audio sample rate that will be used by default')
 option('default_container_format', type: 'string', value: 'mkv', description: 'Container file format that will be used by default')

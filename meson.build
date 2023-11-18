@@ -16,6 +16,7 @@ project(
 conf_data = configuration_data()
 
 conf_data.set('default_codec', get_option('default_codec'))
+conf_data.set('default_pix_fmt', get_option('default_pixel_format'))
 conf_data.set('default_audio_codec', get_option('default_audio_codec'))
 conf_data.set('default_audio_sample_rate', get_option('default_audio_sample_rate'))
 conf_data.set('default_container_format', get_option('default_container_format'))
