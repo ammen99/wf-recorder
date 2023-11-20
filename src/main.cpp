@@ -1116,11 +1116,10 @@ int main(int argc, char *argv[])
             std::cout << "compositor running on different device, disabling DMA-BUF" << std::endl;
         }
 
-        // region with dmabuf not implemented in wlroots
-        if (selected_region.is_selected())
+        // region with dmabuf needs wlroots >= 0.17
+        if (use_dmabuf && selected_region.is_selected())
         {
-            use_dmabuf = false;
-            std::cout << "region capture not supported with DMA-BUF" << std::endl;
+            std::cout << "region capture may not work with older wlroots, try --no-dmabuf if it fails" << std::endl;
         }
 
         if (params.video_filter == "null")
