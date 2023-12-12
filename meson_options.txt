@@ -5,3 +5,4 @@ option('default_audio_sample_rate', type: 'integer', value: 48000, description: 
 option('default_container_format', type: 'string', value: 'mkv', description: 'Container file format that will be used by default')
 option('fallback_audio_sample_fmt', type: 'string', value: 's16', description: 'Fallback audio sample format that will be used if wf-recorder cannot determine the sample formats supported by a codec')
 option('pulse', type: 'feature', value: 'auto', description: 'Enable Pulseaudio')
+option('pipewire', type: 'feature', value: 'auto', description: 'Enable PipeWire')

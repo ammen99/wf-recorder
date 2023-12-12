@@ -7,9 +7,10 @@
 #define DEFAULT_CONTAINER_FORMAT "@default_container_format@"
 #define FALLBACK_AUDIO_SAMPLE_FMT "@fallback_audio_sample_fmt@"
 #mesondefine HAVE_PULSE
+#mesondefine HAVE_PIPEWIRE
 #mesondefine HAVE_OPENCL
 #mesondefine HAVE_LIBAVDEVICE
 
-#ifdef HAVE_PULSE
+#if defined(HAVE_PULSE) || defined(HAVE_PIPEWIRE)
 #define HAVE_AUDIO
 #endif
