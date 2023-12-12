@@ -112,7 +112,7 @@ class FrameWriter
 
     void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt);
 
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     SwrContext *swrCtx;
     AVStream *audioStream;
     AVCodecContext *audioCodecCtx;
@@ -128,7 +128,7 @@ class FrameWriter
     bool add_frame(const uint8_t* pixels, int64_t usec, bool y_invert);
     bool add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert);
 
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     /* Buffer must have size get_audio_buffer_size() */
     void add_audio(const void* buffer);
     size_t get_audio_buffer_size();

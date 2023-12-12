@@ -29,9 +29,9 @@
 
 #include "config.h"
 
-#ifdef HAVE_PULSE
-#include "pulse.hpp"
-PulseReaderParams pulseParams;
+#ifdef HAVE_AUDIO
+#include "audio.hpp"
+AudioReaderParams audioParams;
 #endif
 
 #define MAX_FRAME_FAILURES 16
@@ -560,8 +560,8 @@ static void write_loop(FrameWriterParams params)
     }
     pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
-#ifdef HAVE_PULSE
-    std::unique_ptr<PulseReader> pr;
+#ifdef HAVE_AUDIO
+    std::unique_ptr<AudioReader> pr;
 #endif
 
     while(!exit_main_loop)
@@ -590,12 +590,12 @@ static void write_loop(FrameWriterParams params)
             params.stride = buffer.stride;
             frame_writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
 
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
             if (params.enable_audio)
             {
-                pulseParams.audio_frame_size = frame_writer->get_audio_buffer_size();
-                pulseParams.sample_rate = params.sample_rate;
-                pr = std::unique_ptr<PulseReader> (new PulseReader(pulseParams));
+                audioParams.audio_frame_size = frame_writer->get_audio_buffer_size();
+                audioParams.sample_rate = params.sample_rate;
+                pr = std::unique_ptr<AudioReader> (AudioReader::create(audioParams));
                 pr->start();
             }
 #endif
@@ -635,9 +635,9 @@ static void write_loop(FrameWriterParams params)
     }
 
     std::lock_guard<std::mutex> lock(frame_writer_mutex);
-    /* Free the PulseReader connection first. This way it'd flush any remaining
+    /* Free the AudioReader connection first. This way it'd flush any remaining
      * frames to the FrameWriter */
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     pr = nullptr;
 #endif
     frame_writer = nullptr;
@@ -800,12 +800,12 @@ Screen recording of wlroots-based compositors
 With no FILE, start recording the current screen.
 
 Use Ctrl+C to stop.)");
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     printf(R"(
 
   -a, --audio[=DEVICE]      Starts recording the screen with audio.
                             [=DEVICE] argument is optional.
-                            In case you want to specify the pulseaudio device which will capture
+                            In case you want to specify the audio device which will capture
                             the audio, you can run this command with the name of that device.
                             You can find your device by running: pactl list sources | grep Name
                             Specify device like this: -a<device> or --audio=<device>)");
@@ -882,7 +882,7 @@ Use Ctrl+C to stop.)");
   -y, --overwrite           Force overwriting the output file without prompting.
 
 Examples:)");
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     printf(R"(
 
   Video Only:)");
@@ -896,7 +896,7 @@ Examples:)");
   - wf-recorder -f <filename>.ext       Records the video. Use Ctrl+C to stop recording.
                                         The video file will be stored as <filename>.ext in the
                                         current working directory.)");
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     printf(R"(
 
   Video and Audio:
@@ -1068,11 +1068,11 @@ int main(int argc, char *argv[])
                 break;
 
             case 'a':
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
                 params.enable_audio = true;
-                pulseParams.audio_source = optarg ? strdup(optarg) : NULL;
+                audioParams.audio_source = optarg ? strdup(optarg) : NULL;
 #else
-                std::cerr << "Cannot record audio. Built without pulse support." << std::endl;
+                std::cerr << "Cannot record audio. Built without audio support." << std::endl;
                 return EXIT_FAILURE;
 #endif
                 break;

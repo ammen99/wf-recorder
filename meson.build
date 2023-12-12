@@ -53,6 +53,9 @@ if pulse.found()
     conf_data.set('HAVE_PULSE', true)
     project_sources += 'src/pulse.cpp'
 endif
+if pulse.found()
+    project_sources += 'src/audio.cpp'
+endif
 
 libavutil = dependency('libavutil')
 libavcodec = dependency('libavcodec')

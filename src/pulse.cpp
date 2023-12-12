@@ -5,10 +5,8 @@
 #include <cstring>
 #include <thread>
 
-PulseReader::PulseReader(PulseReaderParams _p)
-    : params(_p)
+bool PulseReader::init()
 {
-
     pa_channel_map map;
     std::memset(&map, 0, sizeof(map));
     pa_channel_map_init_stereo(&map);
@@ -33,7 +31,10 @@ PulseReader::PulseReader(PulseReaderParams _p)
     {
         std::cerr << "Failed to connect to PulseAudio: " << pa_strerror(perr)
             << "\nRecording won't have audio" << std::endl;
+        return false;
     }
+
+    return true;
 }
 
 bool PulseReader::loop()
