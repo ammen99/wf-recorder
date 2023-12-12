@@ -48,12 +48,18 @@ wayland_client = dependency('wayland-client', version: '>=1.20')
 wayland_protos = dependency('wayland-protocols', version: '>=1.14')
 
 pulse = dependency('libpulse-simple', required : get_option('pulse'))
+pipewire = dependency('libpipewire-0.3', required : get_option('pipewire'))
 
+if pipewire.found()
+    conf_data.set('HAVE_PIPEWIRE', true)
+    project_sources += 'src/pipewire.cpp'
+endif
 if pulse.found()
     conf_data.set('HAVE_PULSE', true)
     project_sources += 'src/pulse.cpp'
 endif
-if pulse.found()
+if pipewire.found() or pulse.found()
+    conf_data.set('HAVE_AUDIO', true)
     project_sources += 'src/audio.cpp'
 endif
 
@@ -81,7 +87,7 @@ subdir('proto')
 dependencies = [
     wayland_client, wayland_protos,
     libavutil, libavcodec, libavformat, libavdevice, libavfilter,
-    wf_protos, threads, pulse, swr, gbm, drm
+    wf_protos, threads, pipewire, pulse, swr, gbm, drm
 ]
 
 executable('wf-recorder', project_sources,

@@ -596,7 +596,10 @@ static void write_loop(FrameWriterParams params)
                 audioParams.audio_frame_size = frame_writer->get_audio_buffer_size();
                 audioParams.sample_rate = params.sample_rate;
                 pr = std::unique_ptr<AudioReader> (AudioReader::create(audioParams));
-                pr->start();
+                if (pr)
+                {
+                    pr->start();
+                }
             }
 #endif
         }
