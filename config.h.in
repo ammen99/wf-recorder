@@ -9,3 +9,7 @@
 #mesondefine HAVE_PULSE
 #mesondefine HAVE_OPENCL
 #mesondefine HAVE_LIBAVDEVICE
+
+#ifdef HAVE_PULSE
+#define HAVE_AUDIO
+#endif
