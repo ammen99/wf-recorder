@@ -16,6 +16,7 @@
 .Op Fl -no-dmabuf
 .Op Fl D, -no-damage
 .Op Fl f Ar filename.ext
+.Op Fl q, -quit-after Ar seconds
 .Op Fl F Ar filter_string
 .Op Fl g, -geometry Ar geometry
 .Op Fl h, -help
@@ -115,6 +116,9 @@ You can check the muxers that your
 .Xr ffmpeg 1
 installation supports by running
 .Dl $ ffmpeg -muxers
+.Pp
+.It Fl q , -quit-after Ar seconds
+Stop recording after the specified seconds have elapsed and quit.
 .Pp
 .It Fl F , -filter Ar filter_string
 Set the ffmpeg filter to use. VAAPI requires `scale_vaapi=format=nv12:out_range=full` to work.

@@ -817,6 +817,8 @@ Use Ctrl+C to stop.)");
                             You can check the muxers that your FFmpeg installation supports by
                             running: ffmpeg -muxers
 
+  -q <sec>, --quit-after    Stop recording and quit after <sec> seconds
+
   -m, --muxer               Set the output format to a specific muxer instead of detecting it
                             from the filename.
 
@@ -949,10 +951,12 @@ int main(int argc, char *argv[])
     constexpr const char* default_cmdline_output = "interactive";
     std::string cmdline_output = default_cmdline_output;
     bool force_no_dmabuf = false;
+    int quit_after_seconds = -1;
 
     struct option opts[] = {
         { "output",            required_argument, NULL, 'o' },
         { "file",              required_argument, NULL, 'f' },
+        { "quit-after",        required_argument, NULL, 'q' },
         { "muxer",             required_argument, NULL, 'm' },
         { "geometry",          required_argument, NULL, 'g' },
         { "codec",             required_argument, NULL, 'c' },
@@ -977,7 +981,7 @@ int main(int argc, char *argv[])
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:q:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -1073,6 +1077,10 @@ int main(int argc, char *argv[])
 
             case '&':
                 force_no_dmabuf = true;
+                break;
+            
+            case 'q':
+                quit_after_seconds = atoi(optarg);
                 break;
 
             default:
@@ -1223,6 +1231,14 @@ int main(int argc, char *argv[])
     for (auto signo : GRACEFUL_TERMINATION_SIGNALS)
     {
         signal(signo, handle_graceful_termination);
+    }
+
+    if (quit_after_seconds > 0)
+    {
+        std::thread([=] () {
+            std::this_thread::sleep_for(std::chrono::seconds(quit_after_seconds));
+            exit_main_loop = true;
+        }).detach();
     }
 
     while(!exit_main_loop)
