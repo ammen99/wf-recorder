@@ -124,6 +124,7 @@ struct wf_buffer : public buffer_pool_buf
     struct gbm_bo *bo = nullptr;
     struct wl_buffer *wl_buffer = nullptr;
     void *data = nullptr;
+    size_t size = 0;
     enum wl_shm_format format;
     int drm_format;
     int width, height, stride;
@@ -188,6 +189,18 @@ static struct wl_buffer *create_shm_buffer(uint32_t fmt,
     return buffer;
 }
 
+void free_shm_buffer(wf_buffer& buffer)
+{
+    if (buffer.wl_buffer == NULL)
+    {
+        return;
+    }
+
+    munmap(buffer.data, buffer.size);
+    wl_buffer_destroy(buffer.wl_buffer);
+    buffer.wl_buffer = NULL;
+}
+
 static bool use_damage = true;
 static bool use_dmabuf = false;
 static bool use_hwupload = false;
@@ -224,7 +237,8 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
     if (buffer.height % 2)
         buffer.height -= 1;
 
-    if (!buffer.wl_buffer) {
+    if (!buffer.wl_buffer || buffer.format != format) {
+        free_shm_buffer(buffer);
         buffer.wl_buffer =
             create_shm_buffer(format, width, height, stride, &buffer.data);
     }
@@ -352,7 +366,6 @@ static void frame_handle_linux_dmabuf(void *, struct zwlr_screencopy_frame_v1 *f
             mod >> 32, mod & 0xffffffff);
 
         zwp_linux_buffer_params_v1_add_listener(params, &params_listener, frame);
-
         zwp_linux_buffer_params_v1_create(params, buffer.width,
             buffer.height, format, 0);
     } else {
