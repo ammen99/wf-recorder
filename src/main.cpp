@@ -732,7 +732,7 @@ struct capture_region
     {
         if (sscanf(geometry_string.c_str(), "%d,%d %dx%d", &x, &y, &width, &height) != 4)
         {
-            fprintf(stderr, "Bad geometry: %s\n",
+            fprintf(stderr, "Bad value of geometry: %s\nTo use the correct format see 'wf-recorder --help'.\n",
                 geometry_string.c_str());
             return false;
         }
