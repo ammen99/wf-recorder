@@ -224,7 +224,7 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
     }
 
     auto& buffer = buffers.capture();
-
+    auto old_format = buffer.format;
     buffer.format = (wl_shm_format)format;
     buffer.drm_format = wl_shm_to_drm_format(format);
     buffer.width = width;
@@ -237,7 +237,7 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
     if (buffer.height % 2)
         buffer.height -= 1;
 
-    if (!buffer.wl_buffer || buffer.format != format) {
+    if (!buffer.wl_buffer || old_format != format) {
         free_shm_buffer(buffer);
         buffer.wl_buffer =
             create_shm_buffer(format, width, height, stride, &buffer.data);
