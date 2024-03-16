@@ -1,31 +1,24 @@
 #ifndef PULSE_HPP
 #define PULSE_HPP
 
+#include "audio.hpp"
+
 #include <pulse/simple.h>
 #include <pulse/error.h>
 #include <thread>
 
-struct PulseReaderParams
+class PulseReader : public AudioReader
 {
-    size_t audio_frame_size;
-    uint32_t sample_rate;
-    /* Can be NULL */
-    char *audio_source;
-};
-
-class PulseReader
-{
-    PulseReaderParams params;
     pa_simple *pa;
 
     bool loop();
     std::thread read_thread;
 
     public:
-    PulseReader(PulseReaderParams params);
     ~PulseReader();
 
-    void start();
+    bool init() override;
+    void start() override;
 };
 
 #endif /* end of include guard: PULSE_HPP */
