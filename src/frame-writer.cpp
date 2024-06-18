@@ -12,6 +12,7 @@
 #include "averr.h"
 #include <gbm.h>
 
+#define HAVE_CH_LAYOUT (LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 28, 100))
 
 static const AVRational US_RATIONAL{1,1000000} ;
 
@@ -446,6 +447,22 @@ void FrameWriter::init_video_stream()
 }
 
 #ifdef HAVE_PULSE
+#if HAVE_CH_LAYOUT
+static uint64_t get_codec_channel_layout(const AVCodec *codec)
+{
+    int i = 0;
+    if (!codec->ch_layouts)
+        return AV_CH_LAYOUT_STEREO;
+    while (1) {
+        if (!av_channel_layout_check(&codec->ch_layouts[i]))
+            break;
+        if (codec->ch_layouts[i].u.mask == AV_CH_LAYOUT_STEREO)
+            return codec->ch_layouts[i].u.mask;
+        i++;
+    }
+    return codec->ch_layouts[0].u.mask;
+}
+#else
 static uint64_t get_codec_channel_layout(const AVCodec *codec)
 {
       int i = 0;
@@ -460,6 +477,7 @@ static uint64_t get_codec_channel_layout(const AVCodec *codec)
       }
       return codec->channel_layouts[0];
 }
+#endif
 
 static enum AVSampleFormat get_codec_auto_sample_fmt(const AVCodec *codec)
 {
@@ -533,10 +551,14 @@ void FrameWriter::init_audio_stream()
     {
         audioCodecCtx->sample_fmt = convert_codec_sample_fmt(codec, params.sample_fmt);
     }
+#if HAVE_CH_LAYOUT
+    av_channel_layout_from_mask(&audioCodecCtx->ch_layout, get_codec_channel_layout(codec));
+#else
     audioCodecCtx->channel_layout = get_codec_channel_layout(codec);
+    audioCodecCtx->channels = av_get_channel_layout_nb_channels(audioCodecCtx->channel_layout);
+#endif
     audioCodecCtx->sample_rate = params.sample_rate;
     audioCodecCtx->time_base = (AVRational) { 1, 1000 };
-    audioCodecCtx->channels = av_get_channel_layout_nb_channels(audioCodecCtx->channel_layout);
 
     if (fmtCtx->oformat->flags & AVFMT_GLOBALHEADER)
         audioCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
@@ -559,8 +581,14 @@ void FrameWriter::init_audio_stream()
     av_opt_set_int(swrCtx, "out_sample_rate", audioCodecCtx->sample_rate, 0);
     av_opt_set_sample_fmt(swrCtx, "in_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
     av_opt_set_sample_fmt(swrCtx, "out_sample_fmt", audioCodecCtx->sample_fmt, 0);
+#if HAVE_CH_LAYOUT
+    AVChannelLayout in_chlayout = AV_CHANNEL_LAYOUT_STEREO;
+    av_opt_set_chlayout(swrCtx, "in_chlayout", &in_chlayout, 0);
+    av_opt_set_chlayout(swrCtx, "out_chlayout", &audioCodecCtx->ch_layout, 0);
+#else
     av_opt_set_channel_layout(swrCtx, "in_channel_layout", AV_CH_LAYOUT_STEREO, 0);
     av_opt_set_channel_layout(swrCtx, "out_channel_layout", audioCodecCtx->channel_layout, 0);
+#endif
 
     if (swr_init(swrCtx))
     {
@@ -850,7 +878,11 @@ void FrameWriter::add_audio(const void* buffer)
     AVFrame *inputf = av_frame_alloc();
     inputf->sample_rate    = params.sample_rate;
     inputf->format         = AV_SAMPLE_FMT_FLT;
+#if HAVE_CH_LAYOUT
+    inputf->ch_layout = (AVChannelLayout) AV_CHANNEL_LAYOUT_STEREO;
+#else
     inputf->channel_layout = AV_CH_LAYOUT_STEREO;
+#endif
     inputf->nb_samples     = audioCodecCtx->frame_size;
 
     av_frame_get_buffer(inputf, 0);
@@ -859,7 +891,11 @@ void FrameWriter::add_audio(const void* buffer)
     AVFrame *outputf = av_frame_alloc();
     outputf->format         = audioCodecCtx->sample_fmt;
     outputf->sample_rate    = audioCodecCtx->sample_rate;
+#if HAVE_CH_LAYOUT
+    av_channel_layout_copy(&outputf->ch_layout, &audioCodecCtx->ch_layout);
+#else
     outputf->channel_layout = audioCodecCtx->channel_layout;
+#endif
     outputf->nb_samples     = audioCodecCtx->frame_size;
     av_frame_get_buffer(outputf, 0);
 
