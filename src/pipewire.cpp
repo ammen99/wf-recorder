@@ -110,6 +110,9 @@ static void on_stream_process(void *data)
         }
     }
 
+    if (!pr->time_base)
+        pr->time_base = b->time;
+
     pw_stream_queue_buffer(pr->stream, b);
 }
 
@@ -202,4 +205,9 @@ void PipeWireReader::start()
                       &audio_param, 1);
 
     pw_thread_loop_unlock(thread_loop);
+}
+
+uint64_t PipeWireReader::get_time_base() const
+{
+    return time_base / 1000;
 }

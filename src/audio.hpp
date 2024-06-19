@@ -20,6 +20,7 @@ public:
     virtual void start() = 0;
     AudioReaderParams params;
     static AudioReader *create(AudioReaderParams params);
+    virtual uint64_t get_time_base() const { return 0; }
 };
 
 #endif /* end of include guard: AUDIO_HPP */

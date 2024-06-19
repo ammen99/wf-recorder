@@ -1,6 +1,7 @@
 #define _XOPEN_SOURCE 700
 #define _POSIX_C_SOURCE 199309L
 #include <iostream>
+#include <optional>
 
 #include <list>
 #include <string>
@@ -564,6 +565,8 @@ static void write_loop(FrameWriterParams params)
     std::unique_ptr<AudioReader> pr;
 #endif
 
+    std::optional<uint64_t> first_frame_ts;
+
     while(!exit_main_loop)
     {
         // wait for frame to become available
@@ -604,28 +607,48 @@ static void write_loop(FrameWriterParams params)
 #endif
         }
 
-        bool do_cont = false;
-
-        if (use_dmabuf) {
-            if (use_hwupload) {
-                uint32_t stride = 0;
-                void *map_data = NULL;
-                void *data = gbm_bo_map(buffer.bo, 0, 0, buffer.width, buffer.height,
-                    GBM_BO_TRANSFER_READ, &stride, &map_data);
-                if (!data) {
-                    std::cerr << "Failed to map bo" << std::endl;
-                    break;
-                }
-                do_cont = frame_writer->add_frame((unsigned char*)data,
-                    buffer.base_usec, buffer.y_invert);
-                gbm_bo_unmap(buffer.bo, map_data);
+        bool drop = false;
+        uint64_t sync_timestamp = 0;
+        if (first_frame_ts.has_value()) {
+            sync_timestamp = buffer.base_usec - first_frame_ts.value();
+        } else if (pr) {
+            if (!pr->get_time_base() || pr->get_time_base() > buffer.base_usec) {
+                drop = true;
             } else {
-                do_cont = frame_writer->add_frame(buffer.bo,
-                    buffer.base_usec, buffer.y_invert);
+                first_frame_ts = pr->get_time_base();
+                sync_timestamp = buffer.base_usec - first_frame_ts.value();
             }
         } else {
-            do_cont = frame_writer->add_frame((unsigned char*)buffer.data,
-                buffer.base_usec, buffer.y_invert);
+            sync_timestamp = 0;
+            first_frame_ts = buffer.base_usec;
+        }
+
+        bool do_cont = false;
+
+        if (!drop) {
+            if (use_dmabuf) {
+                if (use_hwupload) {
+                    uint32_t stride = 0;
+                    void *map_data = NULL;
+                    void *data = gbm_bo_map(buffer.bo, 0, 0, buffer.width, buffer.height,
+                        GBM_BO_TRANSFER_READ, &stride, &map_data);
+                    if (!data) {
+                        std::cerr << "Failed to map bo" << std::endl;
+                        break;
+                    }
+                    do_cont = frame_writer->add_frame((unsigned char*)data,
+                        sync_timestamp, buffer.y_invert);
+                    gbm_bo_unmap(buffer.bo, map_data);
+                } else {
+                    do_cont = frame_writer->add_frame(buffer.bo,
+                        sync_timestamp, buffer.y_invert);
+                }
+            } else {
+                do_cont = frame_writer->add_frame((unsigned char*)buffer.data,
+                    sync_timestamp, buffer.y_invert);
+            }
+        } else {
+            do_cont = true;
         }
 
         frame_writer_mutex.unlock();
@@ -1247,9 +1270,6 @@ int main(int argc, char *argv[])
 
     printf("selected region %d,%d %dx%d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);
 
-    timespec first_frame;
-    first_frame.tv_sec = -1;
-
     bool spawned_thread = false;
     std::thread writer_thread;
 
@@ -1288,12 +1308,7 @@ int main(int argc, char *argv[])
             spawned_thread = true;
         }
 
-        if (first_frame.tv_sec == -1)
-            first_frame = buffer.presented;
-
-        buffer.base_usec = timespec_to_usec(buffer.presented)
-            - timespec_to_usec(first_frame);
-
+        buffer.base_usec = timespec_to_usec(buffer.presented);
         buffers.next_capture();
     }
 

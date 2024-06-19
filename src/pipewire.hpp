@@ -11,6 +11,7 @@ public:
     ~PipeWireReader();
     bool init() override;
     void start() override;
+    uint64_t get_time_base() const override;
 
     struct pw_thread_loop *thread_loop = nullptr;
     struct pw_context *context = nullptr;
@@ -25,6 +26,8 @@ public:
 
     uint8_t *buf = nullptr;
     size_t buf_size = 0;
+
+    uint64_t time_base = 0;
 };
 
 #endif /* end of include guard: PIPEWIRE_HPP */
