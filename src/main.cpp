@@ -654,11 +654,11 @@ static bool user_specified_overwrite(std::string filename)
     if (stat (filename.c_str(), &buffer) == 0 && !S_ISCHR(buffer.st_mode))
     {
         std::string input;
-        std::cout << "Output file \"" << filename << "\" exists. Overwrite? Y/n: ";
+        std::cerr << "Output file \"" << filename << "\" exists. Overwrite? Y/n: ";
         std::getline(std::cin, input);
         if (input.size() && input[0] != 'Y' && input[0] != 'y')
         {
-            std::cout << "Use -f to specify the file name." << std::endl;
+            std::cerr << "Use -f to specify the file name." << std::endl;
             return false;
 	}
     }
@@ -783,7 +783,7 @@ static wf_recorder_output* detect_output_from_region(const capture_region& regio
         const capture_region output_region{wo.x, wo.y, wo.width, wo.height};
         if (region.contained_in(output_region))
         {
-            std::cout << "Detected output based on geometry: " << wo.name << std::endl;
+            std::cerr << "Detected output based on geometry: " << wo.name << std::endl;
             return &wo;
         }
     }
@@ -1120,7 +1120,7 @@ int main(int argc, char *argv[])
 
     if (params.codec.find("vaapi") != std::string::npos)
     {
-        std::cout << "using VA-API, trying to enable DMA-BUF capture..." << std::endl;
+        std::cerr << "using VA-API, trying to enable DMA-BUF capture..." << std::endl;
 
         // try compositor device if not explicitly set
         if (params.hw_device.empty())
@@ -1133,15 +1133,15 @@ int main(int argc, char *argv[])
         {
             use_dmabuf = true;
         } else if (force_no_dmabuf) {
-            std::cout << "Disabling DMA-BUF as requested on command line" << std::endl;
+            std::cerr << "Disabling DMA-BUF as requested on command line" << std::endl;
         } else {
-            std::cout << "compositor running on different device, disabling DMA-BUF" << std::endl;
+            std::cerr << "compositor running on different device, disabling DMA-BUF" << std::endl;
         }
 
         // region with dmabuf needs wlroots >= 0.17
         if (use_dmabuf && selected_region.is_selected())
         {
-            std::cout << "region capture may not work with older wlroots, try --no-dmabuf if it fails" << std::endl;
+            std::cerr << "region capture may not work with older wlroots, try --no-dmabuf if it fails" << std::endl;
         }
 
         if (params.video_filter == "null")
@@ -1155,7 +1155,7 @@ int main(int argc, char *argv[])
 
         if (use_dmabuf)
         {
-            std::cout << "enabled DMA-BUF capture, device " << params.hw_device.c_str() << std::endl;
+            std::cerr << "enabled DMA-BUF capture, device " << params.hw_device.c_str() << std::endl;
 
             drm_fd = open(params.hw_device.c_str(), O_RDWR);
             if (drm_fd < 0)

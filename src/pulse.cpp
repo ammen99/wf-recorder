@@ -25,7 +25,7 @@ PulseReader::PulseReader(PulseReaderParams _p)
     };
 
     int perr;
-    std::cout << "Using PulseAudio device: " << (params.audio_source ?: "default") << std::endl;
+    std::cerr << "Using PulseAudio device: " << (params.audio_source ?: "default") << std::endl;
     pa = pa_simple_new(NULL, "wf-recorder3", PA_STREAM_RECORD, params.audio_source,
         "wf-recorder3", &sample_spec, &map, &attr, &perr);
 
