@@ -878,6 +878,8 @@ Use Ctrl+C to stop.)");
   
   -P, --audio-codec-param   Change the audio codec parameters.
                             -P <option_name>=<option_value>
+  
+  -y, --overwrite           Force overwriting the output file without prompting.
 
 Examples:)");
 #ifdef HAVE_PULSE
@@ -971,6 +973,7 @@ int main(int argc, char *argv[])
     constexpr const char* default_cmdline_output = "interactive";
     std::string cmdline_output = default_cmdline_output;
     bool force_no_dmabuf = false;
+    bool force_overwrite = false;
 
     struct option opts[] = {
         { "output",            required_argument, NULL, 'o' },
@@ -995,11 +998,12 @@ int main(int argc, char *argv[])
         { "buffrate",          required_argument, NULL, 'B' },
         { "version",           no_argument,       NULL, 'v' },
         { "no-damage",         no_argument,       NULL, 'D' },
+        { "overwrite",         no_argument,       NULL, 'y' },
         { 0,                   0,                 NULL,  0  }
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:y", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -1097,12 +1101,16 @@ int main(int argc, char *argv[])
                 force_no_dmabuf = true;
                 break;
 
+            case 'y':
+                force_overwrite = true;
+                break;
+
             default:
                 printf("Unsupported command line argument %s\n", optarg);
         }
     }
 
-    if (!user_specified_overwrite(params.file))
+    if (!force_overwrite && !user_specified_overwrite(params.file))
     {
         return EXIT_FAILURE;
     }

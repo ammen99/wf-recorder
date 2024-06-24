@@ -29,6 +29,7 @@
 .Op Fl P, -audio-codec-param Op Ar option_param=option_value
 .Op Fl R, -sample-rate Ar sample_rate
 .Op Fl X, -sample-format Ar sample_format
+.Op Fl y, -overwrite
 .Sh DESCRIPTION
 .Nm
 is a tool built to record your screen on Wayland compositors.
@@ -160,6 +161,9 @@ Set the output audio sample format.
 .Pp
 List available formats using
 .Dl $ ffmpeg -sample_fmts
+.Pp
+.It Fl y , -overwrite
+Force overwriting the output file without prompting.
 
 .El
 .Sh EXAMPLES
