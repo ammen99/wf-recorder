@@ -80,7 +80,7 @@ void FrameWriter::load_codec_options(AVDictionary **dict)
 
     for (auto& opt : params.codec_options)
     {
-        std::cout << "Setting codec option: " << opt.first << "=" << opt.second << std::endl;
+        std::cerr << "Setting codec option: " << opt.first << "=" << opt.second << std::endl;
         av_dict_set(dict, opt.first.c_str(), opt.second.c_str(), 0);
     }
 }
@@ -89,7 +89,7 @@ void FrameWriter::load_audio_codec_options(AVDictionary **dict)
 {
     for (auto& opt : params.audio_codec_options)
     {
-        std::cout << "Setting codec option: " << opt.first << "=" << opt.second << std::endl;
+        std::cerr << "Setting codec option: " << opt.first << "=" << opt.second << std::endl;
         av_dict_set(dict, opt.first.c_str(), opt.second.c_str(), 0);
     }
 }
@@ -331,7 +331,7 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
         exit(-1);
     }
 
-    std::cout << "Using video filter: " << params.video_filter << std::endl;
+    std::cerr << "Using video filter: " << params.video_filter << std::endl;
 
     err = avfilter_graph_parse_ptr(this->videoFilterGraph,
         params.video_filter.c_str(), &inputs, &outputs, NULL);
@@ -358,9 +358,9 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     }
 
     if (params.enable_ffmpeg_debug_output) {
-        std::cout << std::string(80,'#') << std::endl ;
-        std::cout << avfilter_graph_dump(this->videoFilterGraph,0) << "\n";
-        std::cout << std::string(80,'#') << std::endl ;
+        std::cerr << std::string(80,'#') << std::endl ;
+        std::cerr << avfilter_graph_dump(this->videoFilterGraph,0) << "\n";
+        std::cerr << std::string(80,'#') << std::endl ;
     }
 
 
@@ -405,7 +405,7 @@ void FrameWriter::init_video_stream()
     videoCodecCtx->time_base  = US_RATIONAL;
     videoCodecCtx->color_range = AVCOL_RANGE_JPEG;
     if (params.framerate) {
-    std::cout << "Framerate: " << params.framerate << std::endl;
+    std::cerr << "Framerate: " << params.framerate << std::endl;
     }
 
     if (params.bframes != -1)
@@ -510,16 +510,16 @@ static enum AVSampleFormat convert_codec_sample_fmt(const AVCodec *codec, std::s
     static enum AVSampleFormat converted_fmt = av_get_sample_fmt(requested_fmt.c_str());
     if (converted_fmt == AV_SAMPLE_FMT_NONE)
     {
-	std::cout << "Failed to find the given sample format: " << requested_fmt << std::endl;
-	std::exit(-1);
+        std::cerr << "Failed to find the given sample format: " << requested_fmt << std::endl;
+        std::exit(-1);
     } else if (!codec->sample_fmts || check_fmt_available(codec, converted_fmt))
     {
-        std::cout << "Using sample format " << av_get_sample_fmt_name(converted_fmt) << " for audio codec " << codec->name << std::endl;
+        std::cerr << "Using sample format " << av_get_sample_fmt_name(converted_fmt) << " for audio codec " << codec->name << std::endl;
         return converted_fmt;
     } else
     {
-	std::cout << "Codec " << codec->name << " does not support sample format " << av_get_sample_fmt_name(converted_fmt) << std::endl;
-	std::exit(-1);
+        std::cerr << "Codec " << codec->name << " does not support sample format " << av_get_sample_fmt_name(converted_fmt) << std::endl;
+        std::exit(-1);
     }
 }
 
@@ -546,7 +546,7 @@ void FrameWriter::init_audio_stream()
     if (params.sample_fmt.size() == 0) 
     {
         audioCodecCtx->sample_fmt = get_codec_auto_sample_fmt(codec);
-        std::cout << "Choosing sample format " << av_get_sample_fmt_name(audioCodecCtx->sample_fmt) << " for audio codec " << codec->name << std::endl;
+        std::cerr << "Choosing sample format " << av_get_sample_fmt_name(audioCodecCtx->sample_fmt) << " for audio codec " << codec->name << std::endl;
     } else 
     {
         audioCodecCtx->sample_fmt = convert_codec_sample_fmt(codec, params.sample_fmt);
