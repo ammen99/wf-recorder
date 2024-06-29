@@ -892,6 +892,9 @@ Use Ctrl+C to stop.)");
     
   -B. --buffrate            This option is used to specify the buffers expected framerate. this 
                             may help when encoders are expecting specific or limited framerate.
+
+  --audio-backend           Specifies the audio backend among the available backends, for ex.
+                            --audio-backend=pipewire
   
   -C, --audio-codec         Specifies the codec of the audio. These can be found by running:
                             ffmpeg -encoders
@@ -1010,6 +1013,7 @@ int main(int argc, char *argv[])
         { "codec-param",       required_argument, NULL, 'p' },
         { "framerate",         required_argument, NULL, 'r' },
         { "pixel-format",      required_argument, NULL, 'x' },
+        { "audio-backend",     required_argument, NULL, '*' },
         { "audio-codec",       required_argument, NULL, 'C' },
         { "audio-codec-param", required_argument, NULL, 'P' },
         { "sample-rate",       required_argument, NULL, 'R' },
@@ -1129,6 +1133,10 @@ int main(int argc, char *argv[])
 
             case 'y':
                 force_overwrite = true;
+                break;
+
+            case '*':
+                audioParams.audio_backend = optarg;
                 break;
 
             default:

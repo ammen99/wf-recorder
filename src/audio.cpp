@@ -12,7 +12,7 @@
 AudioReader *AudioReader::create(AudioReaderParams params)
 {
 #ifdef HAVE_PIPEWIRE
-    if (getenv("WF_RECORDER_PIPEWIRE")) {
+    if (params.audio_backend == "pipewire") {
         AudioReader *pw = new PipeWireReader;
         pw->params = params;
         if (pw->init())
@@ -21,11 +21,13 @@ AudioReader *AudioReader::create(AudioReaderParams params)
     }
 #endif
 #ifdef HAVE_PULSE
-    AudioReader *pa = new PulseReader;
-    pa->params = params;
-    if (pa->init())
-        return pa;
-    delete pa;
+    if (params.audio_backend == "pulse") {
+        AudioReader *pa = new PulseReader;
+        pa->params = params;
+        if (pa->init())
+            return pa;
+        delete pa;
+    }
 #endif
     return nullptr;
 }

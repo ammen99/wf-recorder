@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include "config.h"
+#include <string>
 
 struct AudioReaderParams
 {
@@ -10,6 +12,8 @@ struct AudioReaderParams
     uint32_t sample_rate;
     /* Can be NULL */
     char *audio_source;
+
+    std::string audio_backend = DEFAULT_AUDIO_BACKEND;
 };
 
 class AudioReader
