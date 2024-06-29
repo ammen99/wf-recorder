@@ -25,6 +25,7 @@
 .Op Fl p, -codec-param Op Ar option_param=option_value
 .Op Fl v, -version
 .Op Fl x, -pixel-format
+.Op Fl -audio-backend Ar audio_backend
 .Op Fl C, -audio-codec Ar output_audio_codec
 .Op Fl P, -audio-codec-param Op Ar option_param=option_value
 .Op Fl R, -sample-rate Ar sample_rate
@@ -146,6 +147,9 @@ Set the output pixel format.
 .Pp
 List available formats using
 .Dl $ ffmpeg -pix_fmts
+.Pp
+.It Fl  -audio-backend Ar audio_backend
+Specifies the audio backend to be used when -a is set.
 .Pp
 .It Fl C , -audio-codec Ar output_audio_codec
 Specifies the codec of the audio.

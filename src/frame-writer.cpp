@@ -446,7 +446,7 @@ void FrameWriter::init_video_stream()
     }
 }
 
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
 #if HAVE_CH_LAYOUT
 static uint64_t get_codec_channel_layout(const AVCodec *codec)
 {
@@ -608,7 +608,7 @@ void FrameWriter::init_audio_stream()
 void FrameWriter::init_codecs()
 {
     init_video_stream();
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     if (params.enable_audio)
         init_audio_stream();
 #endif
@@ -839,7 +839,7 @@ bool FrameWriter::add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert)
     return push_frame(frame, usec);
 }
 
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
 #define SRC_RATE 1e6
 #define DST_RATE 1e3
 
@@ -918,7 +918,7 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
         av_packet_rescale_ts(&pkt, videoCodecCtx->time_base, videoStream->time_base);
         pkt.stream_index = videoStream->index;
     }
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     else
     {
         av_packet_rescale_ts(&pkt, (AVRational){ 1, 1000 }, audioStream->time_base);
@@ -939,7 +939,7 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
         params.write_aborted_flag = true;
     }
     av_packet_unref(&pkt);
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     if (params.enable_audio)
         fmt_mutex.unlock();
 #endif
@@ -951,7 +951,7 @@ FrameWriter::~FrameWriter()
     AVPacket *pkt = av_packet_alloc();
 
     encode(videoCodecCtx, NULL, pkt);
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     if (params.enable_audio)
     {
         encode(audioCodecCtx, NULL, pkt);
@@ -966,7 +966,7 @@ FrameWriter::~FrameWriter()
 
     // Freeing all the allocated memory:
     avcodec_free_context(&videoCodecCtx);
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     if (params.enable_audio)
         avcodec_free_context(&audioCodecCtx);
 #endif
