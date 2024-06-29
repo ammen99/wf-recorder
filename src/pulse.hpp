@@ -13,12 +13,14 @@ class PulseReader : public AudioReader
 
     bool loop();
     std::thread read_thread;
+    uint64_t monotonic_clock_start = 0;
 
     public:
     ~PulseReader();
 
     bool init() override;
     void start() override;
+    uint64_t get_time_base() const override;
 };
 
 #endif /* end of include guard: PULSE_HPP */
