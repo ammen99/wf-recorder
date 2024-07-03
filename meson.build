@@ -6,7 +6,7 @@ project(
 	license: 'MIT',
 	meson_version: '>=0.54.0',
 	default_options: [
-		'cpp_std=c++11',
+		'cpp_std=c++17',
         'c_std=c11',
 		'warning_level=2',
 		'werror=false',
@@ -47,12 +47,66 @@ project_sources = ['src/frame-writer.cpp', 'src/main.cpp', 'src/averr.c']
 wayland_client = dependency('wayland-client', version: '>=1.20')
 wayland_protos = dependency('wayland-protocols', version: '>=1.14')
 
-pulse = dependency('libpulse-simple', required : get_option('pulse'))
+audio_backends = {
+    'pulse': {
+      'dependency': dependency('libpulse-simple', required: false),
+      'sources': ['src/pulse.cpp'],
+      'define': 'HAVE_PULSE'
+    },
+    'pipewire': {
+      'dependency': dependency('libpipewire-0.3', required: false),
+      'sources': ['src/pipewire.cpp'],
+      'define': 'HAVE_PIPEWIRE'
+    }
+}
 
-if pulse.found()
-    conf_data.set('HAVE_PULSE', true)
-    project_sources += 'src/pulse.cpp'
+default_audio_backend = get_option('default_audio_backend')
+message('Using default audio backend: @0@'.format(default_audio_backend))
+have_audio = false
+audio_deps = []
+
+foreach backend_name, backend_data : audio_backends
+  if default_audio_backend == backend_name and not backend_data['dependency'].found()
+    error('Default audio backend set to @0@, but @1@ dependency was not found!'.format(backend_name, backend_data['dependency'].name()))
+  endif
+
+  if default_audio_backend == backend_name and get_option(backend_name).disabled()
+    error('Default audio backend set to @0@, but @1@ support is disabled!'.format(backend_name, backend_name))
+  endif
+
+  if get_option(backend_name).enabled() and not backend_data['dependency'].found()
+    error('@0@ support is enabled, but @1@ dependency was not found!'.format(backend_name, backend_data['dependency'].name()))
+  endif
+
+  if backend_data['dependency'].found() and not get_option(backend_name).disabled()
+    conf_data.set(backend_data['define'], true)
+    project_sources += backend_data['sources']
+    audio_deps += backend_data['dependency']
+    have_audio = true
+  else
+    conf_data.set(backend_data['define'], false)
+  endif
+endforeach
+
+if have_audio
+    conf_data.set('HAVE_AUDIO', true)
+    project_sources += 'src/audio.cpp'
+
+    if default_audio_backend == 'auto'
+      if conf_data.get('HAVE_PULSE')
+        default_audio_backend = 'pulse'
+      else
+        foreach backend_name, backend_data : audio_backends
+          if conf_data.get(backend_data['define'])
+            default_audio_backend = backend_name
+            break
+          endif
+        endforeach
+      endif
+    endif
 endif
+
+conf_data.set('default_audio_backend', default_audio_backend)
 
 libavutil = dependency('libavutil')
 libavcodec = dependency('libavcodec')
@@ -78,9 +132,22 @@ subdir('proto')
 dependencies = [
     wayland_client, wayland_protos,
     libavutil, libavcodec, libavformat, libavdevice, libavfilter,
-    wf_protos, threads, pulse, swr, gbm, drm
-]
+    wf_protos, threads, swr, gbm, drm
+] + audio_deps
 
 executable('wf-recorder', project_sources,
         dependencies: dependencies,
         install: true)
+
+summary = [
+	'',
+	'----------------',
+	'wf-recorder @0@'.format(meson.project_version()),
+    '----------------',
+    'Default audio backend: @0@'.format(default_audio_backend),
+]
+
+foreach backend_name, backend_data : audio_backends
+  summary += ['  - @0@: @1@'.format(backend_name, conf_data.get(backend_data['define']))]
+endforeach
+message('\n'.join(summary))

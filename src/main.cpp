@@ -1,6 +1,7 @@
 #define _XOPEN_SOURCE 700
 #define _POSIX_C_SOURCE 199309L
 #include <iostream>
+#include <optional>
 
 #include <list>
 #include <string>
@@ -29,9 +30,9 @@
 
 #include "config.h"
 
-#ifdef HAVE_PULSE
-#include "pulse.hpp"
-PulseReaderParams pulseParams;
+#ifdef HAVE_AUDIO
+#include "audio.hpp"
+AudioReaderParams audioParams;
 #endif
 
 #define MAX_FRAME_FAILURES 16
@@ -560,9 +561,11 @@ static void write_loop(FrameWriterParams params)
     }
     pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
-#ifdef HAVE_PULSE
-    std::unique_ptr<PulseReader> pr;
+#ifdef HAVE_AUDIO
+    std::unique_ptr<AudioReader> pr;
 #endif
+
+    std::optional<uint64_t> first_frame_ts;
 
     while(!exit_main_loop)
     {
@@ -590,39 +593,62 @@ static void write_loop(FrameWriterParams params)
             params.stride = buffer.stride;
             frame_writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
 
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
             if (params.enable_audio)
             {
-                pulseParams.audio_frame_size = frame_writer->get_audio_buffer_size();
-                pulseParams.sample_rate = params.sample_rate;
-                pr = std::unique_ptr<PulseReader> (new PulseReader(pulseParams));
-                pr->start();
+                audioParams.audio_frame_size = frame_writer->get_audio_buffer_size();
+                audioParams.sample_rate = params.sample_rate;
+                pr = std::unique_ptr<AudioReader> (AudioReader::create(audioParams));
+                if (pr)
+                {
+                    pr->start();
+                }
             }
 #endif
         }
 
-        bool do_cont = false;
-
-        if (use_dmabuf) {
-            if (use_hwupload) {
-                uint32_t stride = 0;
-                void *map_data = NULL;
-                void *data = gbm_bo_map(buffer.bo, 0, 0, buffer.width, buffer.height,
-                    GBM_BO_TRANSFER_READ, &stride, &map_data);
-                if (!data) {
-                    std::cerr << "Failed to map bo" << std::endl;
-                    break;
-                }
-                do_cont = frame_writer->add_frame((unsigned char*)data,
-                    buffer.base_usec, buffer.y_invert);
-                gbm_bo_unmap(buffer.bo, map_data);
+        bool drop = false;
+        uint64_t sync_timestamp = 0;
+        if (first_frame_ts.has_value()) {
+            sync_timestamp = buffer.base_usec - first_frame_ts.value();
+        } else if (pr) {
+            if (!pr->get_time_base() || pr->get_time_base() > buffer.base_usec) {
+                drop = true;
             } else {
-                do_cont = frame_writer->add_frame(buffer.bo,
-                    buffer.base_usec, buffer.y_invert);
+                first_frame_ts = pr->get_time_base();
+                sync_timestamp = buffer.base_usec - first_frame_ts.value();
             }
         } else {
-            do_cont = frame_writer->add_frame((unsigned char*)buffer.data,
-                buffer.base_usec, buffer.y_invert);
+            sync_timestamp = 0;
+            first_frame_ts = buffer.base_usec;
+        }
+
+        bool do_cont = false;
+
+        if (!drop) {
+            if (use_dmabuf) {
+                if (use_hwupload) {
+                    uint32_t stride = 0;
+                    void *map_data = NULL;
+                    void *data = gbm_bo_map(buffer.bo, 0, 0, buffer.width, buffer.height,
+                        GBM_BO_TRANSFER_READ, &stride, &map_data);
+                    if (!data) {
+                        std::cerr << "Failed to map bo" << std::endl;
+                        break;
+                    }
+                    do_cont = frame_writer->add_frame((unsigned char*)data,
+                        sync_timestamp, buffer.y_invert);
+                    gbm_bo_unmap(buffer.bo, map_data);
+                } else {
+                    do_cont = frame_writer->add_frame(buffer.bo,
+                        sync_timestamp, buffer.y_invert);
+                }
+            } else {
+                do_cont = frame_writer->add_frame((unsigned char*)buffer.data,
+                    sync_timestamp, buffer.y_invert);
+            }
+        } else {
+            do_cont = true;
         }
 
         frame_writer_mutex.unlock();
@@ -635,9 +661,9 @@ static void write_loop(FrameWriterParams params)
     }
 
     std::lock_guard<std::mutex> lock(frame_writer_mutex);
-    /* Free the PulseReader connection first. This way it'd flush any remaining
+    /* Free the AudioReader connection first. This way it'd flush any remaining
      * frames to the FrameWriter */
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     pr = nullptr;
 #endif
     frame_writer = nullptr;
@@ -800,12 +826,12 @@ Screen recording of wlroots-based compositors
 With no FILE, start recording the current screen.
 
 Use Ctrl+C to stop.)");
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     printf(R"(
 
   -a, --audio[=DEVICE]      Starts recording the screen with audio.
                             [=DEVICE] argument is optional.
-                            In case you want to specify the pulseaudio device which will capture
+                            In case you want to specify the audio device which will capture
                             the audio, you can run this command with the name of that device.
                             You can find your device by running: pactl list sources | grep Name
                             Specify device like this: -a<device> or --audio=<device>)");
@@ -866,6 +892,9 @@ Use Ctrl+C to stop.)");
     
   -B. --buffrate            This option is used to specify the buffers expected framerate. this 
                             may help when encoders are expecting specific or limited framerate.
+
+  --audio-backend           Specifies the audio backend among the available backends, for ex.
+                            --audio-backend=pipewire
   
   -C, --audio-codec         Specifies the codec of the audio. These can be found by running:
                             ffmpeg -encoders
@@ -882,7 +911,7 @@ Use Ctrl+C to stop.)");
   -y, --overwrite           Force overwriting the output file without prompting.
 
 Examples:)");
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     printf(R"(
 
   Video Only:)");
@@ -896,7 +925,7 @@ Examples:)");
   - wf-recorder -f <filename>.ext       Records the video. Use Ctrl+C to stop recording.
                                         The video file will be stored as <filename>.ext in the
                                         current working directory.)");
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
     printf(R"(
 
   Video and Audio:
@@ -984,6 +1013,7 @@ int main(int argc, char *argv[])
         { "codec-param",       required_argument, NULL, 'p' },
         { "framerate",         required_argument, NULL, 'r' },
         { "pixel-format",      required_argument, NULL, 'x' },
+        { "audio-backend",     required_argument, NULL, '*' },
         { "audio-codec",       required_argument, NULL, 'C' },
         { "audio-codec-param", required_argument, NULL, 'P' },
         { "sample-rate",       required_argument, NULL, 'R' },
@@ -1068,11 +1098,11 @@ int main(int argc, char *argv[])
                 break;
 
             case 'a':
-#ifdef HAVE_PULSE
+#ifdef HAVE_AUDIO
                 params.enable_audio = true;
-                pulseParams.audio_source = optarg ? strdup(optarg) : NULL;
+                audioParams.audio_source = optarg ? strdup(optarg) : NULL;
 #else
-                std::cerr << "Cannot record audio. Built without pulse support." << std::endl;
+                std::cerr << "Cannot record audio. Built without audio support." << std::endl;
                 return EXIT_FAILURE;
 #endif
                 break;
@@ -1103,6 +1133,10 @@ int main(int argc, char *argv[])
 
             case 'y':
                 force_overwrite = true;
+                break;
+
+            case '*':
+                audioParams.audio_backend = optarg;
                 break;
 
             default:
@@ -1244,9 +1278,6 @@ int main(int argc, char *argv[])
 
     printf("selected region %d,%d %dx%d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);
 
-    timespec first_frame;
-    first_frame.tv_sec = -1;
-
     bool spawned_thread = false;
     std::thread writer_thread;
 
@@ -1285,12 +1316,7 @@ int main(int argc, char *argv[])
             spawned_thread = true;
         }
 
-        if (first_frame.tv_sec == -1)
-            first_frame = buffer.presented;
-
-        buffer.base_usec = timespec_to_usec(buffer.presented)
-            - timespec_to_usec(first_frame);
-
+        buffer.base_usec = timespec_to_usec(buffer.presented);
         buffers.next_capture();
     }
 

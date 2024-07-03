@@ -2,10 +2,13 @@
 
 #define DEFAULT_CODEC "@default_codec@"
 #define DEFAULT_PIX_FMT "@default_pix_fmt@"
+#define DEFAULT_AUDIO_BACKEND "@default_audio_backend@"
 #define DEFAULT_AUDIO_CODEC "@default_audio_codec@"
 #define DEFAULT_AUDIO_SAMPLE_RATE @default_audio_sample_rate@
 #define DEFAULT_CONTAINER_FORMAT "@default_container_format@"
 #define FALLBACK_AUDIO_SAMPLE_FMT "@fallback_audio_sample_fmt@"
+#mesondefine HAVE_AUDIO
 #mesondefine HAVE_PULSE
+#mesondefine HAVE_PIPEWIRE
 #mesondefine HAVE_OPENCL
 #mesondefine HAVE_LIBAVDEVICE

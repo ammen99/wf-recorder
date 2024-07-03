@@ -5,10 +5,8 @@
 #include <cstring>
 #include <thread>
 
-PulseReader::PulseReader(PulseReaderParams _p)
-    : params(_p)
+bool PulseReader::init()
 {
-
     pa_channel_map map;
     std::memset(&map, 0, sizeof(map));
     pa_channel_map_init_stereo(&map);
@@ -29,11 +27,24 @@ PulseReader::PulseReader(PulseReaderParams _p)
     pa = pa_simple_new(NULL, "wf-recorder3", PA_STREAM_RECORD, params.audio_source,
         "wf-recorder3", &sample_spec, &map, &attr, &perr);
 
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    this->monotonic_clock_start = ts.tv_sec * 1000000ll + ts.tv_nsec / 1000ll;
+
+    int error = 0;
+    uint64_t latency_audio = pa_simple_get_latency(pa, &error);
+    if (latency_audio != (pa_usec_t)-1) {
+        monotonic_clock_start -= latency_audio;
+    }
+
     if (!pa)
     {
         std::cerr << "Failed to connect to PulseAudio: " << pa_strerror(perr)
             << "\nRecording won't have audio" << std::endl;
+        return false;
     }
+
+    return true;
 }
 
 bool PulseReader::loop()
@@ -68,4 +79,9 @@ PulseReader::~PulseReader()
 {
     if (pa)
         read_thread.join();
+}
+
+uint64_t PulseReader::get_time_base() const
+{
+    return monotonic_clock_start;
 }
