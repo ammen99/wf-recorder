@@ -54,7 +54,7 @@ audio_backends = {
       'define': 'HAVE_PULSE'
     },
     'pipewire': {
-      'dependency': dependency('libpipewire-0.3', required: false),
+      'dependency': dependency('libpipewire-0.3', version: '>=1.0.5', required: false),
       'sources': ['src/pipewire.cpp'],
       'define': 'HAVE_PIPEWIRE'
     }
