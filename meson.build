@@ -2,7 +2,7 @@ project(
 	'wf-recorder',
     'c',
 	'cpp',
-	version: '0.4.1',
+	version: '0.5.0',
 	license: 'MIT',
 	meson_version: '>=0.54.0',
 	default_options: [
