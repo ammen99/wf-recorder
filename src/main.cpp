@@ -611,14 +611,18 @@ static void write_loop(FrameWriterParams params)
         uint64_t sync_timestamp = 0;
         if (first_frame_ts.has_value()) {
             sync_timestamp = buffer.base_usec - first_frame_ts.value();
-        } else if (pr) {
+        }
+#ifdef HAVE_AUDIO
+        else if (pr) {
             if (!pr->get_time_base() || pr->get_time_base() > buffer.base_usec) {
                 drop = true;
             } else {
                 first_frame_ts = pr->get_time_base();
                 sync_timestamp = buffer.base_usec - first_frame_ts.value();
             }
-        } else {
+        }
+#endif
+        else {
             sync_timestamp = 0;
             first_frame_ts = buffer.base_usec;
         }
@@ -1136,7 +1140,11 @@ int main(int argc, char *argv[])
                 break;
 
             case '*':
+#ifdef HAVE_AUDIO
                 audioParams.audio_backend = optarg;
+#else
+                std::cerr << "Ignoring --audio-backend. Built without audio support." << std::endl;
+#endif
                 break;
 
             default:
