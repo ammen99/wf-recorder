@@ -50,7 +50,7 @@ void FrameWriter::load_codec_options(AVDictionary **dict)
 
     static const CodecOptions default_x264_options = {
         {"tune", "zerolatency"},
-        {"preset", "ultrafast"},
+        {"preset", "superfast"},
         {"crf", "20"},
     };
 
