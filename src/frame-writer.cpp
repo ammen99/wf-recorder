@@ -371,7 +371,7 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     this->videoCodecCtx->height = filter_output->h;
     this->videoCodecCtx->pix_fmt = (AVPixelFormat)filter_output->format;
     this->videoCodecCtx->time_base = filter_output->time_base;
-    this->videoCodecCtx->framerate = AVRational{1,0}; // can be 1/0 if unknown
+    this->videoCodecCtx->framerate = AVRational{1,0};
     this->videoCodecCtx->sample_aspect_ratio = filter_output->sample_aspect_ratio;
 
     this->hw_frame_context = av_buffersink_get_hw_frames_ctx(
