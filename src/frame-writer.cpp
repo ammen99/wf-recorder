@@ -526,7 +526,7 @@ static enum AVSampleFormat convert_codec_sample_fmt(const AVCodec *codec, std::s
 void FrameWriter::init_audio_stream()
 {
     AVDictionary *options = NULL;
-    load_codec_options(&options);
+    load_audio_codec_options(&options);
     
     const AVCodec* codec = avcodec_find_encoder_by_name(params.audio_codec.c_str());
     if (!codec)
