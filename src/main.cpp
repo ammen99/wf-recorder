@@ -611,6 +611,7 @@ static void write_loop(FrameWriterParams params)
         uint64_t sync_timestamp = 0;
         if (first_frame_ts.has_value()) {
             sync_timestamp = buffer.base_usec - first_frame_ts.value();
+#ifdef HAVE_AUDIO
         } else if (pr) {
             if (!pr->get_time_base() || pr->get_time_base() > buffer.base_usec) {
                 drop = true;
@@ -618,6 +619,7 @@ static void write_loop(FrameWriterParams params)
                 first_frame_ts = pr->get_time_base();
                 sync_timestamp = buffer.base_usec - first_frame_ts.value();
             }
+#endif
         } else {
             sync_timestamp = 0;
             first_frame_ts = buffer.base_usec;
@@ -1134,11 +1136,11 @@ int main(int argc, char *argv[])
             case 'y':
                 force_overwrite = true;
                 break;
-
+#ifdef HAVE_AUDIO
             case '*':
                 audioParams.audio_backend = optarg;
                 break;
-
+#endif
             default:
                 printf("Unsupported command line argument %s\n", optarg);
         }
