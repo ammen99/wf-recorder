@@ -642,6 +642,9 @@ static const char* determine_output_format(const FrameWriterParams& params)
 
     if (params.file.find("udp") == 0)
         return "mpegts";
+    
+    if (params.file.find("rtp") == 0)
+        return "rtp_mpegts";
 
     return NULL;
 }
