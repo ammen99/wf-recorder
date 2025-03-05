@@ -558,7 +558,7 @@ void FrameWriter::init_audio_stream()
     audioCodecCtx->channels = av_get_channel_layout_nb_channels(audioCodecCtx->channel_layout);
 #endif
     audioCodecCtx->sample_rate = params.sample_rate;
-    audioCodecCtx->time_base = (AVRational) { 1, 1000 };
+    audioCodecCtx->time_base = (AVRational) { 1, audioCodecCtx->sample_rate };
 
     if (fmtCtx->oformat->flags & AVFMT_GLOBALHEADER)
         audioCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
@@ -858,7 +858,7 @@ static int64_t conv_audio_pts(SwrContext *ctx, int64_t in, int sample_rate)
     in = swr_next_pts(ctx, in);
 
     /* Convert from 1/(src_samplerate * dst_samplerate) to audio_dst_tb */
-    return av_rescale_rnd(in, DST_RATE, d, AV_ROUND_NEAR_INF);
+    return av_rescale_rnd(in, sample_rate, d, AV_ROUND_NEAR_INF);
 }
 
 void FrameWriter::send_audio_pkt(AVFrame *frame)
@@ -924,7 +924,7 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
 #ifdef HAVE_AUDIO
     else
     {
-        av_packet_rescale_ts(&pkt, (AVRational){ 1, 1000 }, audioStream->time_base);
+        av_packet_rescale_ts(&pkt, audioCodecCtx->time_base, audioStream->time_base);
         pkt.stream_index = audioStream->index;
     }
 
