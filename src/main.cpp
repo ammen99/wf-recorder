@@ -1278,7 +1278,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    printf("selected region %d,%d %dx%d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);
+    fprintf(stderr, "selected region %d,%d %dx%d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);
 
     bool spawned_thread = false;
     std::thread writer_thread;
