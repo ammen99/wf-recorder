@@ -15,7 +15,7 @@
 .Op Fl d, -device Ar encoding_device
 .Op Fl -no-dmabuf
 .Op Fl D, -no-damage
-.Op Fl f Ar filename.ext
+.Op Fl f, -file Ar filename.ext
 .Op Fl F Ar filter_string
 .Op Fl g, -geometry Ar geometry
 .Op Fl h, -help
@@ -103,7 +103,7 @@ file, which however has a variable refresh rate. When this option is
 on, wf-recorder does not use this optimization and continuously
 records new frames, even if there are no updates on the screen.
 .Pp
-.It Fl f Ar filename.ext
+.It Fl f , -file Ar filename.ext
 By using the
 .Fl f
 option, the output file will have the name
