@@ -66,18 +66,18 @@ You can find your device by running
 .It Fl b , -bframes Ar max_b_frames
 Sets the maximum number of B-Frames to use.
 .It Fl B , -buffrate Ar buffrate
-Tells the encoder a prediction of what framerate to expect. 
+Tells the encoder a prediction of what framerate to expect.
 This preserves VFR and Solves FPS limit issue of some encoders (like svt-av1).
 Should be set to the same framerate as display.
 .Pp
 .It Fl c , -codec Ar output_codec
 Specifies the codec of the video. Supports GIF output as well.
 .Pp
-To modify codec parameters, use
+To change codec parameters, use
 .Fl p Ar option_name=option_value
 .Pp
 .It Fl r , -framerate Ar framerate
-Sets hard constant framerate. Will duplicate frames to reach it. 
+Sets hard constant framerate. Will duplicate frames to reach it.
 This makes the resulting video CFR. Solves FPS limit issue of some encoders.
 .Pp
 .It Fl d , -device Ar encoding_device
@@ -137,7 +137,9 @@ Set the output format to a specific muxer instead of detecting it from the filen
 Specify the output where the video is to be recorded.
 .Pp
 .It Fl p , -codec-param Op Ar option_name=option_value
-Change the codec parameters.
+Change a codec parameter. Can be used multiple times:
+.Fl p Ar option_name_1=option_value_1
+.Fl p Ar option_name_2=option_value_2
 .Pp
 .It Fl v , -version
 Print the version of wf-recorder.
@@ -191,9 +193,10 @@ To specify a
 .Ar codec
 use the
 .Fl c Ar codec
-option. To modify codec parameters,
+option. To change codec parameters, use the
 .Fl p
-.Ar option_name=option_value.
+option:
+.Dl $ wf-recorder -c libx264 -p preset=slow -p crf=18
 .Pp
 To set a specific output format, use the
 .Fl m, -muxer
