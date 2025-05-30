@@ -27,12 +27,39 @@
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 #include "xdg-output-unstable-v1-client-protocol.h"
 #include "linux-dmabuf-unstable-v1-client-protocol.h"
+#include "debug.hpp"
 
 #include "config.h"
+
+// Global debug flag - controlled by -l command line flag
+bool debug_log = false;
 
 #ifdef HAVE_AUDIO
 #include "audio.hpp"
 AudioReaderParams audioParams;
+
+// Map of audio sources to stream indices for the multiple audio stream feature
+std::map<std::string, int> audio_source_streams;
+
+// Helper function to create an AudioReader for a specific source index
+AudioReader* create_audio_reader(int source_index)
+{
+    extern AudioReaderParams audioParams;
+
+    // Create parameters for this specific source
+    AudioReaderParams single_params = audioParams;
+    if (source_index < (int)audioParams.audio_sources.size()) {
+        // Set a single source
+        single_params.audio_sources = { audioParams.audio_sources[source_index] };
+    }
+
+    // Create and start the reader
+    AudioReader* reader = AudioReader::create(single_params);
+    if (reader) {
+        reader->start();
+    }
+    return reader;
+}
 #endif
 
 #define MAX_FRAME_FAILURES 16
@@ -561,9 +588,7 @@ static void write_loop(FrameWriterParams params)
     }
     pthread_sigmask(SIG_BLOCK, &sigset, NULL);
 
-#ifdef HAVE_AUDIO
-    std::unique_ptr<AudioReader> pr;
-#endif
+    std::vector<std::unique_ptr<AudioReader>> audio_readers;
 
     std::optional<uint64_t> first_frame_ts;
 
@@ -596,12 +621,32 @@ static void write_loop(FrameWriterParams params)
 #ifdef HAVE_AUDIO
             if (params.enable_audio)
             {
-                audioParams.audio_frame_size = frame_writer->get_audio_buffer_size();
-                audioParams.sample_rate = params.sample_rate;
-                pr = std::unique_ptr<AudioReader> (AudioReader::create(audioParams));
-                if (pr)
+                // Create an audio reader for each source
+                for (size_t i = 0; i < audioParams.audio_sources.size(); i++)
                 {
-                    pr->start();
+                    AudioReader *ar;
+                    auto source = audioParams.audio_sources[i];
+
+                    uint8_t* dummy_buffer;
+                    audioParams.audio_frame_size = frame_writer->get_audio_buffer_size(&dummy_buffer, i);
+                    audioParams.sample_rate = params.sample_rate;
+                    if (dummy_buffer) {
+                        av_free(dummy_buffer);
+                    }
+
+                    try {
+                        ar = create_audio_reader(i);
+                    } catch (std::exception& e) {
+                        std::cerr << "Failed to create audio reader for source " << source << ": " << e.what() << std::endl;
+                        continue;
+                    }
+
+                    if (ar) {
+                        audio_readers.emplace_back(ar);
+                        // Create mapping between source name and stream index
+                        audio_source_streams[source] = i;
+                        dbg << "DEBUG: Mapped audio source '" << source << "' to stream index " << i << std::endl;
+                    }
                 }
             }
 #endif
@@ -612,11 +657,11 @@ static void write_loop(FrameWriterParams params)
         if (first_frame_ts.has_value()) {
             sync_timestamp = buffer.base_usec - first_frame_ts.value();
 #ifdef HAVE_AUDIO
-        } else if (pr) {
-            if (!pr->get_time_base() || pr->get_time_base() > buffer.base_usec) {
+        } else if (!audio_readers.empty() && audio_readers[0]) {
+            if (!audio_readers[0]->get_time_base() || audio_readers[0]->get_time_base() > buffer.base_usec) {
                 drop = true;
             } else {
-                first_frame_ts = pr->get_time_base();
+                first_frame_ts = audio_readers[0]->get_time_base();
                 sync_timestamp = buffer.base_usec - first_frame_ts.value();
             }
 #endif
@@ -666,7 +711,7 @@ static void write_loop(FrameWriterParams params)
     /* Free the AudioReader connection first. This way it'd flush any remaining
      * frames to the FrameWriter */
 #ifdef HAVE_AUDIO
-    pr = nullptr;
+    audio_readers.clear();
 #endif
     frame_writer = nullptr;
 }
@@ -678,7 +723,7 @@ void handle_graceful_termination(int)
 
 static bool user_specified_overwrite(std::string filename)
 {
-    struct stat buffer;   
+    struct stat buffer;
     if (stat (filename.c_str(), &buffer) == 0 && !S_ISCHR(buffer.st_mode))
     {
         std::string input;
@@ -836,16 +881,18 @@ Use Ctrl+C to stop.)");
                             In case you want to specify the audio device which will capture
                             the audio, you can run this command with the name of that device.
                             You can find your device by running: pactl list sources | grep Name
-                            Specify device like this: -a<device> or --audio=<device>)");
+                            Specify device like this: -a<device> or --audio=<device>
+                            Multiple --audio options can be specified to capture from multiple
+                            sources, for example: --audio="$audio_src" --audio="$mic_src")");
 #endif
     printf(R"(
 
   -c, --codec               Specifies the codec of the video. These can be found by using:
                             ffmpeg -encoders
                             To modify codec parameters, use -p <option_name>=<option_value>
-  
+
   -r, --framerate           Changes framerate to constant framerate with a given value.
-  
+
   -d, --device              Selects the device to use when encoding the video
                             Some drivers report support for rgb0 data for vaapi input but
                             really only support yuv.
@@ -891,25 +938,25 @@ Use Ctrl+C to stop.)");
 
   -b, --bframes             This option is used to set the maximum number of b-frames to be used.
                             If b-frames are not supported by your hardware, set this to 0.
-    
-  -B. --buffrate            This option is used to specify the buffers expected framerate. this 
+
+  -B. --buffrate            This option is used to specify the buffers expected framerate. this
                             may help when encoders are expecting specific or limited framerate.
 
   --audio-backend           Specifies the audio backend among the available backends, for ex.
                             --audio-backend=pipewire
-  
+
   -C, --audio-codec         Specifies the codec of the audio. These can be found by running:
                             ffmpeg -encoders
                             To modify codec parameters, use -P <option_name>=<option_value>
 
-  -X, --sample-format       Set the output audio sample format. These can be found by running: 
+  -X, --sample-format       Set the output audio sample format. These can be found by running:
                             ffmpeg -sample_fmts
-  
+
   -R, --sample-rate         Changes the audio sample rate in HZ. The default value is 48000.
-  
+
   -P, --audio-codec-param   Change the audio codec parameters.
                             -P <option_name>=<option_value>
-  
+
   -y, --overwrite           Force overwriting the output file without prompting.
 
 Examples:)");
@@ -1024,6 +1071,7 @@ int main(int argc, char *argv[])
         { "no-dmabuf",         no_argument,       NULL, '&' },
         { "filter",            required_argument, NULL, 'F' },
         { "log",               no_argument,       NULL, 'l' },
+        { "verbose",           no_argument,       NULL, 'V' },
         { "audio",             optional_argument, NULL, 'a' },
         { "help",              no_argument,       NULL, 'h' },
         { "bframes",           required_argument, NULL, 'b' },
@@ -1035,7 +1083,7 @@ int main(int argc, char *argv[])
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:y", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:yV", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -1097,12 +1145,19 @@ int main(int argc, char *argv[])
 
             case 'l':
                 params.enable_ffmpeg_debug_output = true;
+                debug_log = true;  // Set the global debug flag
+                break;
+
+            case 'V':
+                debug_log = true;  // Set the global debug flag
                 break;
 
             case 'a':
 #ifdef HAVE_AUDIO
                 params.enable_audio = true;
-                audioParams.audio_source = optarg ? strdup(optarg) : NULL;
+                if (optarg) {
+                    audioParams.audio_sources.push_back(optarg);
+                }
 #else
                 std::cerr << "Cannot record audio. Built without audio support." << std::endl;
                 return EXIT_FAILURE;
@@ -1136,15 +1191,24 @@ int main(int argc, char *argv[])
             case 'y':
                 force_overwrite = true;
                 break;
+
 #ifdef HAVE_AUDIO
             case '*':
                 audioParams.audio_backend = optarg;
                 break;
 #endif
+
             default:
                 printf("Unsupported command line argument %s\n", optarg);
         }
     }
+
+#ifdef HAVE_AUDIO
+    if (params.enable_audio && audioParams.audio_sources.empty()) {
+        // If audio is enabled but no source specified, add default source
+        audioParams.audio_sources.push_back("");
+    }
+#endif
 
     if (!force_overwrite && !user_specified_overwrite(params.file))
     {

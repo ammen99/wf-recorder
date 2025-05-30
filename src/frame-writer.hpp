@@ -70,8 +70,6 @@ struct FrameWriterParams
     int sample_rate;
     int buffrate = 0;
 
-    int64_t audio_sync_offset;
-
     bool enable_audio;
     bool enable_ffmpeg_debug_output;
 
@@ -79,6 +77,13 @@ struct FrameWriterParams
 
     std::atomic<bool>& write_aborted_flag;
     FrameWriterParams(std::atomic<bool>& flag): write_aborted_flag(flag) {}
+};
+
+// Structure to hold audio stream data
+struct AudioStreamData {
+    AVStream *stream;
+    AVCodecContext *codecCtx;
+    SwrContext *swrCtx;
 };
 
 class FrameWriter
@@ -113,12 +118,9 @@ class FrameWriter
     void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt);
 
 #ifdef HAVE_AUDIO
-    SwrContext *swrCtx;
-    AVStream *audioStream;
-    AVCodecContext *audioCodecCtx;
-    void init_swr();
-    void init_audio_stream();
-    void send_audio_pkt(AVFrame *frame);
+    // Vector to hold multiple audio streams
+    std::vector<AudioStreamData> audioStreams;
+    void init_audio_stream(size_t num_streams);
 #endif
     void finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt);
     bool push_frame(AVFrame *frame, int64_t usec);
@@ -129,10 +131,10 @@ class FrameWriter
     bool add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert);
 
 #ifdef HAVE_AUDIO
-    /* Buffer must have size get_audio_buffer_size() */
-    void add_audio(const void* buffer);
-    size_t get_audio_buffer_size();
-
+    /* Buffer data with length len */
+    void add_audio(const void* data, int len, int stream_index = 0);
+    size_t get_audio_buffer_size(uint8_t** audioBuffer, int stream_index);
+    size_t get_num_audio_streams() const { return audioStreams.size(); }
 #endif
 
     ~FrameWriter();
