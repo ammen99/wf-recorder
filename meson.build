@@ -42,7 +42,7 @@ include_directories(['.'])
 
 add_project_arguments(['-Wno-deprecated-declarations'], language: 'cpp')
 
-project_sources = ['src/frame-writer.cpp', 'src/main.cpp', 'src/averr.c']
+project_sources = ['src/frame-writer.cpp', 'src/main.cpp', 'src/averr.c', 'src/debug.cpp']
 
 wayland_client = dependency('wayland-client', version: '>=1.20')
 wayland_protos = dependency('wayland-protocols', version: '>=1.14')

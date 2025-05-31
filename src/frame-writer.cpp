@@ -11,6 +11,8 @@
 #include <sstream>
 #include "averr.h"
 #include <gbm.h>
+#include "audio.hpp"
+#include "debug.hpp"
 
 #define HAVE_CH_LAYOUT (LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 28, 100))
 
@@ -220,7 +222,7 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
         }
         else if (params.video_filter == "null"){
             params.video_filter = "fps=" + std::to_string(params.framerate);
-        } 
+        }
     }
 
     this->videoFilterGraph = avfilter_graph_alloc();
@@ -523,86 +525,203 @@ static enum AVSampleFormat convert_codec_sample_fmt(const AVCodec *codec, std::s
     }
 }
 
-void FrameWriter::init_audio_stream()
+void FrameWriter::init_audio_stream(size_t num_streams)
 {
-    AVDictionary *options = NULL;
-    load_audio_codec_options(&options);
-    
-    const AVCodec* codec = avcodec_find_encoder_by_name(params.audio_codec.c_str());
-    if (!codec)
-    {
-        std::cerr << "Failed to find the given audio codec: " << params.audio_codec << std::endl;
-        std::exit(-1);
+    if (num_streams == 0) {
+        return;
     }
 
-    audioStream = avformat_new_stream(fmtCtx, codec);
-    if (!audioStream)
-    {
-        std::cerr << "Failed to open audio stream" << std::endl;
-        std::exit(-1);
-    }
+    // Create audio streams
+    for (size_t i = 0; i < num_streams; i++) {
+        AVDictionary *options = NULL;
+        load_audio_codec_options(&options);
 
-    audioCodecCtx = avcodec_alloc_context3(codec);
-    if (params.sample_fmt.size() == 0) 
-    {
-        audioCodecCtx->sample_fmt = get_codec_auto_sample_fmt(codec);
-        std::cerr << "Choosing sample format " << av_get_sample_fmt_name(audioCodecCtx->sample_fmt) << " for audio codec " << codec->name << std::endl;
-    } else 
-    {
-        audioCodecCtx->sample_fmt = convert_codec_sample_fmt(codec, params.sample_fmt);
-    }
+        const AVCodec* codec = avcodec_find_encoder_by_name(params.audio_codec.c_str());
+        if (!codec)
+        {
+            std::cerr << "Failed to find the given audio codec: " << params.audio_codec << std::endl;
+            exit(1);
+        }
+
+        AVStream* audioStream = avformat_new_stream(fmtCtx, codec);
+        if (!audioStream)
+        {
+            std::cerr << "Failed to open audio stream" << std::endl;
+            exit(1);
+        }
+
+        AVCodecContext* audioCodecCtx = avcodec_alloc_context3(codec);
+
+        if (params.sample_fmt.empty()) {
+            audioCodecCtx->sample_fmt = get_codec_auto_sample_fmt(codec);
+            std::cerr << "Choosing sample format " << av_get_sample_fmt_name(audioCodecCtx->sample_fmt) << " for audio codec " << codec->name << std::endl;
+        } else {
+            audioCodecCtx->sample_fmt = convert_codec_sample_fmt(codec, params.sample_fmt);
+        }
 #if HAVE_CH_LAYOUT
-    av_channel_layout_from_mask(&audioCodecCtx->ch_layout, get_codec_channel_layout(codec));
+        av_channel_layout_from_mask(&audioCodecCtx->ch_layout, get_codec_channel_layout(codec));
 #else
-    audioCodecCtx->channel_layout = get_codec_channel_layout(codec);
-    audioCodecCtx->channels = av_get_channel_layout_nb_channels(audioCodecCtx->channel_layout);
+        audioCodecCtx->channel_layout = get_codec_channel_layout(codec);
+        audioCodecCtx->channels = av_get_channel_layout_nb_channels(audioCodecCtx->channel_layout);
 #endif
-    audioCodecCtx->sample_rate = params.sample_rate;
-    audioCodecCtx->time_base = (AVRational) { 1, audioCodecCtx->sample_rate };
+        audioCodecCtx->sample_rate = params.sample_rate;
+        audioCodecCtx->time_base = (AVRational) { 1, audioCodecCtx->sample_rate };
 
-    if (fmtCtx->oformat->flags & AVFMT_GLOBALHEADER)
         audioCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
-    int err;
-    if ((err = avcodec_open2(audioCodecCtx, codec, NULL)) < 0)
-    {
-        std::cerr << "(audio) avcodec_open2 failed " << err << std::endl;
-        std::exit(-1);
-    }
+        int err;
+        if ((err = avcodec_open2(audioCodecCtx, codec, NULL)) < 0)
+        {
+            std::cerr << "(audio) avcodec_open2 failed " << err << std::endl;
+            exit(1);
+        }
 
-    swrCtx = swr_alloc();
-    if (!swrCtx)
-    {
-        std::cerr << "Failed to allocate swr context" << std::endl;
-        std::exit(-1);
-    }
-
-    av_opt_set_int(swrCtx, "in_sample_rate", params.sample_rate, 0);
-    av_opt_set_int(swrCtx, "out_sample_rate", audioCodecCtx->sample_rate, 0);
-    av_opt_set_sample_fmt(swrCtx, "in_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
-    av_opt_set_sample_fmt(swrCtx, "out_sample_fmt", audioCodecCtx->sample_fmt, 0);
+        // Create SwrContext for this stream
+        SwrContext* swrCtx = swr_alloc();
 #if HAVE_CH_LAYOUT
-    AVChannelLayout in_chlayout = AV_CHANNEL_LAYOUT_STEREO;
-    av_opt_set_chlayout(swrCtx, "in_chlayout", &in_chlayout, 0);
-    av_opt_set_chlayout(swrCtx, "out_chlayout", &audioCodecCtx->ch_layout, 0);
+        AVChannelLayout source_layout = {};
+        av_channel_layout_default(&source_layout, 2);
+
+        av_opt_set_int(swrCtx, "in_sample_rate", audioCodecCtx->sample_rate, 0);
+        av_opt_set_sample_fmt(swrCtx, "in_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
+        av_opt_set_chlayout(swrCtx, "in_chlayout", &source_layout, 0);
+
+        av_opt_set_int(swrCtx, "out_sample_rate", audioCodecCtx->sample_rate, 0);
+        av_opt_set_sample_fmt(swrCtx, "out_sample_fmt", audioCodecCtx->sample_fmt, 0);
+        av_opt_set_chlayout(swrCtx, "out_chlayout", &audioCodecCtx->ch_layout, 0);
 #else
-    av_opt_set_channel_layout(swrCtx, "in_channel_layout", AV_CH_LAYOUT_STEREO, 0);
-    av_opt_set_channel_layout(swrCtx, "out_channel_layout", audioCodecCtx->channel_layout, 0);
+        av_opt_set_int(swrCtx, "in_sample_rate", audioCodecCtx->sample_rate, 0);
+        av_opt_set_sample_fmt(swrCtx, "in_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
+        av_opt_set_channel_layout(swrCtx, "in_channel_layout", AV_CH_LAYOUT_STEREO, 0);
+
+        av_opt_set_int(swrCtx, "out_sample_rate", audioCodecCtx->sample_rate, 0);
+        av_opt_set_sample_fmt(swrCtx, "out_sample_fmt", audioCodecCtx->sample_fmt, 0);
+        av_opt_set_channel_layout(swrCtx, "out_channel_layout", audioCodecCtx->channel_layout, 0);
+#endif
+        swr_init(swrCtx);
+
+        int ret;
+        if ((ret = avcodec_parameters_from_context(audioStream->codecpar, audioCodecCtx)) < 0) {
+            std::cerr << "Failed to copy audio codec parameters to output stream: " << averr(ret) << std::endl;
+            exit(1);
+        }
+
+        // Create and store audio stream data
+        AudioStreamData audioData;
+        audioData.stream = audioStream;
+        audioData.codecCtx = audioCodecCtx;
+        audioData.swrCtx = swrCtx;
+        audioStreams.push_back(audioData);
+    }
+
+    // Set stream metadata for identification
+    for (size_t i = 0; i < audioStreams.size(); i++) {
+        std::string stream_name = "audio_" + std::to_string(i);
+        av_dict_set(&audioStreams[i].stream->metadata, "title", stream_name.c_str(), 0);
+    }
+}
+
+size_t FrameWriter::get_audio_buffer_size(uint8_t** audioBuffer, int stream_index)
+{
+    auto& audio = audioStreams[stream_index];
+
+    // Make sure we're respecting the codec's required frame size
+    // This is especially important for AAC which requires specific frame sizes
+    int samples = audio.codecCtx->frame_size;
+
+    // If the codec doesn't specify a frame size, use a reasonable default
+    if (samples <= 0) {
+        samples = audio.codecCtx->sample_rate / 50; // 20ms of audio
+    }
+
+    int max_buffer_size = av_samples_get_buffer_size(NULL,
+#if HAVE_CH_LAYOUT
+        audio.codecCtx->ch_layout.nb_channels,
+#else
+        audio.codecCtx->channels,
+#endif
+        samples, AV_SAMPLE_FMT_FLT, 0);
+
+    *audioBuffer = (uint8_t*)av_malloc(max_buffer_size);
+    return max_buffer_size;
+}
+
+void FrameWriter::add_audio(const void* data, int len, int stream_index)
+{
+    if (audioStreams.empty() || stream_index >= (int)audioStreams.size())
+        return;
+
+    auto& audio = audioStreams[stream_index];
+
+    // Create input frame with the audio data
+    AVFrame *inputFrame = av_frame_alloc();
+    inputFrame->sample_rate = params.sample_rate;
+#if HAVE_CH_LAYOUT
+    AVChannelLayout in_layout = AV_CHANNEL_LAYOUT_STEREO;
+    av_channel_layout_copy(&inputFrame->ch_layout, &in_layout);
+#else
+    inputFrame->channel_layout = AV_CH_LAYOUT_STEREO;
+    inputFrame->channels = 2;
+#endif
+    inputFrame->format = AV_SAMPLE_FMT_FLT;
+    inputFrame->nb_samples = len / (sizeof(float) * 2); // 2 channels
+
+    av_frame_get_buffer(inputFrame, 0);
+    memcpy(inputFrame->data[0], data, len);
+
+    // Create output frame with codec's parameters
+    AVFrame *outputFrame = av_frame_alloc();
+    outputFrame->format = audio.codecCtx->sample_fmt;
+    outputFrame->sample_rate = audio.codecCtx->sample_rate;
+#if HAVE_CH_LAYOUT
+    av_channel_layout_copy(&outputFrame->ch_layout, &audio.codecCtx->ch_layout);
+#else
+    outputFrame->channel_layout = audio.codecCtx->channel_layout;
+    outputFrame->channels = audio.codecCtx->channels;
 #endif
 
-    if (swr_init(swrCtx))
-    {
-        std::cerr << "Failed to initialize swr" << std::endl;
-        std::exit(-1);
+    // Use the exact frame size required by the codec
+    outputFrame->nb_samples = audio.codecCtx->frame_size;
+    av_frame_get_buffer(outputFrame, 0);
+
+    // Calculate the next PTS value based on the sample rate
+    static std::vector<int64_t> pts_counters;
+    if (pts_counters.size() <= (size_t)stream_index) {
+        pts_counters.resize(stream_index + 1, 0);
     }
 
-    int ret;
-    if ((ret = avcodec_parameters_from_context(audioStream->codecpar, audioCodecCtx)) < 0) {
-        char errmsg[256];
-        av_strerror(ret, errmsg, sizeof(errmsg));
-        std::cerr << "avcodec_parameters_from_context failed: " << err << std::endl;
-        std::exit(-1);
+    // Set PTS to the current counter value
+    outputFrame->pts = pts_counters[stream_index];
+
+    // Convert audio samples
+    int ret = swr_convert(audio.swrCtx,
+                          outputFrame->data, outputFrame->nb_samples,
+                          (const uint8_t**)inputFrame->data, inputFrame->nb_samples);
+
+    if (ret < 0) {
+        std::cerr << "Failed to convert audio samples: " << averr(ret) << std::endl;
+        av_frame_free(&inputFrame);
+        av_frame_free(&outputFrame);
+        return;
     }
+
+    // Output debug information
+    dbg << "DEBUG: Audio frame PTS for stream " << stream_index << std::endl;
+    dbg << "  - Sample rate: " << audio.codecCtx->sample_rate << std::endl;
+    dbg << "  - Audio timebase: 1/" << audio.codecCtx->sample_rate << std::endl;
+    dbg << "  - PTS: " << outputFrame->pts << std::endl;
+    dbg << "  - Time: " << (double)outputFrame->pts / audio.codecCtx->sample_rate << " seconds" << std::endl;
+
+    // Update the counter for the next frame
+    pts_counters[stream_index] += outputFrame->nb_samples;
+
+    // Send to encoder
+    AVPacket *pkt = av_packet_alloc();
+    encode(audio.codecCtx, outputFrame, pkt);
+    av_packet_free(&pkt);  // Let the encode function handle packet unref
+
+    av_frame_free(&inputFrame);
+    av_frame_free(&outputFrame);
 }
 #endif
 void FrameWriter::init_codecs()
@@ -610,7 +729,12 @@ void FrameWriter::init_codecs()
     init_video_stream();
 #ifdef HAVE_AUDIO
     if (params.enable_audio)
-        init_audio_stream();
+    {
+        // Get the number of audio sources from audioParams
+        extern AudioReaderParams audioParams;
+        size_t num_audio_streams = audioParams.audio_sources.size();
+        init_audio_stream(num_audio_streams);
+    }
 #endif
 
     av_dump_format(fmtCtx, 0, params.file.c_str(), 1);
@@ -642,15 +766,14 @@ static const char* determine_output_format(const FrameWriterParams& params)
 
     if (params.file.find("udp") == 0)
         return "mpegts";
-    
+
     if (params.file.find("rtp") == 0)
         return "rtp_mpegts";
 
     return NULL;
 }
 
-FrameWriter::FrameWriter(const FrameWriterParams& _params) :
-    params(_params)
+FrameWriter::FrameWriter(const FrameWriterParams& params) : params(params)
 {
     if (params.enable_ffmpeg_debug_output)
         av_log_set_level(AV_LOG_DEBUG);
@@ -842,76 +965,6 @@ bool FrameWriter::add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert)
     return push_frame(frame, usec);
 }
 
-#ifdef HAVE_AUDIO
-#define SRC_RATE 1e6
-#define DST_RATE 1e3
-
-static int64_t conv_audio_pts(SwrContext *ctx, int64_t in, int sample_rate)
-{
-    //int64_t d = (int64_t) AUDIO_RATE * AUDIO_RATE;
-    int64_t d = (int64_t) sample_rate * sample_rate;
-
-    /* Convert from audio_src_tb to 1/(src_samplerate * dst_samplerate) */
-    in = av_rescale_rnd(in, d, SRC_RATE, AV_ROUND_NEAR_INF);
-
-    /* In units of 1/(src_samplerate * dst_samplerate) */
-    in = swr_next_pts(ctx, in);
-
-    /* Convert from 1/(src_samplerate * dst_samplerate) to audio_dst_tb */
-    return av_rescale_rnd(in, sample_rate, d, AV_ROUND_NEAR_INF);
-}
-
-void FrameWriter::send_audio_pkt(AVFrame *frame)
-{
-    AVPacket *pkt = av_packet_alloc();
-    pkt->data = NULL;
-    pkt->size = 0;
-
-    encode(audioCodecCtx, frame, pkt);
-    av_packet_free(&pkt);
-}
-
-size_t FrameWriter::get_audio_buffer_size()
-{
-    return audioCodecCtx->frame_size << 3;
-}
-
-void FrameWriter::add_audio(const void* buffer)
-{
-    AVFrame *inputf = av_frame_alloc();
-    inputf->sample_rate    = params.sample_rate;
-    inputf->format         = AV_SAMPLE_FMT_FLT;
-#if HAVE_CH_LAYOUT
-    inputf->ch_layout = (AVChannelLayout) AV_CHANNEL_LAYOUT_STEREO;
-#else
-    inputf->channel_layout = AV_CH_LAYOUT_STEREO;
-#endif
-    inputf->nb_samples     = audioCodecCtx->frame_size;
-
-    av_frame_get_buffer(inputf, 0);
-    memcpy(inputf->data[0], buffer, get_audio_buffer_size());
-
-    AVFrame *outputf = av_frame_alloc();
-    outputf->format         = audioCodecCtx->sample_fmt;
-    outputf->sample_rate    = audioCodecCtx->sample_rate;
-#if HAVE_CH_LAYOUT
-    av_channel_layout_copy(&outputf->ch_layout, &audioCodecCtx->ch_layout);
-#else
-    outputf->channel_layout = audioCodecCtx->channel_layout;
-#endif
-    outputf->nb_samples     = audioCodecCtx->frame_size;
-    av_frame_get_buffer(outputf, 0);
-
-    outputf->pts = conv_audio_pts(swrCtx, INT64_MIN, params.sample_rate);
-    swr_convert_frame(swrCtx, outputf, inputf);
-
-    send_audio_pkt(outputf);
-
-    av_frame_free(&inputf);
-    av_frame_free(&outputf);
-}
-#endif
-
 void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
 {
     static std::mutex fmt_mutex, pending_mutex;
@@ -924,8 +977,14 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
 #ifdef HAVE_AUDIO
     else
     {
-        av_packet_rescale_ts(&pkt, audioCodecCtx->time_base, audioStream->time_base);
-        pkt.stream_index = audioStream->index;
+        // Find which audio stream this codec context belongs to
+        for (size_t i = 0; i < audioStreams.size(); i++) {
+            if (audioStreams[i].codecCtx == enc_ctx) {
+                av_packet_rescale_ts(&pkt, audioStreams[i].codecCtx->time_base, audioStreams[i].stream->time_base);
+                pkt.stream_index = audioStreams[i].stream->index;
+                break;
+            }
+        }
     }
 
     /* We use two locks to ensure that if WLOG the audio thread is waiting for
@@ -938,10 +997,12 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
         pending_mutex.unlock();
     }
 #endif
+
     if (av_interleaved_write_frame(fmtCtx, &pkt) != 0) {
         params.write_aborted_flag = true;
     }
     av_packet_unref(&pkt);
+
 #ifdef HAVE_AUDIO
     if (params.enable_audio)
         fmt_mutex.unlock();
@@ -954,12 +1015,20 @@ FrameWriter::~FrameWriter()
     AVPacket *pkt = av_packet_alloc();
 
     encode(videoCodecCtx, NULL, pkt);
+
 #ifdef HAVE_AUDIO
     if (params.enable_audio)
     {
-        encode(audioCodecCtx, NULL, pkt);
+        for (auto& audio : audioStreams) {
+            if (audio.codecCtx) {
+                encode(audio.codecCtx, NULL, pkt);
+            }
+        }
     }
 #endif
+
+    av_packet_free(&pkt);
+
     // Writing the end of the file.
     av_write_trailer(fmtCtx);
 
@@ -969,11 +1038,24 @@ FrameWriter::~FrameWriter()
 
     // Freeing all the allocated memory:
     avcodec_free_context(&videoCodecCtx);
+
 #ifdef HAVE_AUDIO
     if (params.enable_audio)
-        avcodec_free_context(&audioCodecCtx);
+    {
+        for (auto& audio : audioStreams) {
+            if (audio.codecCtx) {
+                avcodec_free_context(&audio.codecCtx);
+                audio.codecCtx = nullptr;
+            }
+            if (audio.swrCtx) {
+                swr_free(&audio.swrCtx);
+                audio.swrCtx = nullptr;
+            }
+        }
+        audioStreams.clear();
+    }
 #endif
-    av_packet_free(&pkt);
+
     // TODO: free all the hw accel
     avformat_free_context(fmtCtx);
 }

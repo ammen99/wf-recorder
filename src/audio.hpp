@@ -5,13 +5,14 @@
 #include <stdint.h>
 #include "config.h"
 #include <string>
+#include <vector>
 
 struct AudioReaderParams
 {
     size_t audio_frame_size;
     uint32_t sample_rate;
-    /* Can be NULL */
-    char *audio_source;
+    /* List of audio sources to capture */
+    std::vector<std::string> audio_sources;
 
     std::string audio_backend = DEFAULT_AUDIO_BACKEND;
 };
