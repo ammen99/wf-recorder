@@ -2,7 +2,7 @@
 #define _POSIX_C_SOURCE 199309L
 #include <iostream>
 #include <optional>
-
+#include <algorithm>
 #include <list>
 #include <string>
 #include <thread>
@@ -771,6 +771,7 @@ struct capture_region
 {
     int32_t x, y;
     int32_t width, height;
+    int16_t rotate_coordinates = 0;
 
     capture_region()
         : capture_region(0, 0, 0, 0) {}
@@ -780,12 +781,34 @@ struct capture_region
 
     void set_from_string(std::string geometry_string)
     {
+        std::string cleaned_geometry = geometry_string;
+        size_t t1_pos = geometry_string.find("t1");
+        size_t t3_pos = geometry_string.find("t3");
+
+        if (t1_pos != std::string::npos) {
+            rotate_coordinates = 90;
+            cleaned_geometry.erase(t1_pos, 2);
+        }
+        else if (t3_pos != std::string::npos) {
+            rotate_coordinates = 270;
+            cleaned_geometry.erase(t3_pos, 2);
+        }
+        cleaned_geometry.erase(std::remove(cleaned_geometry.begin(), cleaned_geometry.end(), ' '), cleaned_geometry.end());
+
         if (sscanf(geometry_string.c_str(), "%d,%d %dx%d", &x, &y, &width, &height) != 4)
         {
             fprintf(stderr, "Bad geometry: %s, capturing whole output instead.\n",
                 geometry_string.c_str());
             x = y = width = height = 0;
             return;
+        }
+
+        if (rotate_coordinates == 90) {
+            std::swap(x, y);
+            x = -x;
+        } else if (rotate_coordinates == 270) {
+            std::swap(x, y);
+            y = -y;
         }
     }
 
@@ -796,6 +819,20 @@ struct capture_region
 
     bool contained_in(const capture_region& output) const
     {
+        if (rotate_coordinates == 90) {
+            return
+                output.x <= abs(x) &&
+                output.x + output.width >= x + width &&
+                output.y <= y &&
+                output.y + output.height >= y + height;
+        }
+        else if (rotate_coordinates == 270) {
+            return
+                output.x <= x &&
+                output.x + output.width >= -x + width &&
+                output.y <= abs(y) &&
+                output.y + output.height >= y + height;
+        }
         return
             output.x <= x &&
             output.x + output.width >= x + width &&
