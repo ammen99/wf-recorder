@@ -2,7 +2,7 @@
 #define _POSIX_C_SOURCE 199309L
 #include <iostream>
 #include <optional>
-#include <algorithm>
+
 #include <list>
 #include <string>
 #include <thread>
@@ -779,22 +779,23 @@ struct capture_region
     capture_region(int32_t _x, int32_t _y, int32_t _width, int32_t _height)
         : x(_x), y(_y), width(_width), height(_height) { }
 
+    void set_transform(const char* transform_str) {
+        int transform = 0;
+        if (sscanf(transform_str, "%d", &transform) != 1) {
+            fprintf(stderr, "Invalid transform format (must be a number)\n");
+        }
+
+        if (transform == 1) {
+            rotate_coordinates = 90;
+        } else if (transform == 3) {
+            rotate_coordinates = 270;
+        } else {
+            fprintf(stderr, "Invalid transform value %d (must be 1 or 3)\n", transform);
+        }
+    }
+
     void set_from_string(std::string geometry_string)
     {
-        std::string cleaned_geometry = geometry_string;
-        size_t t1_pos = geometry_string.find("t1");
-        size_t t3_pos = geometry_string.find("t3");
-
-        if (t1_pos != std::string::npos) {
-            rotate_coordinates = 90;
-            cleaned_geometry.erase(t1_pos, 2);
-        }
-        else if (t3_pos != std::string::npos) {
-            rotate_coordinates = 270;
-            cleaned_geometry.erase(t3_pos, 2);
-        }
-        cleaned_geometry.erase(std::remove(cleaned_geometry.begin(), cleaned_geometry.end(), ' '), cleaned_geometry.end());
-
         if (sscanf(geometry_string.c_str(), "%d,%d %dx%d", &x, &y, &width, &height) != 4)
         {
             fprintf(stderr, "Bad geometry: %s, capturing whole output instead.\n",
@@ -1048,6 +1049,7 @@ int main(int argc, char *argv[])
         { "file",              required_argument, NULL, 'f' },
         { "muxer",             required_argument, NULL, 'm' },
         { "geometry",          required_argument, NULL, 'g' },
+        { "transform",         required_argument, NULL, 't' },
         { "codec",             required_argument, NULL, 'c' },
         { "codec-param",       required_argument, NULL, 'p' },
         { "framerate",         required_argument, NULL, 'r' },
@@ -1072,7 +1074,7 @@ int main(int argc, char *argv[])
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:y", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:g:t:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:y", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -1094,6 +1096,10 @@ int main(int argc, char *argv[])
 
             case 'g':
                 selected_region.set_from_string(optarg);
+                break;
+            
+            case 't':
+                selected_region.set_transform(optarg);
                 break;
 
             case 'c':
