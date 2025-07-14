@@ -844,10 +844,15 @@ struct capture_region
     void set_transform(const wf_recorder_output& wo) {
         transform = wo.transform;
         switch (transform) {
-            case WL_OUTPUT_TRANSFORM_NORMAL:
             case WL_OUTPUT_TRANSFORM_180:
+                //TODO
+                break;
             case WL_OUTPUT_TRANSFORM_FLIPPED:
+                //TODO
+                break;
             case WL_OUTPUT_TRANSFORM_FLIPPED_180:
+                //TODO
+                break;
             case WL_OUTPUT_TRANSFORM_90:
                 fprintf(stderr, "90 degree rotation detected, altering geometry to compensate.\n");
                 std::swap(x, y);
@@ -859,7 +864,13 @@ struct capture_region
                 y = -y;
                 break;
             case WL_OUTPUT_TRANSFORM_FLIPPED_90:
+                //TODO
+                break;
             case WL_OUTPUT_TRANSFORM_FLIPPED_270:
+                //TODO
+                break;
+            case WL_OUTPUT_TRANSFORM_NORMAL:
+                break;
             default:
                 fprintf(stderr, "Unknown transform value passed by compositor, using geometry as-is.\n");
                 transform = WL_OUTPUT_TRANSFORM_NORMAL;
@@ -887,8 +898,14 @@ struct capture_region
     {
         switch (transform) {
             case WL_OUTPUT_TRANSFORM_180:
+                //TODO
+                break;
             case WL_OUTPUT_TRANSFORM_FLIPPED:
+                //TODO
+                break;
             case WL_OUTPUT_TRANSFORM_FLIPPED_180:
+                //TODO
+                break;
             case WL_OUTPUT_TRANSFORM_90:
                 return
                     output.x <= abs(x) &&
@@ -902,8 +919,13 @@ struct capture_region
                     output.y <= abs(y) &&
                     output.y + output.height >= y + height;
             case WL_OUTPUT_TRANSFORM_FLIPPED_90:
+                //TODO
+                break;
             case WL_OUTPUT_TRANSFORM_FLIPPED_270:
-            default: //WL_OUTPUT_TRANSFORM_NORMAL
+                //TODO
+                break;
+            case WL_OUTPUT_TRANSFORM_NORMAL:
+            default:
                 return
                     output.x <= x &&
                     output.x + output.width >= x + width &&
