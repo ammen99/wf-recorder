@@ -58,6 +58,7 @@ struct wf_recorder_output
     zxdg_output_v1 *zxdg_output;
     std::string name, description;
     int32_t x, y, width, height;
+    enum wl_output_transform transform;
 };
 
 std::list<wf_recorder_output> available_outputs;
@@ -461,6 +462,67 @@ static const struct zwp_linux_dmabuf_feedback_v1_listener dmabuf_feedback_listen
     .tranche_flags = dmabuf_feedback_tranche_flags,
 };
 
+static void
+display_handle_geometry(void *data,
+                        struct wl_output *wl_output,
+                        int32_t x, int32_t y,
+                        int32_t physical_width,
+                        int32_t physical_height,
+                        int32_t subpixel,
+                        const char *make,
+                        const char *model,
+                        int32_t transform)
+{
+    wf_recorder_output *wo = (wf_recorder_output*) data;
+
+    wo->transform = (wl_output_transform) transform;
+}
+
+static void
+display_handle_mode(void *data,
+                    struct wl_output *wl_output,
+                    uint32_t flags,
+                    int32_t width,
+                    int32_t height,
+                    int32_t refresh)
+{
+}
+
+static void
+display_handle_done(void *data, struct wl_output *wl_output)
+{
+}
+
+static void
+display_handle_scale(void *data,
+                     struct wl_output *wl_output,
+                     int32_t scale)
+{
+}
+
+static void
+display_handle_name(void *data,
+                    struct wl_output *wl_output,
+                    const char *name)
+{
+}
+
+static void
+display_handle_description(void *data,
+                           struct wl_output *wl_output,
+                           const char *description)
+{
+}
+
+static const struct wl_output_listener output_listener = {
+	display_handle_geometry,
+	display_handle_mode,
+	display_handle_done,
+	display_handle_scale,
+	display_handle_name,
+	display_handle_description
+};
+
 static void handle_global(void*, struct wl_registry *registry,
     uint32_t name, const char *interface, uint32_t) {
 
@@ -470,6 +532,7 @@ static void handle_global(void*, struct wl_registry *registry,
         wf_recorder_output wro;
         wro.output = output;
         available_outputs.push_back(wro);
+        wl_output_add_listener(output, &output_listener, &available_outputs.back());
     }
     else if (strcmp(interface, wl_shm_interface.name) == 0)
     {
@@ -730,7 +793,6 @@ static void sync_wayland()
     wl_display_roundtrip(display);
 }
 
-
 static void load_output_info()
 {
     for (auto& wo : available_outputs)
@@ -779,18 +841,41 @@ struct capture_region
     capture_region(int32_t _x, int32_t _y, int32_t _width, int32_t _height)
         : x(_x), y(_y), width(_width), height(_height) { }
 
-    void set_transform(const char* transform_str) {
-        int transform = 0;
-        if (sscanf(transform_str, "%d", &transform) != 1) {
-            fprintf(stderr, "Invalid transform format (must be a number)\n");
-        }
-
-        if (transform == 1) {
-            rotate_coordinates = 90;
-        } else if (transform == 3) {
-            rotate_coordinates = 270;
-        } else {
-            fprintf(stderr, "Invalid transform value %d (must be 1 or 3)\n", transform);
+    void set_transform(const wf_recorder_output& wo) {
+        switch (wo.transform) {
+            case WL_OUTPUT_TRANSFORM_NORMAL:
+                fprintf(stderr, "WL_OUTPUT_TRANSFORM_NORMAL\n");
+                break;
+            case WL_OUTPUT_TRANSFORM_180:
+                fprintf(stderr, "WL_OUTPUT_TRANSFORM_180\n");
+                break;
+            case WL_OUTPUT_TRANSFORM_FLIPPED:
+                fprintf(stderr, "WL_OUTPUT_TRANSFORM_FLIPPED\n");
+                break;
+            case WL_OUTPUT_TRANSFORM_FLIPPED_180:
+                fprintf(stderr, "WL_OUTPUT_TRANSFORM_FLIPPED_180\n");
+                break;
+            case WL_OUTPUT_TRANSFORM_90:
+                rotate_coordinates = 90;
+                std::swap(x, y);
+                x = -x;
+                fprintf(stderr, "WL_OUTPUT_TRANSFORM_90\n");
+                break;
+            case WL_OUTPUT_TRANSFORM_270:
+                rotate_coordinates = 270;
+                std::swap(x, y);
+                y = -y;
+                fprintf(stderr, "WL_OUTPUT_TRANSFORM_270\n");
+                break;
+            case WL_OUTPUT_TRANSFORM_FLIPPED_90:
+                fprintf(stderr, "WL_OUTPUT_TRANSFORM_FLIPPED_90\n");
+                break;
+            case WL_OUTPUT_TRANSFORM_FLIPPED_270:
+                fprintf(stderr, "WL_OUTPUT_TRANSFORM_FLIPPED_270\n");
+                break;
+            default:
+                fprintf(stderr, "Transform not found.\n");
+                break;
         }
     }
 
@@ -802,14 +887,6 @@ struct capture_region
                 geometry_string.c_str());
             x = y = width = height = 0;
             return;
-        }
-
-        if (rotate_coordinates == 90) {
-            std::swap(x, y);
-            x = -x;
-        } else if (rotate_coordinates == 270) {
-            std::swap(x, y);
-            y = -y;
         }
     }
 
@@ -1049,7 +1126,6 @@ int main(int argc, char *argv[])
         { "file",              required_argument, NULL, 'f' },
         { "muxer",             required_argument, NULL, 'm' },
         { "geometry",          required_argument, NULL, 'g' },
-        { "transform",         required_argument, NULL, 't' },
         { "codec",             required_argument, NULL, 'c' },
         { "codec-param",       required_argument, NULL, 'p' },
         { "framerate",         required_argument, NULL, 'r' },
@@ -1074,7 +1150,7 @@ int main(int argc, char *argv[])
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:m:g:t:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:y", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:y", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -1098,10 +1174,6 @@ int main(int argc, char *argv[])
                 selected_region.set_from_string(optarg);
                 break;
             
-            case 't':
-                selected_region.set_transform(optarg);
-                break;
-
             case 'c':
                 params.codec = optarg;
                 break;
@@ -1312,6 +1384,7 @@ int main(int argc, char *argv[])
 
     if (selected_region.is_selected())
     {
+        selected_region.set_transform(*chosen_output);
         if (!selected_region.contained_in({chosen_output->x, chosen_output->y,
             chosen_output->width, chosen_output->height}))
         {
