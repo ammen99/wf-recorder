@@ -849,19 +849,20 @@ struct capture_region
             case WL_OUTPUT_TRANSFORM_FLIPPED:
             case WL_OUTPUT_TRANSFORM_FLIPPED_180:
             case WL_OUTPUT_TRANSFORM_90:
-                fprintf(stderr, "WL_OUTPUT_TRANSFORM_90\n");
+                fprintf(stderr, "90 degree rotation detected, altering geometry to compensate.\n");
                 std::swap(x, y);
                 x = -x;
                 break;
             case WL_OUTPUT_TRANSFORM_270:
-                fprintf(stderr, "WL_OUTPUT_TRANSFORM_270\n");
+                fprintf(stderr, "270 degree rotation detected, altering geometry to compensate.\n");
                 std::swap(x, y);
                 y = -y;
                 break;
             case WL_OUTPUT_TRANSFORM_FLIPPED_90:
             case WL_OUTPUT_TRANSFORM_FLIPPED_270:
             default:
-                fprintf(stderr, "Transform not found.\n");
+                fprintf(stderr, "Unknown transform value passed by compositor, using geometry as-is.\n");
+                transform = WL_OUTPUT_TRANSFORM_NORMAL;
                 break;
         }
     }
