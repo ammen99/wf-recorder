@@ -833,7 +833,7 @@ struct capture_region
 {
     int32_t x, y;
     int32_t width, height;
-    int16_t rotate_coordinates = 0;
+    int transform = WL_OUTPUT_TRANSFORM_NORMAL;
 
     capture_region()
         : capture_region(0, 0, 0, 0) {}
@@ -842,37 +842,24 @@ struct capture_region
         : x(_x), y(_y), width(_width), height(_height) { }
 
     void set_transform(const wf_recorder_output& wo) {
-        switch (wo.transform) {
+        transform = wo.transform;
+        switch (transform) {
             case WL_OUTPUT_TRANSFORM_NORMAL:
-                fprintf(stderr, "WL_OUTPUT_TRANSFORM_NORMAL\n");
-                break;
             case WL_OUTPUT_TRANSFORM_180:
-                fprintf(stderr, "WL_OUTPUT_TRANSFORM_180\n");
-                break;
             case WL_OUTPUT_TRANSFORM_FLIPPED:
-                fprintf(stderr, "WL_OUTPUT_TRANSFORM_FLIPPED\n");
-                break;
             case WL_OUTPUT_TRANSFORM_FLIPPED_180:
-                fprintf(stderr, "WL_OUTPUT_TRANSFORM_FLIPPED_180\n");
-                break;
             case WL_OUTPUT_TRANSFORM_90:
-                rotate_coordinates = 90;
+                fprintf(stderr, "WL_OUTPUT_TRANSFORM_90\n");
                 std::swap(x, y);
                 x = -x;
-                fprintf(stderr, "WL_OUTPUT_TRANSFORM_90\n");
                 break;
             case WL_OUTPUT_TRANSFORM_270:
-                rotate_coordinates = 270;
+                fprintf(stderr, "WL_OUTPUT_TRANSFORM_270\n");
                 std::swap(x, y);
                 y = -y;
-                fprintf(stderr, "WL_OUTPUT_TRANSFORM_270\n");
                 break;
             case WL_OUTPUT_TRANSFORM_FLIPPED_90:
-                fprintf(stderr, "WL_OUTPUT_TRANSFORM_FLIPPED_90\n");
-                break;
             case WL_OUTPUT_TRANSFORM_FLIPPED_270:
-                fprintf(stderr, "WL_OUTPUT_TRANSFORM_FLIPPED_270\n");
-                break;
             default:
                 fprintf(stderr, "Transform not found.\n");
                 break;
@@ -897,26 +884,32 @@ struct capture_region
 
     bool contained_in(const capture_region& output) const
     {
-        if (rotate_coordinates == 90) {
-            return
-                output.x <= abs(x) &&
-                output.x + output.width >= x + width &&
-                output.y <= y &&
-                output.y + output.height >= y + height;
+        switch (transform) {
+            case WL_OUTPUT_TRANSFORM_180:
+            case WL_OUTPUT_TRANSFORM_FLIPPED:
+            case WL_OUTPUT_TRANSFORM_FLIPPED_180:
+            case WL_OUTPUT_TRANSFORM_90:
+                return
+                    output.x <= abs(x) &&
+                    output.x + output.width >= x + width &&
+                    output.y <= y &&
+                    output.y + output.height >= y + height;
+            case WL_OUTPUT_TRANSFORM_270:
+                return
+                    output.x <= x &&
+                    output.x + output.width >= -x + width &&
+                    output.y <= abs(y) &&
+                    output.y + output.height >= y + height;
+            case WL_OUTPUT_TRANSFORM_FLIPPED_90:
+            case WL_OUTPUT_TRANSFORM_FLIPPED_270:
+            default: //WL_OUTPUT_TRANSFORM_NORMAL
+                return
+                    output.x <= x &&
+                    output.x + output.width >= x + width &&
+                    output.y <= y &&
+                    output.y + output.height >= y + height;
         }
-        else if (rotate_coordinates == 270) {
-            return
-                output.x <= x &&
-                output.x + output.width >= -x + width &&
-                output.y <= abs(y) &&
-                output.y + output.height >= y + height;
-        }
-        return
-            output.x <= x &&
-            output.x + output.width >= x + width &&
-            output.y <= y &&
-            output.y + output.height >= y + height;
-    }
+    };
 };
 
 static wf_recorder_output* detect_output_from_region(const capture_region& region)
@@ -1173,7 +1166,7 @@ int main(int argc, char *argv[])
             case 'g':
                 selected_region.set_from_string(optarg);
                 break;
-            
+
             case 'c':
                 params.codec = optarg;
                 break;
