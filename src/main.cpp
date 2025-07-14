@@ -464,13 +464,13 @@ static const struct zwp_linux_dmabuf_feedback_v1_listener dmabuf_feedback_listen
 
 static void
 display_handle_geometry(void *data,
-                        struct wl_output *wl_output,
-                        int32_t x, int32_t y,
-                        int32_t physical_width,
-                        int32_t physical_height,
-                        int32_t subpixel,
-                        const char *make,
-                        const char *model,
+                        struct wl_output *,
+                        int32_t, int32_t,
+                        int32_t,
+                        int32_t,
+                        int32_t,
+                        const char *,
+                        const char *,
                         int32_t transform)
 {
     wf_recorder_output *wo = (wf_recorder_output*) data;
@@ -479,38 +479,38 @@ display_handle_geometry(void *data,
 }
 
 static void
-display_handle_mode(void *data,
-                    struct wl_output *wl_output,
-                    uint32_t flags,
-                    int32_t width,
-                    int32_t height,
-                    int32_t refresh)
+display_handle_mode(void *,
+                    struct wl_output *,
+                    uint32_t,
+                    int32_t,
+                    int32_t,
+                    int32_t)
 {
 }
 
 static void
-display_handle_done(void *data, struct wl_output *wl_output)
+display_handle_done(void *, struct wl_output *)
 {
 }
 
 static void
-display_handle_scale(void *data,
-                     struct wl_output *wl_output,
-                     int32_t scale)
+display_handle_scale(void *,
+                     struct wl_output *,
+                     int32_t)
 {
 }
 
 static void
-display_handle_name(void *data,
-                    struct wl_output *wl_output,
-                    const char *name)
+display_handle_name(void *,
+                    struct wl_output *,
+                    const char *)
 {
 }
 
 static void
-display_handle_description(void *data,
-                           struct wl_output *wl_output,
-                           const char *description)
+display_handle_description(void *,
+                           struct wl_output *,
+                           const char *)
 {
 }
 
