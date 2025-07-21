@@ -881,7 +881,7 @@ Use Ctrl+C to stop.)");
 
   -l, --log                 Generates a log on the current terminal. Debug purposes.
 
-  -L, --list-ouput          List the available outputs.
+  -L, --list-output          List the available outputs.
   
   -o, --output              Specify the output where the video is to be recorded.
 
