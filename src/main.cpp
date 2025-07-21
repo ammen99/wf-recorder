@@ -881,6 +881,8 @@ Use Ctrl+C to stop.)");
 
   -l, --log                 Generates a log on the current terminal. Debug purposes.
 
+  -L, --list-ouput          List the available outputs.
+  
   -o, --output              Specify the output where the video is to be recorded.
 
   -p, --codec-param         Change the codec parameters.
@@ -1007,9 +1009,11 @@ static void list_available_output()
     init_wayland_client();
     load_output_info();
 
+    int i = 1;
     for (auto& wo : available_outputs)
     {
-        printf("Name: %s - Description: %s\n",  wo.name.c_str(), wo.description.c_str());
+        printf("%d. Name: %s Description: %s\n", i++, wo.name.c_str(),
+            wo.description.c_str());
     }
 
     exit(EXIT_SUCCESS);
