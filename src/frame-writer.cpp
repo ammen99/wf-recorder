@@ -212,15 +212,65 @@ AVPixelFormat FrameWriter::handle_buffersink_pix_fmt(const AVCodec *codec)
     return best_format;
 }
 
+static std::string transpose_from_transform(int32_t transform)
+{
+    switch (transform)
+    {
+      case WL_OUTPUT_TRANSFORM_90:
+        fprintf(stderr, "Transform: 90\n");
+        return "transpose=" + std::to_string(1);
+        break;
+      case WL_OUTPUT_TRANSFORM_180:
+        fprintf(stderr, "Transform: 180\n");
+        return "transpose=" + std::to_string(1) + ",transpose=" + std::to_string(1);
+        break;
+      case WL_OUTPUT_TRANSFORM_270:
+        fprintf(stderr, "Transform: 270\n");
+        return "transpose=" + std::to_string(2);
+        break;
+      case WL_OUTPUT_TRANSFORM_FLIPPED:
+        fprintf(stderr, "Transform: FLIPPED\n");
+        return "hflip";
+        break;
+      case WL_OUTPUT_TRANSFORM_FLIPPED_90:
+        fprintf(stderr, "Transform: FLIPPED_90\n");
+        return "transpose=" + std::to_string(1) + ",hflip";
+        break;
+      case WL_OUTPUT_TRANSFORM_FLIPPED_180:
+        fprintf(stderr, "Transform: FLIPPED_180\n");
+        return "vflip";
+        break;
+      case WL_OUTPUT_TRANSFORM_FLIPPED_270:
+        fprintf(stderr, "Transform: FLIPPED_270\n");
+        return "transpose=" + std::to_string(2) + ",hflip";
+        break;
+      case WL_OUTPUT_TRANSFORM_NORMAL:
+      default:
+        break;
+    }
+    return "";
+}
+
 void FrameWriter::init_video_filters(const AVCodec *codec)
 {
+    if (params.transform != 0) {
+        if (params.video_filter != "null" &&
+             params.video_filter.find("transpose") == std::string::npos &&
+             params.video_filter.find("hflip") == std::string::npos &&
+             params.video_filter.find("vflip") == std::string::npos) {
+            params.video_filter += "," + transpose_from_transform(params.transform);
+        }
+        else if (params.video_filter == "null"){
+            params.video_filter = transpose_from_transform(params.transform);
+        }
+    }
     if (params.framerate != 0){
         if (params.video_filter != "null" && params.video_filter.find("fps") == std::string::npos) {
             params.video_filter += ",fps=" + std::to_string(params.framerate);
         }
         else if (params.video_filter == "null"){
             params.video_filter = "fps=" + std::to_string(params.framerate);
-        } 
+        }
     }
 
     this->videoFilterGraph = avfilter_graph_alloc();

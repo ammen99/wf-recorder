@@ -17,7 +17,6 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <unistd.h>
-#include <wayland-client-protocol.h>
 #include <gbm.h>
 #include <fcntl.h>
 #include <xf86drm.h>
@@ -58,9 +57,71 @@ struct wf_recorder_output
     zxdg_output_v1 *zxdg_output;
     std::string name, description;
     int32_t x, y, width, height;
+    int32_t transform;
 };
 
 std::list<wf_recorder_output> available_outputs;
+
+static void
+display_handle_geometry(void *data,
+                        wl_output *,
+                        int32_t, int32_t,
+                        int32_t,
+                        int32_t,
+                        int32_t,
+                        const char *,
+                        const char *,
+                        int32_t transform)
+{
+    wf_recorder_output *wo = (wf_recorder_output*) data;
+
+    wo->transform = transform;
+}
+
+static void
+display_handle_mode(void *,
+                    struct wl_output *,
+                    uint32_t,
+                    int32_t,
+                    int32_t,
+                    int32_t)
+{
+}
+
+static void
+display_handle_done(void *, wl_output *)
+{
+}
+
+static void
+display_handle_scale(void *,
+                     wl_output *,
+                     int32_t)
+{
+}
+
+static void
+display_handle_name(void *,
+                    wl_output *,
+                    const char *)
+{
+}
+
+static void
+display_handle_description(void *,
+                           wl_output *,
+                           const char *)
+{
+}
+
+static const struct wl_output_listener output_listener = {
+	display_handle_geometry,
+	display_handle_mode,
+	display_handle_done,
+	display_handle_scale,
+	display_handle_name,
+	display_handle_description
+};
 
 static void handle_xdg_output_logical_position(void*,
     zxdg_output_v1* zxdg_output, int32_t x, int32_t y)
@@ -466,10 +527,11 @@ static void handle_global(void*, struct wl_registry *registry,
 
     if (strcmp(interface, wl_output_interface.name) == 0)
     {
-        auto output = (wl_output*)wl_registry_bind(registry, name, &wl_output_interface, 1);
+        auto output = (wl_output*)wl_registry_bind(registry, name, &wl_output_interface, 4);
         wf_recorder_output wro;
         wro.output = output;
         available_outputs.push_back(wro);
+        wl_output_add_listener(output, &output_listener, &available_outputs.back());
     }
     else if (strcmp(interface, wl_shm_interface.name) == 0)
     {
@@ -729,7 +791,6 @@ static void sync_wayland()
     wl_display_dispatch(display);
     wl_display_roundtrip(display);
 }
-
 
 static void load_output_info()
 {
@@ -1267,6 +1328,8 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    params.transform = chosen_output->transform;
+
     if (selected_region.is_selected())
     {
         if (!selected_region.contained_in({chosen_output->x, chosen_output->y,
@@ -1276,6 +1339,10 @@ int main(int argc, char *argv[])
                 "inside the output\n");
             selected_region = capture_region{};
         }
+    } else
+    {
+        selected_region = capture_region{chosen_output->x, chosen_output->y,
+            chosen_output->width, chosen_output->height};
     }
 
     fprintf(stderr, "selected region %d,%d %dx%d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);

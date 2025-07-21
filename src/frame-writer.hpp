@@ -9,6 +9,7 @@
 #include <vector>
 #include <map>
 #include <atomic>
+#include <wayland-client-protocol.h>
 #include "config.h"
 
 extern "C"
@@ -28,8 +29,6 @@ extern "C"
     #include <libavutil/opt.h>
     #include <libavutil/hwcontext_drm.h>
 }
-
-#include "config.h"
 
 enum InputFormat
 {
@@ -69,6 +68,7 @@ struct FrameWriterParams
     int framerate = 0;
     int sample_rate;
     int buffrate = 0;
+    int32_t transform = 0;
 
     int64_t audio_sync_offset;
 
