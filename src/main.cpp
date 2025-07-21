@@ -989,6 +989,32 @@ static void parse_codec_opts(std::map<std::string, std::string>& options, const 
     }
 }
 
+static void init_wayland_client()
+{
+    display = wl_display_connect(NULL);
+    if (display == NULL)
+    {
+        fprintf(stderr, "failed to create display: %m\n");
+        exit(EXIT_FAILURE);
+    }
+    struct wl_registry *registry = wl_display_get_registry(display);
+    wl_registry_add_listener(registry, &registry_listener, NULL);
+    sync_wayland();
+}
+
+static void list_available_output()
+{
+    init_wayland_client();
+    load_output_info();
+
+    for (auto& wo : available_outputs)
+    {
+        printf("Name: %s - Description: %s\n",  wo.name.c_str(), wo.description.c_str());
+    }
+
+    exit(EXIT_SUCCESS);
+}
+
 int main(int argc, char *argv[])
 {
     FrameWriterParams params = FrameWriterParams(exit_main_loop);
@@ -1031,11 +1057,12 @@ int main(int argc, char *argv[])
         { "version",           no_argument,       NULL, 'v' },
         { "no-damage",         no_argument,       NULL, 'D' },
         { "overwrite",         no_argument,       NULL, 'y' },
+        { "list-output",       no_argument,       NULL, 'L' },
         { 0,                   0,                 NULL,  0  }
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:y", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:y:L", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -1136,6 +1163,10 @@ int main(int argc, char *argv[])
             case 'y':
                 force_overwrite = true;
                 break;
+
+            case 'L':
+                list_available_output();
+                break;
 #ifdef HAVE_AUDIO
             case '*':
                 audioParams.audio_backend = optarg;
@@ -1151,16 +1182,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    display = wl_display_connect(NULL);
-    if (display == NULL)
-    {
-        fprintf(stderr, "failed to create display: %m\n");
-        return EXIT_FAILURE;
-    }
-
-    struct wl_registry *registry = wl_display_get_registry(display);
-    wl_registry_add_listener(registry, &registry_listener, NULL);
-    sync_wayland();
+    init_wayland_client();
 
     if (params.codec.find("vaapi") != std::string::npos)
     {
