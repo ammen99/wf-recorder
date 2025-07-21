@@ -744,16 +744,23 @@ static void load_output_info()
     sync_wayland();
 }
 
-static wf_recorder_output* choose_interactive()
+static void print_available_outputs()
 {
-    fprintf(stdout, "Please select an output from the list to capture (enter output no.):\n");
-
     int i = 1;
     for (auto& wo : available_outputs)
     {
         printf("%d. Name: %s Description: %s\n", i++, wo.name.c_str(),
             wo.description.c_str());
     }
+}
+
+
+
+static wf_recorder_output* choose_interactive()
+{
+    fprintf(stdout, "Please select an output from the list to capture (enter output no.):\n");
+
+    print_available_outputs();
 
     printf("Enter output no.:");
     fflush(stdout);
@@ -1004,20 +1011,15 @@ static void init_wayland_client()
     sync_wayland();
 }
 
-static void list_available_output()
+static void list_available_outputs()
 {
     init_wayland_client();
     load_output_info();
-
-    int i = 1;
-    for (auto& wo : available_outputs)
-    {
-        printf("%d. Name: %s Description: %s\n", i++, wo.name.c_str(),
-            wo.description.c_str());
-    }
+    print_available_outputs();
 
     exit(EXIT_SUCCESS);
 }
+
 
 int main(int argc, char *argv[])
 {
@@ -1169,7 +1171,7 @@ int main(int argc, char *argv[])
                 break;
 
             case 'L':
-                list_available_output();
+                list_available_outputs();
                 break;
 #ifdef HAVE_AUDIO
             case '*':
