@@ -805,16 +805,23 @@ static void load_output_info()
     sync_wayland();
 }
 
-static wf_recorder_output* choose_interactive()
+static void print_available_outputs()
 {
-    fprintf(stdout, "Please select an output from the list to capture (enter output no.):\n");
-
     int i = 1;
     for (auto& wo : available_outputs)
     {
         printf("%d. Name: %s Description: %s\n", i++, wo.name.c_str(),
             wo.description.c_str());
     }
+}
+
+
+
+static wf_recorder_output* choose_interactive()
+{
+    fprintf(stdout, "Please select an output from the list to capture (enter output no.):\n");
+
+    print_available_outputs();
 
     printf("Enter output no.:");
     fflush(stdout);
@@ -942,6 +949,8 @@ Use Ctrl+C to stop.)");
 
   -l, --log                 Generates a log on the current terminal. Debug purposes.
 
+  -L, --list-output          List the available outputs.
+  
   -o, --output              Specify the output where the video is to be recorded.
 
   -p, --codec-param         Change the codec parameters.
@@ -1050,6 +1059,29 @@ static void parse_codec_opts(std::map<std::string, std::string>& options, const 
     }
 }
 
+static void init_wayland_client()
+{
+    display = wl_display_connect(NULL);
+    if (display == NULL)
+    {
+        fprintf(stderr, "failed to create display: %m\n");
+        exit(EXIT_FAILURE);
+    }
+    struct wl_registry *registry = wl_display_get_registry(display);
+    wl_registry_add_listener(registry, &registry_listener, NULL);
+    sync_wayland();
+}
+
+static void list_available_outputs()
+{
+    init_wayland_client();
+    load_output_info();
+    print_available_outputs();
+
+    exit(EXIT_SUCCESS);
+}
+
+
 int main(int argc, char *argv[])
 {
     FrameWriterParams params = FrameWriterParams(exit_main_loop);
@@ -1092,11 +1124,12 @@ int main(int argc, char *argv[])
         { "version",           no_argument,       NULL, 'v' },
         { "no-damage",         no_argument,       NULL, 'D' },
         { "overwrite",         no_argument,       NULL, 'y' },
+        { "list-output",       no_argument,       NULL, 'L' },
         { 0,                   0,                 NULL,  0  }
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:y", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:y:L", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -1197,6 +1230,10 @@ int main(int argc, char *argv[])
             case 'y':
                 force_overwrite = true;
                 break;
+
+            case 'L':
+                list_available_outputs();
+                break;
 #ifdef HAVE_AUDIO
             case '*':
                 audioParams.audio_backend = optarg;
@@ -1212,16 +1249,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    display = wl_display_connect(NULL);
-    if (display == NULL)
-    {
-        fprintf(stderr, "failed to create display: %m\n");
-        return EXIT_FAILURE;
-    }
-
-    struct wl_registry *registry = wl_display_get_registry(display);
-    wl_registry_add_listener(registry, &registry_listener, NULL);
-    sync_wayland();
+    init_wayland_client();
 
     if (params.codec.find("vaapi") != std::string::npos)
     {

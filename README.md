@@ -92,6 +92,7 @@ The man page can be read with `man ./manpage/wf-recorder.1`.
 In its simplest form, run `wf-recorder` to start recording and use Ctrl+C to stop. This will create a file called `recording.mp4` in the current working directory using the default codec.
 
 Use `-f <filename>` to specify the output file. In case of multiple outputs, you'll first be prompted to select the output you want to record. If you know the output name beforehand, you can use the `-o <output name>` option.
+To view all available output options, use the list flag `-L` or `--list-output`
 
 To select a specific part of the screen you can either use `-g <geometry>`, or use [slurp](https://github.com/emersion/slurp) for interactive selection of the screen area that will be recorded:
 
