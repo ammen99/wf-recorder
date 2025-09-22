@@ -23,7 +23,9 @@
 
 #include "frame-writer.hpp"
 #include "buffer-pool.hpp"
-#include "wlr-screencopy-unstable-v1-client-protocol.h"
+#include "ext-foreign-toplevel-list-v1-client-protocol.h"
+#include "ext-image-copy-capture-v1-client-protocol.h"
+#include "ext-image-capture-source-v1-client-protocol.h"
 #include "xdg-output-unstable-v1-client-protocol.h"
 #include "linux-dmabuf-unstable-v1-client-protocol.h"
 
@@ -47,9 +49,17 @@ static std::string drm_device_name;
 
 static struct wl_shm *shm = NULL;
 static struct zxdg_output_manager_v1 *xdg_output_manager = NULL;
-static struct zwlr_screencopy_manager_v1 *screencopy_manager = NULL;
+static struct ext_foreign_toplevel_list_v1 *foreign_toplevel_list;
+static struct ext_image_capture_source_v1 *copy_capture_source = NULL;
+static struct ext_image_copy_capture_manager_v1 *copy_capture_manager = NULL;
+static struct ext_output_image_capture_source_manager_v1 *output_image_capture = NULL;
+static struct ext_foreign_toplevel_image_capture_source_manager_v1 *toplevel_image_capture;
 static struct zwp_linux_dmabuf_v1 *dmabuf = NULL;
-void request_next_frame();
+void request_next_frame(bool reallocate);
+
+static bool capture_toplevel = false;
+static std::string toplevel_id = "";
+static ext_foreign_toplevel_handle_v1 *selected_toplevel = NULL;
 
 struct wf_recorder_output
 {
@@ -182,6 +192,7 @@ const zxdg_output_v1_listener xdg_output_implementation = {
 
 struct wf_buffer : public buffer_pool_buf
 {
+    ext_image_copy_capture_frame_v1 *frame = NULL;
     struct gbm_bo *bo = nullptr;
     zwp_linux_buffer_params_v1 *params = nullptr;
     struct wl_buffer *wl_buffer = nullptr;
@@ -195,6 +206,13 @@ struct wf_buffer : public buffer_pool_buf
     timespec presented;
     uint64_t base_usec;
 };
+
+struct damage_rect
+{
+    int x, y, w, h;
+};
+
+static std::vector<damage_rect> damage_rects;
 
 std::atomic<bool> exit_main_loop{false};
 
@@ -221,6 +239,12 @@ static int backingfile(off_t size)
 
     unlink(name);
     return fd;
+}
+
+void handle_graceful_termination(int)
+{
+    exit_main_loop = true;
+    buffer_copy_done = true;
 }
 
 static struct wl_buffer *create_shm_buffer(uint32_t fmt,
@@ -278,65 +302,44 @@ static uint32_t wl_shm_to_drm_format(uint32_t format)
     }
 }
 
-static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, uint32_t format,
-    uint32_t width, uint32_t height, uint32_t stride)
-{
-    if (use_dmabuf) {
-        return;
-    }
-
-    auto& buffer = buffers.capture();
-    auto old_format = buffer.format;
-    buffer.format = (wl_shm_format)format;
-    buffer.drm_format = wl_shm_to_drm_format(format);
-    buffer.width = width;
-    buffer.height = height;
-    buffer.stride = stride;
-
-    /* ffmpeg requires even width and height */
-    if (buffer.width % 2)
-        buffer.width -= 1;
-    if (buffer.height % 2)
-        buffer.height -= 1;
-
-    if (!buffer.wl_buffer || old_format != format) {
-        free_shm_buffer(buffer);
-        buffer.wl_buffer =
-            create_shm_buffer(format, width, height, stride, &buffer.data);
-    }
-
-    if (buffer.wl_buffer == NULL) {
-        fprintf(stderr, "failed to create buffer\n");
-        exit(EXIT_FAILURE);
-    }
-
-    if (use_damage) {
-        zwlr_screencopy_frame_v1_copy_with_damage(frame, buffer.wl_buffer);
-    } else {
-        zwlr_screencopy_frame_v1_copy(frame, buffer.wl_buffer);
-    }
-}
-
-static void frame_handle_flags(void*, struct zwlr_screencopy_frame_v1 *, uint32_t flags) {
-    buffers.capture().y_invert = flags & ZWLR_SCREENCOPY_FRAME_V1_FLAGS_Y_INVERT;
-}
-
 int32_t frame_failed_cnt = 0;
 
-static void frame_handle_ready(void *, struct zwlr_screencopy_frame_v1 *,
-    uint32_t tv_sec_hi, uint32_t tv_sec_low, uint32_t tv_nsec) {
+static void frame_handle_transform(void *,
+    struct ext_image_copy_capture_frame_v1 *,
+    uint32_t)
+{
+}
 
-    auto& buffer = buffers.capture();
+static void frame_handle_damage(void *,
+    struct ext_image_copy_capture_frame_v1 *,
+    int32_t x, int32_t y, int32_t width, int32_t height)
+{
+    damage_rects.push_back(damage_rect{x, y, width, height});
+}
+
+static void frame_handle_presentation_time(void *data,
+    struct ext_image_copy_capture_frame_v1 *,
+    uint32_t tv_sec_hi, uint32_t tv_sec_lo, uint32_t tv_nsec)
+{
+    auto buffer = (wf_buffer *) data;
+    buffer->presented.tv_sec = ((1ll * tv_sec_hi) << 32ll) | tv_sec_lo;
+    buffer->presented.tv_nsec = tv_nsec;
+}
+
+static void frame_handle_ready(void *,
+    struct ext_image_copy_capture_frame_v1 *)
+{
     buffer_copy_done = true;
-    buffer.presented.tv_sec = ((1ll * tv_sec_hi) << 32ll) | tv_sec_low;
-    buffer.presented.tv_nsec = tv_nsec;
     frame_failed_cnt = 0;
 }
 
-static void frame_handle_failed(void *, struct zwlr_screencopy_frame_v1 *) {
-    std::cerr << "Failed to copy frame, retrying..." << std::endl;
+static void frame_handle_failed(void *,
+    struct ext_image_copy_capture_frame_v1 *,
+    uint32_t reason)
+{
+    std::cerr << "Failed to copy frame because reason " << reason << ", retrying..." << std::endl;
     ++frame_failed_cnt;
-    request_next_frame();
+    request_next_frame(true);
     if (frame_failed_cnt > MAX_FRAME_FAILURES)
     {
         std::cerr << "Failed to copy frame too many times, exiting!" << std::endl;
@@ -344,24 +347,22 @@ static void frame_handle_failed(void *, struct zwlr_screencopy_frame_v1 *) {
     }
 }
 
-static void frame_handle_damage(void *, struct zwlr_screencopy_frame_v1 *,
-    uint32_t, uint32_t, uint32_t, uint32_t)
+static const struct ext_image_copy_capture_frame_v1_listener frame_listener = {
+    .transform = frame_handle_transform,
+    .damage = frame_handle_damage,
+    .presentation_time = frame_handle_presentation_time,
+    .ready = frame_handle_ready,
+    .failed = frame_handle_failed,
+};
+
+static void dmabuf_created(void *, struct zwp_linux_buffer_params_v1 *,
+    struct wl_buffer *wl_buffer)
 {
-}
-
-static void dmabuf_created(void *data, struct zwp_linux_buffer_params_v1 *,
-    struct wl_buffer *wl_buffer) {
-
     auto& buffer = buffers.capture();
     buffer.wl_buffer = wl_buffer;
-
-    zwlr_screencopy_frame_v1 *frame = (zwlr_screencopy_frame_v1*) data;
-
-    if (use_damage) {
-        zwlr_screencopy_frame_v1_copy_with_damage(frame, buffer.wl_buffer);
-    } else {
-        zwlr_screencopy_frame_v1_copy(frame, buffer.wl_buffer);
-    }
+    ext_image_copy_capture_frame_v1_attach_buffer(buffer.frame, buffer.wl_buffer);
+    ext_image_copy_capture_frame_v1_damage_buffer(buffer.frame, 0, 0, buffer.width, buffer.height);
+    ext_image_copy_capture_frame_v1_capture(buffer.frame);
 }
 
 static void dmabuf_failed(void *, struct zwp_linux_buffer_params_v1 *) {
@@ -385,8 +386,7 @@ static wl_shm_format drm_to_wl_shm_format(uint32_t format)
     }
 }
 
-static void frame_handle_linux_dmabuf(void *, struct zwlr_screencopy_frame_v1 *frame,
-    uint32_t format, uint32_t width, uint32_t height)
+static void frame_handle_linux_dmabuf(uint32_t width, uint32_t height, uint32_t format, bool reallocate)
 {
     if (!use_dmabuf) {
         return;
@@ -397,10 +397,8 @@ static void frame_handle_linux_dmabuf(void *, struct zwlr_screencopy_frame_v1 *f
     auto old_format = buffer.format;
     buffer.format = drm_to_wl_shm_format(format);
     buffer.drm_format = format;
-    buffer.width = width;
-    buffer.height = height;
 
-    if (!buffer.wl_buffer || (old_format != buffer.format)) {
+    if (!buffer.wl_buffer || (old_format != format) || reallocate) {
         if (buffer.bo) {
             if (buffer.wl_buffer) {
                 wl_buffer_destroy(buffer.wl_buffer);
@@ -410,13 +408,16 @@ static void frame_handle_linux_dmabuf(void *, struct zwlr_screencopy_frame_v1 *f
             gbm_bo_destroy(buffer.bo);
         }
 
+        auto w = width;
+        auto h = height;
+
         const uint64_t modifier = 0; // DRM_FORMAT_MOD_LINEAR
-        buffer.bo = gbm_bo_create_with_modifiers(gbm_device, buffer.width,
-            buffer.height, format, &modifier, 1);
+        buffer.bo = gbm_bo_create_with_modifiers(gbm_device, w,
+            h, format, &modifier, 1);
         if (buffer.bo == NULL)
         {
-            buffer.bo = gbm_bo_create(gbm_device, buffer.width,
-                buffer.height, format, GBM_BO_USE_LINEAR | GBM_BO_USE_RENDERING);
+            buffer.bo = gbm_bo_create(gbm_device, w,
+                h, format, GBM_BO_USE_LINEAR | GBM_BO_USE_RENDERING);
         }
         if (buffer.bo == NULL)
         {
@@ -436,30 +437,11 @@ static void frame_handle_linux_dmabuf(void *, struct zwlr_screencopy_frame_v1 *f
             gbm_bo_get_stride(buffer.bo),
             mod >> 32, mod & 0xffffffff);
 
-        zwp_linux_buffer_params_v1_add_listener(buffer.params, &params_listener, frame);
-        zwp_linux_buffer_params_v1_create(buffer.params, buffer.width,
-            buffer.height, format, 0);
-    } else {
-        if (use_damage) {
-            zwlr_screencopy_frame_v1_copy_with_damage(frame, buffer.wl_buffer);
-        } else {
-            zwlr_screencopy_frame_v1_copy(frame, buffer.wl_buffer);
-        }
+        zwp_linux_buffer_params_v1_add_listener(buffer.params, &params_listener, NULL);
+        zwp_linux_buffer_params_v1_create(buffer.params, w,
+            h, format, 0);
     }
 }
-
-static void frame_handle_buffer_done(void *, struct zwlr_screencopy_frame_v1 *) {
-}
-
-static const struct zwlr_screencopy_frame_v1_listener frame_listener = {
-    .buffer = frame_handle_buffer,
-    .flags = frame_handle_flags,
-    .ready = frame_handle_ready,
-    .failed = frame_handle_failed,
-    .damage = frame_handle_damage,
-    .linux_dmabuf = frame_handle_linux_dmabuf,
-    .buffer_done = frame_handle_buffer_done,
-};
 
 static void dmabuf_feedback_done(void *, struct zwp_linux_dmabuf_feedback_v1 *feedback)
 {
@@ -522,8 +504,89 @@ static const struct zwp_linux_dmabuf_feedback_v1_listener dmabuf_feedback_listen
     .tranche_flags = dmabuf_feedback_tranche_flags,
 };
 
+struct toplevel_data
+{
+    ext_foreign_toplevel_handle_v1 *toplevel;
+    std::string title = "";
+    std::string app_id = "";
+    std::string identifier = "";
+};
+
+std::vector<toplevel_data> toplevels_list;
+
+static void handle_toplevel_title(void *data,
+    struct ext_foreign_toplevel_handle_v1 *,
+    const char *title)
+{
+    toplevel_data *td = (toplevel_data *) data;
+    td->title = title;
+}
+
+static void handle_toplevel_app_id(void *data,
+    struct ext_foreign_toplevel_handle_v1 *,
+    const char *app_id)
+{
+    toplevel_data *td = (toplevel_data *) data;
+    td->app_id = app_id;
+}
+
+static void handle_toplevel_identifier(void *data,
+    struct ext_foreign_toplevel_handle_v1 *ext_foreign_toplevel_handle_v1,
+    const char *identifier)
+{
+    toplevel_data *td = (toplevel_data *) data;
+    if (toplevel_id.empty())
+    {
+        td->identifier = identifier;
+	} else if (toplevel_id == std::string(identifier))
+    {
+        selected_toplevel = ext_foreign_toplevel_handle_v1;
+    }
+}
+
+static void handle_toplevel_closed(void *,
+    struct ext_foreign_toplevel_handle_v1 *)
+{
+    handle_graceful_termination(0);
+}
+
+static void handle_toplevel_done(void *,
+    struct ext_foreign_toplevel_handle_v1 *)
+{
+}
+
+static const struct ext_foreign_toplevel_handle_v1_listener toplevel_listener = {
+    .closed = handle_toplevel_closed,
+    .done = handle_toplevel_done,
+    .title = handle_toplevel_title,
+    .app_id = handle_toplevel_app_id,
+    .identifier = handle_toplevel_identifier,
+};
+
+void handle_toplevel(void *,
+    struct ext_foreign_toplevel_list_v1 *,
+    struct ext_foreign_toplevel_handle_v1 *toplevel)
+{
+    toplevel_data td;
+    td.toplevel = toplevel;
+    toplevels_list.push_back(td);
+    ext_foreign_toplevel_handle_v1_add_listener(toplevel, &toplevel_listener, &toplevels_list.back());
+}
+
+void handle_finished(void *,
+    struct ext_foreign_toplevel_list_v1 *)
+{
+    std::cerr << "finished." << std::endl;
+    exit(EXIT_SUCCESS);
+}
+
+static const struct ext_foreign_toplevel_list_v1_listener foreign_toplevel_list_listener = {
+    .toplevel = handle_toplevel,
+    .finished = handle_finished,
+};
+
 static void handle_global(void*, struct wl_registry *registry,
-    uint32_t name, const char *interface, uint32_t) {
+    uint32_t name, const char *interface, uint32_t version) {
 
     if (strcmp(interface, wl_output_interface.name) == 0)
     {
@@ -537,10 +600,26 @@ static void handle_global(void*, struct wl_registry *registry,
     {
         shm = (wl_shm*) wl_registry_bind(registry, name, &wl_shm_interface, 1);
     }
-    else if (strcmp(interface, zwlr_screencopy_manager_v1_interface.name) == 0)
+    else if (capture_toplevel && strcmp(interface, ext_foreign_toplevel_list_v1_interface.name) == 0)
     {
-        screencopy_manager = (zwlr_screencopy_manager_v1*) wl_registry_bind(registry, name,
-            &zwlr_screencopy_manager_v1_interface, 3);
+        foreign_toplevel_list = (ext_foreign_toplevel_list_v1*) wl_registry_bind(registry, name,
+            &ext_foreign_toplevel_list_v1_interface, version);
+        ext_foreign_toplevel_list_v1_add_listener(foreign_toplevel_list, &foreign_toplevel_list_listener, NULL);
+    }
+    else if (capture_toplevel && strcmp(interface, ext_foreign_toplevel_image_capture_source_manager_v1_interface.name) == 0)
+    {
+        toplevel_image_capture = (ext_foreign_toplevel_image_capture_source_manager_v1*) wl_registry_bind(registry, name,
+            &ext_foreign_toplevel_image_capture_source_manager_v1_interface, version);
+    }
+    else if (!capture_toplevel && strcmp(interface, ext_output_image_capture_source_manager_v1_interface.name) == 0)
+    {
+        output_image_capture = (ext_output_image_capture_source_manager_v1*) wl_registry_bind(registry, name,
+            &ext_output_image_capture_source_manager_v1_interface, version);
+    }
+    else if (strcmp(interface, ext_image_copy_capture_manager_v1_interface.name) == 0)
+    {
+        copy_capture_manager = (ext_image_copy_capture_manager_v1*) wl_registry_bind(registry, name,
+            &ext_image_copy_capture_manager_v1_interface, version);
     }
     else if (strcmp(interface, zxdg_output_manager_v1_interface.name) == 0)
     {
@@ -632,7 +711,7 @@ static void write_loop(FrameWriterParams params)
     while(!exit_main_loop)
     {
         // wait for frame to become available
-        while(buffers.encode().ready_encode() != true && !exit_main_loop) {
+        while (buffers.encode().ready_encode() != true && !exit_main_loop) {
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
         }
         if (exit_main_loop) {
@@ -645,14 +724,16 @@ static void write_loop(FrameWriterParams params)
         frame_writer_mutex.lock();
         frame_writer_pending_mutex.unlock();
 
+        params.width = buffer.width;
+        params.height = buffer.height;
+        params.stride = buffer.stride;
+        params.format = get_input_format(buffer);
+        params.drm_format = buffer.drm_format;
+
         if (!frame_writer)
         {
             /* This is the first time buffer attributes are available */
-            params.format = get_input_format(buffer);
-            params.drm_format = buffer.drm_format;
-            params.width = buffer.width;
-            params.height = buffer.height;
-            params.stride = buffer.stride;
+
             frame_writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
 
 #ifdef HAVE_AUDIO
@@ -733,11 +814,6 @@ static void write_loop(FrameWriterParams params)
     frame_writer = nullptr;
 }
 
-void handle_graceful_termination(int)
-{
-    exit_main_loop = true;
-}
-
 static bool user_specified_overwrite(std::string filename)
 {
     struct stat buffer;   
@@ -750,7 +826,7 @@ static bool user_specified_overwrite(std::string filename)
         {
             std::cerr << "Use -f to specify the file name." << std::endl;
             return false;
-	}
+        }
     }
 
     return true;
@@ -762,8 +838,24 @@ static void check_has_protos()
         fprintf(stderr, "compositor is missing wl_shm\n");
         exit(EXIT_FAILURE);
     }
-    if (screencopy_manager == NULL) {
-        fprintf(stderr, "compositor doesn't support wlr-screencopy-unstable-v1\n");
+
+    if (!capture_toplevel && output_image_capture == NULL) {
+        fprintf(stderr, "compositor doesn't support ext-output-image-capture-source-manager-v1\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (capture_toplevel && foreign_toplevel_list == NULL) {
+        fprintf(stderr, "compositor doesn't support ext-foreign-toplevel-list-v1\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (capture_toplevel && toplevel_image_capture == NULL) {
+        fprintf(stderr, "compositor doesn't support ext-foreign-toplevel-image-capture-source-manager-v1\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if (copy_capture_manager == NULL) {
+        fprintf(stderr, "compositor doesn't support ext-image-copy-capture-manager-v1\n");
         exit(EXIT_FAILURE);
     }
 
@@ -949,9 +1041,14 @@ Use Ctrl+C to stop.)");
 
   -l, --log                 Generates a log on the current terminal. Debug purposes.
 
-  -L, --list-output          List the available outputs.
+  -L, --list-output         List the available outputs.
   
   -o, --output              Specify the output where the video is to be recorded.
+
+  -t, --toplevel[=ID]       Specify a toplevel window to record.
+                            [=ID] argument is optional.
+                            To select a toplevel from a list, use this option without
+                            an indentifier specified.
 
   -p, --codec-param         Change the codec parameters.
                             -p <option_name>=<option_value>
@@ -1016,32 +1113,173 @@ Examples:)");
     exit(EXIT_SUCCESS);
 }
 
+static int current_buffer_width, current_buffer_height, current_buffer_format;
+
+static void handle_buffer_size(void *,
+    struct ext_image_copy_capture_session_v1 *,
+    uint32_t width, uint32_t height)
+{
+    /* ffmpeg requires even width and height */
+    if (width % 2 && height % 2)
+    {
+        std::cerr << "Cannot use odd width and height: " << width << "x" << height << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    if (width % 2)
+    {
+        std::cerr << "Cannot use odd width: " << width << "x" << height << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    if (height % 2)
+    {
+        std::cerr << "Cannot use odd height: " << width << "x" << height << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    current_buffer_width = width;
+    current_buffer_height = height;
+}
+
+static void handle_shm_format(void *,
+    struct ext_image_copy_capture_session_v1 *,
+    uint32_t format)
+{
+    if (!use_dmabuf)
+    {
+        current_buffer_format = format;
+    }
+}
+
+static void handle_dmabuf_device(void *,
+    struct ext_image_copy_capture_session_v1 *,
+    struct wl_array *)
+{
+}
+
+static void handle_dmabuf_format(void *,
+    struct ext_image_copy_capture_session_v1 *,
+    uint32_t format,
+    struct wl_array *)
+{
+    if (use_dmabuf)
+    {
+        current_buffer_format = format;
+    }
+}
+
+static void handle_done(void *,
+    struct ext_image_copy_capture_session_v1 *)
+{
+}
+
+static void handle_stopped(void *,
+    struct ext_image_copy_capture_session_v1 *)
+{
+}
+
+static const struct ext_image_copy_capture_session_v1_listener recording_session_listener = {
+    .buffer_size = handle_buffer_size,
+    .shm_format = handle_shm_format,
+    .dmabuf_device = handle_dmabuf_device,
+    .dmabuf_format = handle_dmabuf_format,
+    .done = handle_done,
+    .stopped = handle_stopped,
+};
+
 capture_region selected_region{};
 wf_recorder_output *chosen_output = nullptr;
-zwlr_screencopy_frame_v1 *frame = NULL;
+ext_image_copy_capture_frame_v1 *frame = NULL;
+ext_image_copy_capture_session_v1 *recording_session = NULL;
 
-void request_next_frame()
+void request_next_frame(bool reallocate)
 {
     if (frame != NULL)
     {
-        zwlr_screencopy_frame_v1_destroy(frame);
+        ext_image_copy_capture_frame_v1_destroy(frame);
     }
 
-    /* Capture the whole output if the user hasn't provided a good geometry */
-    if (!selected_region.is_selected())
+    auto& buffer = buffers.capture();
+    if (copy_capture_source == NULL)
     {
-        frame = zwlr_screencopy_manager_v1_capture_output(
-            screencopy_manager, 1, chosen_output->output);
-    } else
-    {
-        frame = zwlr_screencopy_manager_v1_capture_output_region(
-            screencopy_manager, 1, chosen_output->output,
-            selected_region.x - chosen_output->x,
-            selected_region.y - chosen_output->y,
-            selected_region.width, selected_region.height);
+        if (capture_toplevel)
+        {
+            if (toplevel_id.empty())
+            {
+                int i = 0;
+                std::cerr << "Toplevel List:" << std::endl;
+                for (auto& td : toplevels_list)
+                {
+                    std::cerr << ++i << ": " << td.identifier << " " << td.app_id << " " << td.title << std::endl;
+                }
+                std::cerr << "Enter selection: ";
+                uint32_t number;
+                std::cin >> number;
+                if (number > toplevels_list.size() || number < 1)
+                {
+                    std::cerr << "Invalid selection \"" << number << "\", try again." << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                selected_toplevel = toplevels_list[number - 1].toplevel;
+            }
+		    copy_capture_source = ext_foreign_toplevel_image_capture_source_manager_v1_create_source(toplevel_image_capture, selected_toplevel);
+        } else
+        {
+		    copy_capture_source = ext_output_image_capture_source_manager_v1_create_source(output_image_capture, chosen_output->output);
+        }
+        recording_session = ext_image_copy_capture_manager_v1_create_session(copy_capture_manager, copy_capture_source, EXT_IMAGE_COPY_CAPTURE_MANAGER_V1_OPTIONS_PAINT_CURSORS);
+        ext_image_copy_capture_session_v1_add_listener(recording_session, &recording_session_listener, NULL);
+        sync_wayland();
     }
 
-    zwlr_screencopy_frame_v1_add_listener(frame, &frame_listener, NULL);
+    bool dirty = buffer.width != current_buffer_width || buffer.height != current_buffer_height || !buffer.wl_buffer;
+    buffer.width = current_buffer_width;
+    buffer.height = current_buffer_height;
+    buffer.stride = buffer.width * 4;
+    buffer.y_invert = 0;
+
+    frame = ext_image_copy_capture_session_v1_create_frame(recording_session);
+    buffer.frame = frame;
+    ext_image_copy_capture_frame_v1_add_listener(buffer.frame, &frame_listener, &buffer);
+
+    if (!use_dmabuf && (!buffer.wl_buffer || reallocate))
+    {
+        buffer.format = (wl_shm_format) current_buffer_format;
+        buffer.drm_format = wl_shm_to_drm_format(current_buffer_format);
+
+        free_shm_buffer(buffer);
+        buffer.wl_buffer =
+            create_shm_buffer(buffer.format, buffer.width, buffer.height, buffer.stride, &buffer.data);
+
+        if (buffer.wl_buffer == NULL)
+        {
+            fprintf(stderr, "failed to create buffer\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    if (buffer.wl_buffer)
+    {
+        ext_image_copy_capture_frame_v1_attach_buffer(buffer.frame, buffer.wl_buffer);
+
+        if (use_damage)
+        {
+            for (auto rect : damage_rects)
+            {
+                ext_image_copy_capture_frame_v1_damage_buffer(buffer.frame, rect.x, rect.y, rect.w, rect.h);
+            }
+            damage_rects.clear();
+        } else
+        {
+            ext_image_copy_capture_frame_v1_damage_buffer(buffer.frame, 0, 0, buffer.width, buffer.height);
+        }
+
+        ext_image_copy_capture_frame_v1_capture(buffer.frame);
+    } else if (use_dmabuf && (dirty || reallocate))
+    {
+        frame_handle_linux_dmabuf(buffer.width, buffer.height, current_buffer_format, reallocate);
+        ext_image_copy_capture_frame_v1_damage_buffer(buffer.frame, 0, 0, buffer.width, buffer.height);
+        dirty = false;
+    }
 }
 
 static void parse_codec_opts(std::map<std::string, std::string>& options, const std::string param)
@@ -1101,7 +1339,7 @@ int main(int argc, char *argv[])
 
     struct option opts[] = {
         { "output",            required_argument, NULL, 'o' },
-        { "file",              required_argument, NULL, 'f' },
+        { "file",               required_argument, NULL, 'f' },
         { "muxer",             required_argument, NULL, 'm' },
         { "geometry",          required_argument, NULL, 'g' },
         { "codec",             required_argument, NULL, 'c' },
@@ -1115,12 +1353,13 @@ int main(int argc, char *argv[])
         { "sample-format",     required_argument, NULL, 'X' },
         { "device",            required_argument, NULL, 'd' },
         { "no-dmabuf",         no_argument,       NULL, '&' },
-        { "filter",            required_argument, NULL, 'F' },
+        { "filter",             required_argument, NULL, 'F' },
+        { "toplevel",          optional_argument, NULL, 't' },
         { "log",               no_argument,       NULL, 'l' },
         { "audio",             optional_argument, NULL, 'a' },
         { "help",              no_argument,       NULL, 'h' },
         { "bframes",           required_argument, NULL, 'b' },
-        { "buffrate",          required_argument, NULL, 'B' },
+        { "buffrate",           required_argument, NULL, 'B' },
         { "version",           no_argument,       NULL, 'v' },
         { "no-damage",         no_argument,       NULL, 'D' },
         { "overwrite",         no_argument,       NULL, 'y' },
@@ -1129,7 +1368,7 @@ int main(int argc, char *argv[])
     };
 
     int c, i;
-    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::hvDF:yL", opts, &i)) != -1)
+    while((c = getopt_long(argc, argv, "o:f:m:g:c:p:r:x:C:P:R:X:d:b:B:la::t::hvDF:yL", opts, &i)) != -1)
     {
         switch(c)
         {
@@ -1201,6 +1440,11 @@ int main(int argc, char *argv[])
                 std::cerr << "Cannot record audio. Built without audio support." << std::endl;
                 return EXIT_FAILURE;
 #endif
+                break;
+
+            case 't':
+                capture_toplevel = true;
+                toplevel_id = optarg ? optarg : "";
                 break;
 
             case 'h':
@@ -1391,7 +1635,7 @@ int main(int argc, char *argv[])
         }
 
         buffer_copy_done = false;
-        request_next_frame();
+        request_next_frame(false);
 
         while (!buffer_copy_done && !exit_main_loop && wl_display_dispatch(display) != -1) {
             // This space is intentionally left blank
