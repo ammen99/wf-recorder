@@ -23,6 +23,7 @@
 .Op Fl m, -muxer Ar muxer
 .Op Fl L, -list-output
 .Op Fl o, -output Ar output
+.Op Fl t, -toplevel Op Ar =IDENTIFIER
 .Op Fl p, -codec-param Op Ar option_param=option_value
 .Op Fl v, -version
 .Op Fl x, -pixel-format
@@ -139,6 +140,13 @@ List the available outputs.
 .Pp
 .It Fl o , -output
 Specify the output where the video is to be recorded.
+.Pp
+.It Fl t , -toplevel Op Ar =IDENTIFIER
+Starts recording a toplevel window.
+.Pp
+.Ar IDENTIFIER
+argument is optional.
+To select a toplevel from a list, use this option without an indentifier specified.
 .Pp
 .It Fl p , -codec-param Op Ar option_name=option_value
 Change a codec parameter. Can be used multiple times:
