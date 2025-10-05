@@ -335,17 +335,8 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
         exit(-1);
     }
 
-    // We also need to tell the sink which pixel formats are supported.
-    // by the video encoder. codevIndicate to our sink  pixel formats
-    // are accepted by our codec.
-    const AVPixelFormat picked_pix_fmt[] =
-    {
-        handle_buffersink_pix_fmt(codec),
-        AV_PIX_FMT_NONE
-    };
-
-    err = av_opt_set_int_list(this->videoFilterSinkCtx, "pix_fmts",
-        picked_pix_fmt, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
+    err = av_opt_set(this->videoFilterSinkCtx, "pixel_formats",
+        codec->name, AV_OPT_SEARCH_CHILDREN);
 
     if (err < 0) {
         std::cerr << "Failed to set pix_fmts: " << averr(err) << std::endl;;
