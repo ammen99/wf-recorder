@@ -142,6 +142,11 @@ AVPixelFormat FrameWriter::get_input_format()
     }
 }
 
+AVRational FrameWriter::get_input_time_base()
+{
+    return US_RATIONAL;
+}
+
 static const struct {
     int drm;
     AVPixelFormat av;
@@ -310,36 +315,52 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     }
     buffer_filter_config << ":pixel_aspect=1/1";
 
-    int err = avfilter_graph_create_filter(&this->videoFilterSourceCtx, source,
-        "Source", buffer_filter_config.str().c_str(), NULL, this->videoFilterGraph);
-    if (err < 0) {
-        std::cerr << "Cannot create video filter in: " << averr(err) << std::endl;;
+    this->videoFilterSourceCtx = avfilter_graph_alloc_filter(this->videoFilterGraph, source, "Source");
+        
+    if (!this->videoFilterSourceCtx) {
+        std::cerr << "Cannot create video filter in." << std::endl;;
         exit(-1);
     }
 
     AVBufferSrcParameters *p = av_buffersrc_parameters_alloc();
     memset(p, 0, sizeof(*p));
-    p->format = AV_PIX_FMT_NONE;
+    p->format = (int)this->get_input_format();
+    p->time_base = this->get_input_time_base();
+    p->width = params.width;
+    p->height = params.height;
     p->hw_frames_ctx = this->hw_frame_context_in;
-    err = av_buffersrc_parameters_set(this->videoFilterSourceCtx, p);
+    int err = av_buffersrc_parameters_set(this->videoFilterSourceCtx, p);
     av_free(p);
     if (err < 0) {
          std::cerr << "Cannot set hwcontext filter in: " << averr(err) << std::endl;;
          exit(-1);
     }
 
-    err = avfilter_graph_create_filter(&this->videoFilterSinkCtx, sink, "Sink",
-        NULL, NULL, this->videoFilterGraph);
+    err = avfilter_init_dict(this->videoFilterSourceCtx, NULL);
     if (err < 0) {
-        std::cerr << "Cannot create video filter out: " << averr(err) << std::endl;;
+        std::cerr << "Cannot initialise video filter in: " << averr(err) << std::endl;;
         exit(-1);
     }
 
+    this->videoFilterSinkCtx = avfilter_graph_alloc_filter(this->videoFilterGraph, sink, "Sink");
+    if (!this->videoFilterSinkCtx) {
+        std::cerr << "Cannot create video filter out." << std::endl;;
+        exit(-1);
+    }
+
+    const char* picked_pix_fmt = av_get_pix_fmt_name(handle_buffersink_pix_fmt(codec));
+
     err = av_opt_set(this->videoFilterSinkCtx, "pixel_formats",
-        codec->name, AV_OPT_SEARCH_CHILDREN);
+        picked_pix_fmt, AV_OPT_SEARCH_CHILDREN);
 
     if (err < 0) {
         std::cerr << "Failed to set pix_fmts: " << averr(err) << std::endl;;
+        exit(-1);
+    }
+
+    err = avfilter_init_dict(this->videoFilterSinkCtx, NULL);
+    if (err < 0) {
+        std::cerr << "Cannot initialise video filter out: " << averr(err) << std::endl;;
         exit(-1);
     }
 

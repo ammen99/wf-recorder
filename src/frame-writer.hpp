@@ -105,6 +105,7 @@ class FrameWriter
     AVPixelFormat lookup_pixel_format(std::string pix_fmt);
     AVPixelFormat handle_buffersink_pix_fmt(const AVCodec *codec);
     AVPixelFormat get_input_format();
+    AVRational get_input_time_base();
     void init_hw_accel();
     void init_codecs();
     void init_video_filters(const AVCodec *codec);
