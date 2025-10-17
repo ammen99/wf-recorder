@@ -5,8 +5,7 @@
 
 #include <iostream>
 #include "frame-writer.hpp"
-#include <vector>
-#include <queue>
+#include <libavfilter/version.h>
 #include <cstring>
 #include <sstream>
 #include "averr.h"
@@ -310,10 +309,10 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     }
     buffer_filter_config << ":pixel_aspect=1/1";
 
-    int err = avfilter_graph_create_filter(&this->videoFilterSourceCtx, source,
-        "Source", buffer_filter_config.str().c_str(), NULL, this->videoFilterGraph);
-    if (err < 0) {
-        std::cerr << "Cannot create video filter in: " << averr(err) << std::endl;;
+    this->videoFilterSourceCtx = avfilter_graph_alloc_filter(this->videoFilterGraph,
+        source, "Source");
+    if (!this->videoFilterSourceCtx) {
+        std::cerr << "Cannot alloc video filter in." << std::endl;;
         exit(-1);
     }
 
@@ -321,23 +320,31 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     memset(p, 0, sizeof(*p));
     p->format = AV_PIX_FMT_NONE;
     p->hw_frames_ctx = this->hw_frame_context_in;
-    err = av_buffersrc_parameters_set(this->videoFilterSourceCtx, p);
+    int err = av_buffersrc_parameters_set(this->videoFilterSourceCtx, p);
     av_free(p);
     if (err < 0) {
          std::cerr << "Cannot set hwcontext filter in: " << averr(err) << std::endl;;
          exit(-1);
     }
 
-    err = avfilter_graph_create_filter(&this->videoFilterSinkCtx, sink, "Sink",
-        NULL, NULL, this->videoFilterGraph);
+    err = avfilter_init_str(this->videoFilterSourceCtx, buffer_filter_config.str().c_str());
     if (err < 0) {
-        std::cerr << "Cannot create video filter out: " << averr(err) << std::endl;;
+         std::cerr << "Cannot init filter in: " << averr(err) << std::endl;;
+         exit(-1);
+    }
+
+    this->videoFilterSinkCtx = avfilter_graph_alloc_filter(this->videoFilterGraph,
+        sink, "Sink");
+    if (!this->videoFilterSinkCtx) {
+        std::cerr << "Cannot alloc video filter out." << std::endl;;
         exit(-1);
     }
 
     // We also need to tell the sink which pixel formats are supported.
     // by the video encoder. codevIndicate to our sink  pixel formats
     // are accepted by our codec.
+    // pixel_formats used to be called pix_fmts and was renamed in 10.6.100
+#if LIBAVFILTER_VERSION_INT < AV_VERSION_INT(10, 6, 100)
     const AVPixelFormat picked_pix_fmt[] =
     {
         handle_buffersink_pix_fmt(codec),
@@ -346,10 +353,20 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
 
     err = av_opt_set_int_list(this->videoFilterSinkCtx, "pix_fmts",
         picked_pix_fmt, AV_PIX_FMT_NONE, AV_OPT_SEARCH_CHILDREN);
+#else
+    err = av_opt_set(this->videoFilterSinkCtx, "pixel_formats",
+        av_get_pix_fmt_name(handle_buffersink_pix_fmt(codec)), AV_OPT_SEARCH_CHILDREN);
+#endif
 
     if (err < 0) {
         std::cerr << "Failed to set pix_fmts: " << averr(err) << std::endl;;
         exit(-1);
+    }
+
+    err = avfilter_init_dict(this->videoFilterSinkCtx, NULL);
+    if (err < 0) {
+         std::cerr << "Cannot init filter out: " << averr(err) << std::endl;;
+         exit(-1);
     }
 
     // Create the connections to the filter graph
