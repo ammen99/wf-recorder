@@ -128,7 +128,7 @@ install_data('manpage/wf-recorder.1', install_dir :
 	join_paths(get_option('prefix'), get_option('mandir'), 'man1'))
 
 install_data('completions/wf-recorder.fish', install_dir :
-	join_paths(get_option('prefix'), 'share/fish/fish/vendor_completions.d/'))
+	join_paths(get_option('prefix'), 'share/fish/vendor_completions.d/'))
 
 subdir('proto')
 
