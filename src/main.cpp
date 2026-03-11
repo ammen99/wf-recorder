@@ -531,7 +531,7 @@ static void handle_toplevel_app_id(void *data,
 }
 
 static void handle_toplevel_identifier(void *data,
-    struct ext_foreign_toplevel_handle_v1 *ext_foreign_toplevel_handle_v1,
+    struct ext_foreign_toplevel_handle_v1 *toplevel,
     const char *identifier)
 {
     toplevel_data *td = (toplevel_data *) data;
@@ -540,7 +540,7 @@ static void handle_toplevel_identifier(void *data,
         td->identifier = identifier;
 	} else if (toplevel_id == std::string(identifier))
     {
-        selected_toplevel = ext_foreign_toplevel_handle_v1;
+        selected_toplevel = toplevel;
     }
 }
 
@@ -576,7 +576,7 @@ void handle_toplevel(void *,
 void handle_finished(void *,
     struct ext_foreign_toplevel_list_v1 *)
 {
-    std::cerr << "finished." << std::endl;
+    std::cerr << "ext_foreign_toplevel_list finished." << std::endl;
     exit(EXIT_SUCCESS);
 }
 
@@ -1119,23 +1119,6 @@ static void handle_buffer_size(void *,
     struct ext_image_copy_capture_session_v1 *,
     uint32_t width, uint32_t height)
 {
-    /* ffmpeg requires even width and height */
-    if (width % 2 && height % 2)
-    {
-        std::cerr << "Cannot use odd width and height: " << width << "x" << height << std::endl;
-        exit(EXIT_FAILURE);
-    }
-    if (width % 2)
-    {
-        std::cerr << "Cannot use odd width: " << width << "x" << height << std::endl;
-        exit(EXIT_FAILURE);
-    }
-    if (height % 2)
-    {
-        std::cerr << "Cannot use odd height: " << width << "x" << height << std::endl;
-        exit(EXIT_FAILURE);
-    }
-
     current_buffer_width = width;
     current_buffer_height = height;
 }
@@ -1199,37 +1182,6 @@ void request_next_frame(bool reallocate)
     }
 
     auto& buffer = buffers.capture();
-    if (copy_capture_source == NULL)
-    {
-        if (capture_toplevel)
-        {
-            if (toplevel_id.empty())
-            {
-                int i = 0;
-                std::cerr << "Toplevel List:" << std::endl;
-                for (auto& td : toplevels_list)
-                {
-                    std::cerr << ++i << ": " << td.identifier << " " << td.app_id << " " << td.title << std::endl;
-                }
-                std::cerr << "Enter selection: ";
-                uint32_t number;
-                std::cin >> number;
-                if (number > toplevels_list.size() || number < 1)
-                {
-                    std::cerr << "Invalid selection \"" << number << "\", try again." << std::endl;
-                    exit(EXIT_FAILURE);
-                }
-                selected_toplevel = toplevels_list[number - 1].toplevel;
-            }
-		    copy_capture_source = ext_foreign_toplevel_image_capture_source_manager_v1_create_source(toplevel_image_capture, selected_toplevel);
-        } else
-        {
-		    copy_capture_source = ext_output_image_capture_source_manager_v1_create_source(output_image_capture, chosen_output->output);
-        }
-        recording_session = ext_image_copy_capture_manager_v1_create_session(copy_capture_manager, copy_capture_source, EXT_IMAGE_COPY_CAPTURE_MANAGER_V1_OPTIONS_PAINT_CURSORS);
-        ext_image_copy_capture_session_v1_add_listener(recording_session, &recording_session_listener, NULL);
-        sync_wayland();
-    }
 
     bool dirty = buffer.width != current_buffer_width || buffer.height != current_buffer_height || !buffer.wl_buffer;
     buffer.width = current_buffer_width;
@@ -1617,7 +1569,70 @@ int main(int argc, char *argv[])
             chosen_output->width, chosen_output->height};
     }
 
-    fprintf(stderr, "selected region %d,%d %dx%d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);
+    if (!copy_capture_source)
+    {
+        if (capture_toplevel)
+        {
+            if (toplevel_id.empty())
+            {
+                if (toplevels_list.empty())
+                {
+                    std::cerr << "Toplevel List: (empty) - Ensure the wayfire copy-capture plugin is loaded." << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                int i = 0;
+                std::cerr << "Toplevel List:" << std::endl;
+                for (auto& td : toplevels_list)
+                {
+                    std::cerr << ++i << ": " << td.identifier << " " << td.app_id << " " << td.title << std::endl;
+                }
+                std::cerr << "Enter selection: ";
+                uint32_t number = 0;
+                std::string input;
+                try
+                {
+                    std::getline(std::cin, input);
+                    number = std::stoi(input);
+                }
+                catch (const std::string& e)
+                {
+                    std::cerr << "Invalid selection \"" << input << "\", try again." << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                if (number > toplevels_list.size() || number < 1)
+                {
+                    std::cerr << "Invalid selection \"" << number << "\", try again." << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                selected_toplevel = toplevels_list[number - 1].toplevel;
+                if (!selected_toplevel)
+                {
+                    std::cerr << "!selected_toplevel" << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+            }
+		    copy_capture_source = ext_foreign_toplevel_image_capture_source_manager_v1_create_source(toplevel_image_capture, selected_toplevel);
+            if (!copy_capture_source)
+            {
+                std::cerr << "!copy_capture_source (toplevel)" << std::endl;
+                exit(EXIT_FAILURE);
+            }
+        } else
+        {
+		    copy_capture_source = ext_output_image_capture_source_manager_v1_create_source(output_image_capture, chosen_output->output);
+            if (!copy_capture_source)
+            {
+                std::cerr << "!copy_capture_source (output)" << std::endl;
+                exit(EXIT_FAILURE);
+            }
+
+            fprintf(stderr, "selected region %d,%d %dx%d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);
+        }
+        recording_session = ext_image_copy_capture_manager_v1_create_session(copy_capture_manager, copy_capture_source, EXT_IMAGE_COPY_CAPTURE_MANAGER_V1_OPTIONS_PAINT_CURSORS);
+        ext_image_copy_capture_session_v1_add_listener(recording_session, &recording_session_listener, NULL);
+        sync_wayland();
+        wl_display_flush(display);
+    }
 
     bool spawned_thread = false;
     std::thread writer_thread;
