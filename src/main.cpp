@@ -545,9 +545,12 @@ static void handle_toplevel_identifier(void *data,
 }
 
 static void handle_toplevel_closed(void *,
-    struct ext_foreign_toplevel_handle_v1 *)
+    struct ext_foreign_toplevel_handle_v1 *toplevel)
 {
-    handle_graceful_termination(0);
+    if (selected_toplevel == toplevel)
+    {
+        handle_graceful_termination(0);
+    }
 }
 
 static void handle_toplevel_done(void *,
