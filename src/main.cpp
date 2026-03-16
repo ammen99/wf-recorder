@@ -5,7 +5,6 @@
 
 #include <list>
 #include <string>
-#include <thread>
 #include <mutex>
 #include <atomic>
 #include <getopt.h>
@@ -35,8 +34,6 @@
 #include "audio.hpp"
 AudioReaderParams audioParams;
 #endif
-
-#define MAX_FRAME_FAILURES 16
 
 static const int GRACEFUL_TERMINATION_SIGNALS[] = { SIGTERM, SIGINT, SIGHUP };
 
@@ -216,7 +213,7 @@ static std::vector<damage_rect> damage_rects;
 
 std::atomic<bool> exit_main_loop{false};
 
-buffer_pool<wf_buffer, 16> buffers;
+buffer_pool<wf_buffer, MAX_FRAME_FAILURES> buffers;
 
 bool buffer_copy_done = false;
 
@@ -338,8 +335,11 @@ static void frame_handle_failed(void *,
     uint32_t reason)
 {
     std::cerr << "Failed to copy frame because reason " << reason << ", retrying..." << std::endl;
-    ++frame_failed_cnt;
-    request_next_frame(true);
+    if (!frame_failed_cnt)
+    {
+        request_next_frame(true);
+    }
+    frame_failed_cnt++;
     if (frame_failed_cnt > MAX_FRAME_FAILURES)
     {
         std::cerr << "Failed to copy frame too many times, exiting!" << std::endl;
@@ -355,14 +355,11 @@ static const struct ext_image_copy_capture_frame_v1_listener frame_listener = {
     .failed = frame_handle_failed,
 };
 
-static void dmabuf_created(void *, struct zwp_linux_buffer_params_v1 *,
+static void dmabuf_created(void *data, struct zwp_linux_buffer_params_v1 *,
     struct wl_buffer *wl_buffer)
 {
-    auto& buffer = buffers.capture();
-    buffer.wl_buffer = wl_buffer;
-    ext_image_copy_capture_frame_v1_attach_buffer(buffer.frame, buffer.wl_buffer);
-    ext_image_copy_capture_frame_v1_damage_buffer(buffer.frame, 0, 0, buffer.width, buffer.height);
-    ext_image_copy_capture_frame_v1_capture(buffer.frame);
+    auto buffer = (wf_buffer *) data;
+    buffer->wl_buffer = wl_buffer;
 }
 
 static void dmabuf_failed(void *, struct zwp_linux_buffer_params_v1 *) {
@@ -402,6 +399,7 @@ static void frame_handle_linux_dmabuf(uint32_t width, uint32_t height, uint32_t 
         if (buffer.bo) {
             if (buffer.wl_buffer) {
                 wl_buffer_destroy(buffer.wl_buffer);
+                buffer.wl_buffer = nullptr;
             }
 
             zwp_linux_buffer_params_v1_destroy(buffer.params);
@@ -426,8 +424,9 @@ static void frame_handle_linux_dmabuf(uint32_t width, uint32_t height, uint32_t 
             return;
         }
 
+        buffer.width = gbm_bo_get_width(buffer.bo);
+        buffer.height = gbm_bo_get_height(buffer.bo);;
         buffer.stride = gbm_bo_get_stride(buffer.bo);
-
         buffer.params = zwp_linux_dmabuf_v1_create_params(dmabuf);
 
         uint64_t mod = gbm_bo_get_modifier(buffer.bo);
@@ -437,9 +436,8 @@ static void frame_handle_linux_dmabuf(uint32_t width, uint32_t height, uint32_t 
             gbm_bo_get_stride(buffer.bo),
             mod >> 32, mod & 0xffffffff);
 
-        zwp_linux_buffer_params_v1_add_listener(buffer.params, &params_listener, NULL);
-        zwp_linux_buffer_params_v1_create(buffer.params, w,
-            h, format, 0);
+        zwp_linux_buffer_params_v1_add_listener(buffer.params, &params_listener, &buffer);
+        zwp_linux_buffer_params_v1_create(buffer.params, w, h, format, 0);
     }
 }
 
@@ -784,15 +782,15 @@ static void write_loop(FrameWriterParams params)
                         std::cerr << "Failed to map bo" << std::endl;
                         break;
                     }
-                    do_cont = frame_writer->add_frame((unsigned char*)data,
+                    do_cont = frame_writer->add_frame(buffer.width, buffer.height, (unsigned char*)data,
                         sync_timestamp, buffer.y_invert);
                     gbm_bo_unmap(buffer.bo, map_data);
                 } else {
-                    do_cont = frame_writer->add_frame(buffer.bo,
+                    do_cont = frame_writer->add_frame(buffer.width, buffer.height, buffer.bo,
                         sync_timestamp, buffer.y_invert);
                 }
             } else {
-                do_cont = frame_writer->add_frame((unsigned char*)buffer.data,
+                do_cont = frame_writer->add_frame(buffer.width, buffer.height, (unsigned char*)buffer.data,
                     sync_timestamp, buffer.y_invert);
             }
         } else {
@@ -909,8 +907,6 @@ static void print_available_outputs()
             wo.description.c_str());
     }
 }
-
-
 
 static wf_recorder_output* choose_interactive()
 {
@@ -1124,6 +1120,7 @@ static void handle_buffer_size(void *,
 {
     current_buffer_width = width;
     current_buffer_height = height;
+    request_next_frame(true);
 }
 
 static void handle_shm_format(void *,
@@ -1179,6 +1176,12 @@ ext_image_copy_capture_session_v1 *recording_session = NULL;
 
 void request_next_frame(bool reallocate)
 {
+    // wait for a free buffer
+    while(buffers.capture().ready_capture() != true)
+    {
+        std::this_thread::sleep_for(std::chrono::microseconds(500));
+    }
+
     if (frame != NULL)
     {
         ext_image_copy_capture_frame_v1_destroy(frame);
@@ -1196,7 +1199,7 @@ void request_next_frame(bool reallocate)
     buffer.frame = frame;
     ext_image_copy_capture_frame_v1_add_listener(buffer.frame, &frame_listener, &buffer);
 
-    if (!use_dmabuf && (!buffer.wl_buffer || reallocate))
+    if (!use_dmabuf && (!buffer.wl_buffer || dirty || reallocate))
     {
         buffer.format = (wl_shm_format) current_buffer_format;
         buffer.drm_format = wl_shm_to_drm_format(current_buffer_format);
@@ -1210,6 +1213,10 @@ void request_next_frame(bool reallocate)
             fprintf(stderr, "failed to create buffer\n");
             exit(EXIT_FAILURE);
         }
+    } else if (use_dmabuf && (!buffer.wl_buffer || dirty || reallocate))
+    {
+        frame_handle_linux_dmabuf(buffer.width, buffer.height, current_buffer_format, (!buffer.wl_buffer || dirty || reallocate));
+        while (!buffer.wl_buffer && wl_display_dispatch(display) != -1);
     }
 
     if (buffer.wl_buffer)
@@ -1229,11 +1236,6 @@ void request_next_frame(bool reallocate)
         }
 
         ext_image_copy_capture_frame_v1_capture(buffer.frame);
-    } else if (use_dmabuf && (dirty || reallocate))
-    {
-        frame_handle_linux_dmabuf(buffer.width, buffer.height, current_buffer_format, reallocate);
-        ext_image_copy_capture_frame_v1_damage_buffer(buffer.frame, 0, 0, buffer.width, buffer.height);
-        dirty = false;
     }
 }
 
@@ -1647,11 +1649,6 @@ int main(int argc, char *argv[])
 
     while(!exit_main_loop)
     {
-        // wait for a free buffer
-        while(buffers.capture().ready_capture() != true) {
-            std::this_thread::sleep_for(std::chrono::microseconds(500));
-        }
-
         buffer_copy_done = false;
         request_next_frame(false);
 

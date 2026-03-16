@@ -4,6 +4,7 @@
 // Audio encoding - thanks to wlstream, a lot of the code/ideas are taken from there
 
 #include <iostream>
+#include <algorithm>
 #include "frame-writer.hpp"
 #include <libavfilter/version.h>
 #include <cstring>
@@ -33,6 +34,10 @@ static FFmpegInitialize ffmpegInitialize;
 
 void FrameWriter::init_hw_accel()
 {
+    if (this->hw_device_context)
+    {
+        return;
+    }
     int ret = av_hwdevice_ctx_create(&this->hw_device_context,
         av_hwdevice_find_type_by_name("vaapi"), params.hw_device.c_str(), NULL, 0);
 
@@ -250,6 +255,12 @@ static std::string transpose_from_transform(int32_t transform)
     return "";
 }
 
+void FrameWriter::fini_video_filters()
+{
+    av_buffer_unref(&hw_frame_context);
+    av_buffer_unref(&hw_frame_context_in);
+}
+
 void FrameWriter::init_video_filters(const AVCodec *codec)
 {
     if (params.transform != 0) {
@@ -447,12 +458,12 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     avfilter_inout_free(&outputs);
 }
 
-void FrameWriter::init_video_stream()
+void FrameWriter::pre_init_video_stream()
 {
-    AVDictionary *options = NULL;
+    options = NULL;
     load_codec_options(&options);
 
-    const AVCodec* codec = avcodec_find_encoder_by_name(params.codec.c_str());
+    codec = avcodec_find_encoder_by_name(params.codec.c_str());
     if (!codec)
     {
         std::cerr << "Failed to find the given codec: " << params.codec << std::endl;
@@ -465,7 +476,16 @@ void FrameWriter::init_video_stream()
         std::cerr << "Failed to open stream" << std::endl;
         std::exit(-1);
     }
+}
 
+void FrameWriter::fini_video_stream()
+{
+    fini_video_filters();
+    avcodec_free_context(&videoCodecCtx);
+}
+
+void FrameWriter::init_video_stream()
+{
     videoCodecCtx = avcodec_alloc_context3(codec);
     videoCodecCtx->width      = params.width;
     videoCodecCtx->height     = params.height;
@@ -503,7 +523,6 @@ void FrameWriter::init_video_stream()
         std::cerr << "avcodec_open2 failed: " << err << std::endl;
         std::exit(-1);
     }
-    av_dict_free(&options);
 
     if ((ret = avcodec_parameters_from_context(videoStream->codecpar, videoCodecCtx)) < 0) {
         av_strerror(ret, err, 256);
@@ -673,6 +692,7 @@ void FrameWriter::init_audio_stream()
 #endif
 void FrameWriter::init_codecs()
 {
+    pre_init_video_stream();
     init_video_stream();
 #ifdef HAVE_AUDIO
     if (params.enable_audio)
@@ -797,8 +817,11 @@ bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
             // There will be no more output frames on this sink.
             // That could happen if a filter like 'trim' is used to
             // stop after a given time.
+            std::cerr << "AVERROR_EOF" << std::endl;
+            av_frame_free(&filtered_frame);
             return false;
         } else if (err < 0) {
+            std::cerr << "err < 0" << std::endl;
             av_frame_free(&filtered_frame);
             return false;
         }
@@ -819,8 +842,22 @@ bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
     return true;
 }
 
-bool FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
+void FrameWriter::recreate_encoder()
+{std::cerr << __func__ << std::endl;
+    fini_video_stream();
+    init_video_stream();
+}
+
+bool FrameWriter::add_frame(int width, int height, const uint8_t* pixels, int64_t usec, bool y_invert)
 {
+    if (params.width != width || params.height != height)
+    {
+        std::cerr << "size mismatch, resizing video: " << params.width << "x" << params.height << " != " << width  << "x" << height << std::endl;
+        params.width = width;
+        params.height = height;
+        recreate_encoder();
+    }
+
     /* Calculate data after y-inversion */
     int stride[] = {int(params.stride)};
     const uint8_t *formatted_pixels = pixels;
@@ -845,7 +882,41 @@ bool FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
     return push_frame(frame, usec);
 }
 
-bool FrameWriter::add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert)
+bool FrameWriter::add_frame(int width, int height, struct gbm_bo *bo, int64_t usec, bool y_invert)
+{
+    if (params.width != width || params.height != height)
+    {
+        for (auto [vaapi_bo, vaapi_frame] : mapped_frames)
+        {
+            av_frame_free(&vaapi_frame);
+        }
+        mapped_frames.clear();
+        while (!encoding_threads.empty())
+        {
+            encoding_threads.erase(std::remove_if(encoding_threads.begin(), encoding_threads.end(), [] (std::thread &t)
+            {
+                if (t.joinable())
+                {
+                    t.join();
+                    return true;
+                }
+                return false;
+            }), encoding_threads.end());
+        }
+        std::cerr << "size mismatch, resizing video: " << params.width << "x" << params.height << " != " << width  << "x" << height << std::endl;
+        params.width = width;
+        params.height = height;
+        recreate_encoder();
+    }
+
+    encoding_threads.emplace_back(std::thread([=] () {
+        add_frame3(bo, usec, y_invert);
+    }));
+
+    return true;
+}
+
+bool FrameWriter::add_frame3(struct gbm_bo *bo, int64_t usec, bool y_invert)
 {
     if (y_invert)
     {
@@ -1016,6 +1087,18 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
 
 FrameWriter::~FrameWriter()
 {
+    while (!encoding_threads.empty())
+    {
+        encoding_threads.erase(std::remove_if(encoding_threads.begin(), encoding_threads.end(), [] (std::thread &t)
+        {
+            if (t.joinable())
+            {
+                t.join();
+                return true;
+            }
+            return false;
+        }), encoding_threads.end());
+    }
     // Writing the delayed frames:
     AVPacket *pkt = av_packet_alloc();
 
@@ -1034,7 +1117,8 @@ FrameWriter::~FrameWriter()
         avio_closep(&fmtCtx->pb);
 
     // Freeing all the allocated memory:
-    avcodec_free_context(&videoCodecCtx);
+    fini_video_stream();
+    av_dict_free(&options);
 #ifdef HAVE_AUDIO
     if (params.enable_audio)
         avcodec_free_context(&audioCodecCtx);

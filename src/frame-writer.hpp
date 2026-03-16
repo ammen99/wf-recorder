@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
+#include <thread>
 #include <map>
 #include <atomic>
 #include <wayland-client-protocol.h>
@@ -91,6 +92,8 @@ class FrameWriter
     AVStream* videoStream;
     AVCodecContext* videoCodecCtx;
     AVFormatContext* fmtCtx;
+    AVDictionary *options;
+    const AVCodec *codec;
 
     AVFilterContext* videoFilterSourceCtx = NULL;
     AVFilterContext* videoFilterSinkCtx = NULL;
@@ -100,7 +103,8 @@ class FrameWriter
     AVBufferRef *hw_frame_context = NULL;
     AVBufferRef *hw_frame_context_in = NULL;
 
-    std::map<struct gbm_bo*, AVFrame*> mapped_frames;
+    std::map<struct gbm_bo*, AVFrame *> mapped_frames;
+    std::vector<std::thread> encoding_threads;
 
     AVPixelFormat lookup_pixel_format(std::string pix_fmt);
     AVPixelFormat handle_buffersink_pix_fmt(const AVCodec *codec);
@@ -108,7 +112,10 @@ class FrameWriter
     void init_hw_accel();
     void init_codecs();
     void init_video_filters(const AVCodec *codec);
+    void fini_video_filters();
+    void pre_init_video_stream();
     void init_video_stream();
+    void fini_video_stream();
 
     void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt);
 
@@ -125,8 +132,10 @@ class FrameWriter
 
   public:
     FrameWriter(const FrameWriterParams& params);
-    bool add_frame(const uint8_t* pixels, int64_t usec, bool y_invert);
-    bool add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert);
+    void recreate_encoder();
+    bool add_frame(int width, int height, const uint8_t* pixels, int64_t usec, bool y_invert);
+    bool add_frame(int width, int height, struct gbm_bo *bo, int64_t usec, bool y_invert);
+    bool add_frame3(struct gbm_bo *bo, int64_t usec, bool y_invert);
 
 #ifdef HAVE_AUDIO
     /* Buffer must have size get_audio_buffer_size() */
