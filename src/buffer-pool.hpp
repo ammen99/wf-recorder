@@ -5,7 +5,8 @@
 #include <atomic>
 #include <type_traits>
 
-#define MAX_FRAME_FAILURES 64
+#define MAX_FRAME_FAILURES 16
+#define INITIAL_BUFFERS_SIZE 2
 
 class buffer_pool_buf
 {
@@ -39,14 +40,14 @@ public:
 
     ~buffer_pool()
     {
-        for (size_t i = 0; i < N; ++i) {
+        for (size_t i = 0; i < bufs_size; ++i) {
             delete bufs[i];
         }
     }
 
     size_t size() const
     {
-        return N;
+        return bufs_size;
     }
 
     const T* at(size_t i) const
@@ -93,7 +94,8 @@ public:
             }
             std::cerr << "bufs_size: " << bufs_size << std::endl;
             bufs[bufs_size - 1] = new T;
-            next = (capture_idx + 1) % bufs_size;
+            next = bufs_size - 1;
+            encode_idx = capture_idx;
         }
         capture_idx = next;
         return *bufs[capture_idx];
@@ -112,8 +114,8 @@ public:
 
 private:
     std::mutex mutex;
-    std::array<T*, N> bufs;
-    size_t bufs_size = 2;
+    std::array<T*, MAX_FRAME_FAILURES> bufs;
+    size_t bufs_size = INITIAL_BUFFERS_SIZE;
     int capture_idx = 0; // head
     int encode_idx = 0; // tail
 };

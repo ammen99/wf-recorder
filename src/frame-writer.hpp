@@ -104,7 +104,6 @@ class FrameWriter
     AVBufferRef *hw_frame_context_in = NULL;
 
     std::map<struct gbm_bo*, AVFrame *> mapped_frames;
-    std::vector<std::thread> encoding_threads;
 
     AVPixelFormat lookup_pixel_format(std::string pix_fmt);
     AVPixelFormat handle_buffersink_pix_fmt(const AVCodec *codec);
@@ -134,7 +133,7 @@ class FrameWriter
     FrameWriter(const FrameWriterParams& params);
     void recreate_encoder();
     bool add_frame(int width, int height, const uint8_t* pixels, int64_t usec, bool y_invert);
-    bool add_frame(int width, int height, struct gbm_bo *bo, int64_t usec, bool y_invert);
+    bool add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert);
     bool add_frame3(struct gbm_bo *bo, int64_t usec, bool y_invert);
 
 #ifdef HAVE_AUDIO

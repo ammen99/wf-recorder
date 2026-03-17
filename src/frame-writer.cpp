@@ -4,7 +4,6 @@
 // Audio encoding - thanks to wlstream, a lot of the code/ideas are taken from there
 
 #include <iostream>
-#include <algorithm>
 #include "frame-writer.hpp"
 #include <libavfilter/version.h>
 #include <cstring>
@@ -515,6 +514,10 @@ void FrameWriter::init_video_stream()
         videoCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
+    av_dict_set_int(&options, "async_depth", 1, 0);
+    videoCodecCtx->thread_type = FF_THREAD_FRAME;
+    videoCodecCtx->bit_rate = 10000000;
+
     int ret;
     char err[256];
     if ((ret = avcodec_open2(videoCodecCtx, codec, &options)) < 0)
@@ -764,6 +767,7 @@ void FrameWriter::encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt)
 {
     /* send the frame to the encoder */
     int ret = avcodec_send_frame(enc_ctx, frame);
+
     if (ret < 0)
     {
         fprintf(stderr, "error sending a frame for encoding\n");
@@ -817,11 +821,9 @@ bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
             // There will be no more output frames on this sink.
             // That could happen if a filter like 'trim' is used to
             // stop after a given time.
-            std::cerr << "AVERROR_EOF" << std::endl;
             av_frame_free(&filtered_frame);
             return false;
         } else if (err < 0) {
-            std::cerr << "err < 0" << std::endl;
             av_frame_free(&filtered_frame);
             return false;
         }
@@ -843,7 +845,7 @@ bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
 }
 
 void FrameWriter::recreate_encoder()
-{std::cerr << __func__ << std::endl;
+{
     fini_video_stream();
     init_video_stream();
 }
@@ -882,8 +884,11 @@ bool FrameWriter::add_frame(int width, int height, const uint8_t* pixels, int64_
     return push_frame(frame, usec);
 }
 
-bool FrameWriter::add_frame(int width, int height, struct gbm_bo *bo, int64_t usec, bool y_invert)
+bool FrameWriter::add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert)
 {
+    int width = gbm_bo_get_width(bo);
+    int height = gbm_bo_get_height(bo);
+
     if (params.width != width || params.height != height)
     {
         for (auto [vaapi_bo, vaapi_frame] : mapped_frames)
@@ -891,29 +896,13 @@ bool FrameWriter::add_frame(int width, int height, struct gbm_bo *bo, int64_t us
             av_frame_free(&vaapi_frame);
         }
         mapped_frames.clear();
-        while (!encoding_threads.empty())
-        {
-            encoding_threads.erase(std::remove_if(encoding_threads.begin(), encoding_threads.end(), [] (std::thread &t)
-            {
-                if (t.joinable())
-                {
-                    t.join();
-                    return true;
-                }
-                return false;
-            }), encoding_threads.end());
-        }
         std::cerr << "size mismatch, resizing video: " << params.width << "x" << params.height << " != " << width  << "x" << height << std::endl;
         params.width = width;
         params.height = height;
         recreate_encoder();
     }
 
-    encoding_threads.emplace_back(std::thread([=] () {
-        add_frame3(bo, usec, y_invert);
-    }));
-
-    return true;
+    return add_frame3(bo, usec, y_invert);
 }
 
 bool FrameWriter::add_frame3(struct gbm_bo *bo, int64_t usec, bool y_invert)
@@ -1087,18 +1076,6 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
 
 FrameWriter::~FrameWriter()
 {
-    while (!encoding_threads.empty())
-    {
-        encoding_threads.erase(std::remove_if(encoding_threads.begin(), encoding_threads.end(), [] (std::thread &t)
-        {
-            if (t.joinable())
-            {
-                t.join();
-                return true;
-            }
-            return false;
-        }), encoding_threads.end());
-    }
     // Writing the delayed frames:
     AVPacket *pkt = av_packet_alloc();
 

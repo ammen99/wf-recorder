@@ -213,7 +213,7 @@ static std::vector<damage_rect> damage_rects;
 
 std::atomic<bool> exit_main_loop{false};
 
-buffer_pool<wf_buffer, MAX_FRAME_FAILURES> buffers;
+buffer_pool<wf_buffer, INITIAL_BUFFERS_SIZE> buffers;
 
 bool buffer_copy_done = false;
 
@@ -410,12 +410,12 @@ static void frame_handle_linux_dmabuf(uint32_t width, uint32_t height, uint32_t 
         auto h = height;
 
         const uint64_t modifier = 0; // DRM_FORMAT_MOD_LINEAR
-        buffer.bo = gbm_bo_create_with_modifiers(gbm_device, w,
-            h, format, &modifier, 1);
+        buffer.bo = gbm_bo_create_with_modifiers(gbm_device, w, h,
+            format, &modifier, 1);
         if (buffer.bo == NULL)
         {
-            buffer.bo = gbm_bo_create(gbm_device, w,
-                h, format, GBM_BO_USE_LINEAR | GBM_BO_USE_RENDERING);
+            buffer.bo = gbm_bo_create(gbm_device, w, h,
+                format, GBM_BO_USE_LINEAR | GBM_BO_USE_RENDERING);
         }
         if (buffer.bo == NULL)
         {
@@ -715,6 +715,7 @@ static void write_loop(FrameWriterParams params)
         while (buffers.encode().ready_encode() != true && !exit_main_loop) {
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
         }
+
         if (exit_main_loop) {
             break;
         }
@@ -786,8 +787,7 @@ static void write_loop(FrameWriterParams params)
                         sync_timestamp, buffer.y_invert);
                     gbm_bo_unmap(buffer.bo, map_data);
                 } else {
-                    do_cont = frame_writer->add_frame(buffer.width, buffer.height, buffer.bo,
-                        sync_timestamp, buffer.y_invert);
+                    do_cont = frame_writer->add_frame(buffer.bo, sync_timestamp, buffer.y_invert);
                 }
             } else {
                 do_cont = frame_writer->add_frame(buffer.width, buffer.height, (unsigned char*)buffer.data,
@@ -805,7 +805,6 @@ static void write_loop(FrameWriterParams params)
 
         buffers.next_encode();
     }
-
     std::lock_guard<std::mutex> lock(frame_writer_mutex);
     /* Free the AudioReader connection first. This way it'd flush any remaining
      * frames to the FrameWriter */
@@ -1120,7 +1119,6 @@ static void handle_buffer_size(void *,
 {
     current_buffer_width = width;
     current_buffer_height = height;
-    request_next_frame(true);
 }
 
 static void handle_shm_format(void *,
@@ -1176,6 +1174,10 @@ ext_image_copy_capture_session_v1 *recording_session = NULL;
 
 void request_next_frame(bool reallocate)
 {
+    auto& buffer = buffers.capture();
+
+    bool dirty = buffer.width != current_buffer_width || buffer.height != current_buffer_height;
+
     // wait for a free buffer
     while(buffers.capture().ready_capture() != true)
     {
@@ -1187,9 +1189,6 @@ void request_next_frame(bool reallocate)
         ext_image_copy_capture_frame_v1_destroy(frame);
     }
 
-    auto& buffer = buffers.capture();
-
-    bool dirty = buffer.width != current_buffer_width || buffer.height != current_buffer_height || !buffer.wl_buffer;
     buffer.width = current_buffer_width;
     buffer.height = current_buffer_height;
     buffer.stride = buffer.width * 4;
@@ -1578,6 +1577,7 @@ int main(int argc, char *argv[])
     {
         if (capture_toplevel)
         {
+            params.bframes = 0;
             if (toplevel_id.empty())
             {
                 if (toplevels_list.empty())
