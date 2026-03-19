@@ -256,8 +256,14 @@ static std::string transpose_from_transform(int32_t transform)
 
 void FrameWriter::fini_video_filters()
 {
-    av_buffer_unref(&hw_frame_context);
-    av_buffer_unref(&hw_frame_context_in);
+    if (hw_frame_context)
+    {
+        av_buffer_unref(&hw_frame_context);
+    }
+    if (hw_frame_context_in)
+    {
+        av_buffer_unref(&hw_frame_context_in);
+    }
 }
 
 void FrameWriter::init_video_filters(const AVCodec *codec)
@@ -516,7 +522,6 @@ void FrameWriter::init_video_stream()
 
     av_dict_set_int(&options, "async_depth", 1, 0);
     videoCodecCtx->thread_type = FF_THREAD_FRAME;
-    videoCodecCtx->bit_rate = 10000000;
 
     int ret;
     char err[256];
@@ -855,9 +860,9 @@ bool FrameWriter::add_frame(int width, int height, const uint8_t* pixels, int64_
     if (params.width != width || params.height != height)
     {
         std::cerr << "size mismatch, resizing video: " << params.width << "x" << params.height << " != " << width  << "x" << height << std::endl;
-        params.width = width;
+        params.width  = width;
         params.height = height;
-        recreate_encoder();
+        params.stride = width * 4;
     }
 
     /* Calculate data after y-inversion */
@@ -896,6 +901,13 @@ bool FrameWriter::add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert)
             av_frame_free(&vaapi_frame);
         }
         mapped_frames.clear();
+
+        AVPacket *pkt = av_packet_alloc();
+        pkt->data = NULL;
+        pkt->size = 0;
+        encode(videoCodecCtx, NULL, pkt);
+        av_packet_free(&pkt);
+
         std::cerr << "size mismatch, resizing video: " << params.width << "x" << params.height << " != " << width  << "x" << height << std::endl;
         params.width = width;
         params.height = height;
@@ -1072,6 +1084,7 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
     if (params.enable_audio)
         fmt_mutex.unlock();
 #endif
+
 }
 
 FrameWriter::~FrameWriter()

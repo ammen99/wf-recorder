@@ -3,6 +3,7 @@
 #include <array>
 #include <mutex>
 #include <atomic>
+#include <functional>
 #include <type_traits>
 
 #define MAX_FRAME_FAILURES 16
@@ -87,6 +88,7 @@ public:
         if (buffers_full)
         {
             bufs_size++;
+            buf_inc++;
             if (bufs_size > MAX_FRAME_FAILURES)
             {
                 std::cerr << "Too many buffers! (" << bufs_size << " > " << MAX_FRAME_FAILURES << ")" << std::endl;
@@ -94,8 +96,7 @@ public:
             }
             std::cerr << "bufs_size: " << bufs_size << std::endl;
             bufs[bufs_size - 1] = new T;
-            next = bufs_size - 1;
-            encode_idx = capture_idx;
+            next = (capture_idx + 1) % bufs_size;
         }
         capture_idx = next;
         return *bufs[capture_idx];
@@ -108,7 +109,8 @@ public:
         std::lock_guard<std::mutex> lock(mutex);
         bufs[encode_idx]->available = false;
         bufs[encode_idx]->released = true;
-        encode_idx = (encode_idx + 1) % bufs_size;
+        encode_idx = (encode_idx + 1) % (bufs_size - buf_inc);
+        buf_inc = 0;
         return *bufs[encode_idx];
     }
 
@@ -116,6 +118,7 @@ private:
     std::mutex mutex;
     std::array<T*, MAX_FRAME_FAILURES> bufs;
     size_t bufs_size = INITIAL_BUFFERS_SIZE;
+    int buf_inc = 0;
     int capture_idx = 0; // head
     int encode_idx = 0; // tail
 };

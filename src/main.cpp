@@ -209,7 +209,7 @@ struct damage_rect
     int x, y, w, h;
 };
 
-static std::vector<damage_rect> damage_rects;
+static std::vector<damage_rect> damage_rects, last_damage_rects;
 
 std::atomic<bool> exit_main_loop{false};
 
@@ -712,7 +712,8 @@ static void write_loop(FrameWriterParams params)
     while(!exit_main_loop)
     {
         // wait for frame to become available
-        while (buffers.encode().ready_encode() != true && !exit_main_loop) {
+        while (buffers.encode().ready_encode() != true && !exit_main_loop)
+        {
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
         }
 
@@ -726,9 +727,42 @@ static void write_loop(FrameWriterParams params)
         frame_writer_mutex.lock();
         frame_writer_pending_mutex.unlock();
 
-        params.width = buffer.width;
-        params.height = buffer.height;
-        params.stride = buffer.stride;
+        int w = buffer.width;
+        int h = buffer.height;
+        int s = buffer.stride;
+        unsigned char *pixels, *q, *p = NULL;
+        if (params.codec.find("libx264") != std::string::npos)
+        {
+            if ((buffer.width % 2) != 0)
+            {
+                w--;
+                s = w * 4;
+            }
+            if ((buffer.height % 2) != 0)
+            {
+                h--;
+            }
+            pixels = (unsigned char *) malloc(s * h);
+            p = pixels;
+            q = (unsigned char *) buffer.data;
+            if ((buffer.width % 2) != 0)
+            {
+                for (int y = 0; y < h; y++)
+                {
+                    memcpy(p, q, s);
+                    p = pixels + y * s;
+                    q = (unsigned char *) buffer.data + y * (s + 4);
+                }
+                p = pixels;
+            } else
+            {
+                pixels = (unsigned char *) buffer.data;
+            }
+        }
+
+        params.width = w;
+        params.height = h;
+        params.stride = s;
         params.format = get_input_format(buffer);
         params.drm_format = buffer.drm_format;
 
@@ -789,17 +823,24 @@ static void write_loop(FrameWriterParams params)
                 } else {
                     do_cont = frame_writer->add_frame(buffer.bo, sync_timestamp, buffer.y_invert);
                 }
-            } else {
-                do_cont = frame_writer->add_frame(buffer.width, buffer.height, (unsigned char*)buffer.data,
+            } else if (params.codec.find("libx264") != std::string::npos)
+            {
+                do_cont = frame_writer->add_frame(w, h, pixels,
+                    sync_timestamp, buffer.y_invert);
+            } else
+            {
+                do_cont = frame_writer->add_frame(w, h, (unsigned char *)buffer.data,
                     sync_timestamp, buffer.y_invert);
             }
         } else {
             do_cont = true;
         }
+        free(p);
 
         frame_writer_mutex.unlock();
 
         if (!do_cont) {
+
             break;
         }
 
@@ -1176,10 +1217,10 @@ void request_next_frame(bool reallocate)
 {
     auto& buffer = buffers.capture();
 
-    bool dirty = buffer.width != current_buffer_width || buffer.height != current_buffer_height;
+    bool dirty = buffer.width != current_buffer_width || buffer.height != current_buffer_height || !buffer.wl_buffer || reallocate;
 
     // wait for a free buffer
-    while(buffers.capture().ready_capture() != true)
+    while(buffers.capture().ready_capture() != true && !exit_main_loop)
     {
         std::this_thread::sleep_for(std::chrono::microseconds(500));
     }
@@ -1198,7 +1239,7 @@ void request_next_frame(bool reallocate)
     buffer.frame = frame;
     ext_image_copy_capture_frame_v1_add_listener(buffer.frame, &frame_listener, &buffer);
 
-    if (!use_dmabuf && (!buffer.wl_buffer || dirty || reallocate))
+    if (!use_dmabuf && dirty)
     {
         buffer.format = (wl_shm_format) current_buffer_format;
         buffer.drm_format = wl_shm_to_drm_format(current_buffer_format);
@@ -1212,9 +1253,9 @@ void request_next_frame(bool reallocate)
             fprintf(stderr, "failed to create buffer\n");
             exit(EXIT_FAILURE);
         }
-    } else if (use_dmabuf && (!buffer.wl_buffer || dirty || reallocate))
+    } else if (use_dmabuf && dirty)
     {
-        frame_handle_linux_dmabuf(buffer.width, buffer.height, current_buffer_format, (!buffer.wl_buffer || dirty || reallocate));
+        frame_handle_linux_dmabuf(buffer.width, buffer.height, current_buffer_format, dirty);
         while (!buffer.wl_buffer && wl_display_dispatch(display) != -1);
     }
 
@@ -1222,19 +1263,25 @@ void request_next_frame(bool reallocate)
     {
         ext_image_copy_capture_frame_v1_attach_buffer(buffer.frame, buffer.wl_buffer);
 
-        if (use_damage)
+        if (use_damage && !dirty)
         {
+            for (auto rect : last_damage_rects)
+            {
+                ext_image_copy_capture_frame_v1_damage_buffer(buffer.frame, rect.x, rect.y, rect.w, rect.h);
+            }
+
             for (auto rect : damage_rects)
             {
                 ext_image_copy_capture_frame_v1_damage_buffer(buffer.frame, rect.x, rect.y, rect.w, rect.h);
             }
-            damage_rects.clear();
         } else
         {
             ext_image_copy_capture_frame_v1_damage_buffer(buffer.frame, 0, 0, buffer.width, buffer.height);
         }
 
         ext_image_copy_capture_frame_v1_capture(buffer.frame);
+        last_damage_rects = damage_rects;
+        damage_rects.clear();
     }
 }
 
