@@ -742,11 +742,11 @@ static void write_loop(FrameWriterParams params)
             {
                 h--;
             }
-            pixels = (unsigned char *) malloc(s * h);
-            p = pixels;
-            q = (unsigned char *) buffer.data;
             if ((buffer.width % 2) != 0)
             {
+                pixels = (unsigned char *) malloc(s * h);
+                p = pixels;
+                q = (unsigned char *) buffer.data;
                 for (int y = 0; y < h; y++)
                 {
                     memcpy(p, q, s);
