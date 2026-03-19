@@ -15,7 +15,7 @@ The following distributions are known to have packages:
 | Debian       | ```apt install wf-recorder``` |
 | Fedora       | ```dnf install wf-recorder``` |
 | Gentoo       | Available in the official `::gentoo` repository |
-| NixOS / Nix  | Add `wf-recoder` to configuration or run any of: `nix-shell -p wf-recorder`, `nix shell nixpkgs#wfrecorder`, `nix run nixpkgs#wf-recorder` |
+| NixOS / Nix  | Add `wf-recorder` to configuration or run any of: `nix-shell -p wf-recorder`, `nix shell nixpkgs#wfrecorder`, `nix run nixpkgs#wf-recorder` |
 | Void         | ```xbps-install -S wf-recorder``` |
 
 ## From Source
