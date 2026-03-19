@@ -73,19 +73,8 @@ public:
     T& next_capture()
     {
         std::lock_guard<std::mutex> lock(mutex);
-        bufs[capture_idx]->released = false;
-        bufs[capture_idx]->available = true;
-        bool buffers_full = true;
-        for (size_t i = 0; i < bufs_size; i++)
-        {
-            if (bufs[i]->ready_capture())
-            {
-                buffers_full = false;
-                break;
-            }
-        }
         int next = (capture_idx + 1) % bufs_size;
-        if (buffers_full)
+        if (!bufs[next]->ready_capture())
         {
             bufs_size++;
             buf_inc++;
@@ -94,9 +83,12 @@ public:
                 std::cerr << "Too many buffers! (" << bufs_size << " > " << MAX_FRAME_FAILURES << ")" << std::endl;
                 exit(EXIT_FAILURE);
             }
+            std::cerr << "bufs_size: " << bufs_size << std::endl;
             bufs[bufs_size - 1] = new T;
             next = (capture_idx + 1) % bufs_size;
         }
+        bufs[capture_idx]->released = false;
+        bufs[capture_idx]->available = true;
         capture_idx = next;
         return *bufs[capture_idx];
     }
