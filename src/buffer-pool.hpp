@@ -94,7 +94,6 @@ public:
                 std::cerr << "Too many buffers! (" << bufs_size << " > " << MAX_FRAME_FAILURES << ")" << std::endl;
                 exit(EXIT_FAILURE);
             }
-            std::cerr << "bufs_size: " << bufs_size << std::endl;
             bufs[bufs_size - 1] = new T;
             next = (capture_idx + 1) % bufs_size;
         }

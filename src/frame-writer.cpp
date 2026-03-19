@@ -859,7 +859,6 @@ bool FrameWriter::add_frame(int width, int height, const uint8_t* pixels, int64_
 {
     if (params.width != width || params.height != height)
     {
-        std::cerr << "size mismatch, resizing video: " << params.width << "x" << params.height << " != " << width  << "x" << height << std::endl;
         params.width  = width;
         params.height = height;
         params.stride = width * 4;
@@ -908,7 +907,6 @@ bool FrameWriter::add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert)
         encode(videoCodecCtx, NULL, pkt);
         av_packet_free(&pkt);
 
-        std::cerr << "size mismatch, resizing video: " << params.width << "x" << params.height << " != " << width  << "x" << height << std::endl;
         params.width = width;
         params.height = height;
         recreate_encoder();
