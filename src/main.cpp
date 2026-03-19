@@ -733,17 +733,14 @@ static void write_loop(FrameWriterParams params)
         unsigned char *pixels, *q, *p = NULL;
         if (params.codec.find("libx264") != std::string::npos)
         {
-            if ((buffer.width % 2) != 0)
-            {
-                w--;
-                s = w * 4;
-            }
             if ((buffer.height % 2) != 0)
             {
                 h--;
             }
             if ((buffer.width % 2) != 0)
             {
+                w--;
+                s = w * 4;
                 pixels = (unsigned char *) malloc(s * h);
                 p = pixels;
                 q = (unsigned char *) buffer.data;
