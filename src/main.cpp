@@ -238,10 +238,24 @@ static int backingfile(off_t size)
     return fd;
 }
 
+wl_display *display = NULL;
+std::thread writer_thread;
 void handle_graceful_termination(int)
 {
     exit_main_loop = true;
     buffer_copy_done = true;
+    if (writer_thread.joinable())
+    {
+        writer_thread.join();
+    }
+    for (size_t i = 0; i < buffers.size(); i++)
+    {
+        auto buffer = buffers.at(i);
+        if (buffer && buffer->wl_buffer)
+            wl_buffer_destroy(buffer->wl_buffer);
+    }
+
+    wl_display_disconnect(display);
 }
 
 static struct wl_buffer *create_shm_buffer(uint32_t fmt,
@@ -335,10 +349,7 @@ static void frame_handle_failed(void *,
     uint32_t reason)
 {
     std::cerr << "Failed to copy frame because reason " << reason << ", retrying..." << std::endl;
-    if (!frame_failed_cnt)
-    {
-        request_next_frame(true);
-    }
+    request_next_frame(true);
     frame_failed_cnt++;
     if (frame_failed_cnt > MAX_FRAME_FAILURES)
     {
@@ -653,6 +664,11 @@ static uint64_t timespec_to_usec (const timespec& ts)
     return ts.tv_sec * 1000000ll + 1ll * ts.tv_nsec / 1000ll;
 }
 
+static uint64_t get_current_msec()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
 static InputFormat get_input_format(wf_buffer& buffer)
 {
     if (use_dmabuf && !use_hwupload) {
@@ -692,6 +708,8 @@ static InputFormat get_input_format(wf_buffer& buffer)
     }
 }
 
+int framerate;
+
 static void write_loop(FrameWriterParams params)
 {
     /* Ignore SIGTERM/SIGINT/SIGHUP, main loop is responsible for the exit_main_loop signal */
@@ -709,59 +727,66 @@ static void write_loop(FrameWriterParams params)
 
     std::optional<uint64_t> first_frame_ts;
 
+    uint64_t encode_last_time = get_current_msec();
+
     while(!exit_main_loop)
     {
+        uint64_t elapsed = get_current_msec() - encode_last_time;
+        uint64_t ms = 1000 / framerate;
+
         // wait for frame to become available
-        while (buffers.encode().ready_encode() != true && !exit_main_loop)
+        while ((buffers.encode().ready_encode() != true || elapsed < ms) && !exit_main_loop)
         {
-            std::this_thread::sleep_for(std::chrono::microseconds(1000));
+            elapsed = get_current_msec() - encode_last_time;
+            std::this_thread::sleep_for(std::chrono::milliseconds(ms / 4));
         }
+        encode_last_time = get_current_msec();
 
         if (exit_main_loop) {
             break;
         }
 
-        auto& buffer = buffers.encode();
+        auto buffer = &buffers.encode();
 
         frame_writer_pending_mutex.lock();
         frame_writer_mutex.lock();
         frame_writer_pending_mutex.unlock();
 
-        int w = buffer.width;
-        int h = buffer.height;
-        int s = buffer.stride;
+        int w = buffer->width;
+        int h = buffer->height;
+        int s = buffer->stride;
         unsigned char *pixels, *q, *p = NULL;
         if (params.codec.find("libx264") != std::string::npos)
         {
-            if ((buffer.height % 2) != 0)
+            if ((buffer->height % 2) != 0)
             {
                 h--;
             }
-            if ((buffer.width % 2) != 0)
+            if ((buffer->width % 2) != 0)
             {
                 w--;
                 s = w * 4;
                 pixels = (unsigned char *) malloc(s * h);
                 p = pixels;
-                q = (unsigned char *) buffer.data;
+                q = (unsigned char *) buffer->data;
                 for (int y = 0; y < h; y++)
                 {
                     memcpy(p, q, s);
                     p = pixels + y * s;
-                    q = (unsigned char *) buffer.data + y * (s + 4);
+                    q = (unsigned char *) buffer->data + y * (s + 4);
                 }
                 p = pixels;
             } else
             {
-                pixels = (unsigned char *) buffer.data;
+                pixels = (unsigned char *) buffer->data;
             }
         }
 
         params.width = w;
         params.height = h;
         params.stride = s;
-        params.format = get_input_format(buffer);
-        params.drm_format = buffer.drm_format;
+        params.format = get_input_format(*buffer);
+        params.drm_format = buffer->drm_format;
 
         if (!frame_writer)
         {
@@ -786,19 +811,19 @@ static void write_loop(FrameWriterParams params)
         bool drop = false;
         uint64_t sync_timestamp = 0;
         if (first_frame_ts.has_value()) {
-            sync_timestamp = buffer.base_usec - first_frame_ts.value();
+            sync_timestamp = buffer->base_usec - first_frame_ts.value();
 #ifdef HAVE_AUDIO
         } else if (pr) {
-            if (!pr->get_time_base() || pr->get_time_base() > buffer.base_usec) {
+            if (!pr->get_time_base() || pr->get_time_base() > buffer->base_usec) {
                 drop = true;
             } else {
                 first_frame_ts = pr->get_time_base();
-                sync_timestamp = buffer.base_usec - first_frame_ts.value();
+                sync_timestamp = buffer->base_usec - first_frame_ts.value();
             }
 #endif
         } else {
             sync_timestamp = 0;
-            first_frame_ts = buffer.base_usec;
+            first_frame_ts = buffer->base_usec;
         }
 
         bool do_cont = false;
@@ -808,26 +833,26 @@ static void write_loop(FrameWriterParams params)
                 if (use_hwupload) {
                     uint32_t stride = 0;
                     void *map_data = NULL;
-                    void *data = gbm_bo_map(buffer.bo, 0, 0, buffer.width, buffer.height,
+                    void *data = gbm_bo_map(buffer->bo, 0, 0, buffer->width, buffer->height,
                         GBM_BO_TRANSFER_READ, &stride, &map_data);
                     if (!data) {
                         std::cerr << "Failed to map bo" << std::endl;
                         break;
                     }
-                    do_cont = frame_writer->add_frame(buffer.width, buffer.height, (unsigned char*)data,
-                        sync_timestamp, buffer.y_invert);
-                    gbm_bo_unmap(buffer.bo, map_data);
+                    do_cont = frame_writer->add_frame(buffer->width, buffer->height, (unsigned char*)data,
+                        sync_timestamp, buffer->y_invert);
+                    gbm_bo_unmap(buffer->bo, map_data);
                 } else {
-                    do_cont = frame_writer->add_frame(buffer.bo, sync_timestamp, buffer.y_invert);
+                    do_cont = frame_writer->add_frame(buffer->bo, sync_timestamp, buffer->y_invert);
                 }
             } else if (params.codec.find("libx264") != std::string::npos)
             {
                 do_cont = frame_writer->add_frame(w, h, pixels,
-                    sync_timestamp, buffer.y_invert);
+                    sync_timestamp, buffer->y_invert);
             } else
             {
-                do_cont = frame_writer->add_frame(w, h, (unsigned char *)buffer.data,
-                    sync_timestamp, buffer.y_invert);
+                do_cont = frame_writer->add_frame(w, h, (unsigned char *)buffer->data,
+                    sync_timestamp, buffer->y_invert);
             }
         } else {
             do_cont = true;
@@ -915,7 +940,6 @@ static void check_has_protos()
     }
 }
 
-wl_display *display = NULL;
 static void sync_wayland()
 {
     wl_display_dispatch(display);
@@ -1210,17 +1234,30 @@ wf_recorder_output *chosen_output = nullptr;
 ext_image_copy_capture_frame_v1 *frame = NULL;
 ext_image_copy_capture_session_v1 *recording_session = NULL;
 
+uint64_t capture_last_time;
+
 void request_next_frame(bool reallocate)
 {
     auto& buffer = buffers.capture();
 
     bool dirty = buffer.width != current_buffer_width || buffer.height != current_buffer_height || !buffer.wl_buffer || reallocate;
 
+    uint64_t elapsed = get_current_msec() - capture_last_time;
+    uint64_t ms = 1000 / framerate;
+
     // wait for a free buffer
-    while(buffers.capture().ready_capture() != true && !exit_main_loop)
+    while((buffers.capture().ready_capture() != true || elapsed < ms) && !exit_main_loop)
     {
-        std::this_thread::sleep_for(std::chrono::microseconds(500));
+        elapsed = get_current_msec() - capture_last_time;
+        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
     }
+
+    if (exit_main_loop)
+    {
+        return;
+    }
+
+    capture_last_time = get_current_msec();
 
     if (frame != NULL)
     {
@@ -1253,7 +1290,7 @@ void request_next_frame(bool reallocate)
     } else if (use_dmabuf && dirty)
     {
         frame_handle_linux_dmabuf(buffer.width, buffer.height, current_buffer_format, dirty);
-        while (!buffer.wl_buffer && wl_display_dispatch(display) != -1);
+        while (!buffer.wl_buffer && !exit_main_loop && wl_display_dispatch(display) != -1);
     }
 
     if (buffer.wl_buffer)
@@ -1308,6 +1345,7 @@ static void init_wayland_client()
     struct wl_registry *registry = wl_display_get_registry(display);
     wl_registry_add_listener(registry, &registry_listener, NULL);
     sync_wayland();
+    wl_registry_destroy(registry);
 }
 
 static void list_available_outputs()
@@ -1684,23 +1722,33 @@ int main(int argc, char *argv[])
     }
 
     bool spawned_thread = false;
-    std::thread writer_thread;
 
     for (auto signo : GRACEFUL_TERMINATION_SIGNALS)
     {
         signal(signo, handle_graceful_termination);
     }
 
+    framerate = params.framerate;
+
+    if (framerate <= 0)
+    {
+        params.framerate = framerate = 60;
+    }
+
+    capture_last_time = get_current_msec();
+
     while(!exit_main_loop)
     {
         buffer_copy_done = false;
         request_next_frame(false);
 
-        while (!buffer_copy_done && !exit_main_loop && wl_display_dispatch(display) != -1) {
-            // This space is intentionally left blank
+        while (!buffer_copy_done && !exit_main_loop && wl_display_dispatch(display) != -1)
+        {
+            std::this_thread::sleep_for(std::chrono::microseconds(500));
         }
 
-        if (exit_main_loop) {
+        if (exit_main_loop)
+        {
             break;
         }
 
@@ -1718,18 +1766,6 @@ int main(int argc, char *argv[])
 
         buffer.base_usec = timespec_to_usec(buffer.presented);
         buffers.next_capture();
-    }
-
-    if (writer_thread.joinable())
-    {
-        writer_thread.join();
-    }
-
-    for (size_t i = 0; i < buffers.size(); ++i)
-    {
-        auto buffer = buffers.at(i);
-        if (buffer && buffer->wl_buffer)
-            wl_buffer_destroy(buffer->wl_buffer);
     }
 
     if (gbm_device) {
