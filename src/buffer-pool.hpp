@@ -77,7 +77,6 @@ public:
         if (!bufs[next]->ready_capture())
         {
             bufs_size++;
-            buf_inc++;
             if (bufs_size > MAX_FRAME_FAILURES)
             {
                 std::cerr << "Too many buffers! (" << bufs_size << " > " << MAX_FRAME_FAILURES << ")" << std::endl;
@@ -100,8 +99,7 @@ public:
         std::lock_guard<std::mutex> lock(mutex);
         bufs[encode_idx]->available = false;
         bufs[encode_idx]->released = true;
-        encode_idx = (encode_idx + 1) % (bufs_size - buf_inc);
-        buf_inc = 0;
+        encode_idx = (encode_idx + 1) % bufs_size;
         return *bufs[encode_idx];
     }
 
@@ -109,7 +107,6 @@ private:
     std::mutex mutex;
     std::array<T*, MAX_FRAME_FAILURES> bufs;
     size_t bufs_size = INITIAL_BUFFERS_SIZE;
-    int buf_inc = 0;
     int capture_idx = 0; // head
     int encode_idx = 0; // tail
 };
