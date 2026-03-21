@@ -279,14 +279,6 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
             params.video_filter = transpose_from_transform(params.transform);
         }
     }
-    if (params.framerate != 0){
-        if (params.video_filter != "null" && params.video_filter.find("fps") == std::string::npos) {
-            params.video_filter += ",fps=" + std::to_string(params.framerate);
-        }
-        else if (params.video_filter == "null"){
-            params.video_filter = "fps=" + std::to_string(params.framerate);
-        }
-    }
 
     this->videoFilterGraph = avfilter_graph_alloc();
     av_opt_set(videoFilterGraph, "scale_sws_opts", "flags=fast_bilinear:src_range=1:dst_range=1", 0);
@@ -794,6 +786,7 @@ void FrameWriter::encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt)
 
         finish_frame(enc_ctx, *pkt);
     }
+    av_frame_free(&frame);
 }
 
 bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
@@ -812,6 +805,9 @@ bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
         AVFrame *filtered_frame = av_frame_alloc();
 
         if (!filtered_frame) {
+            av_free(frame->data[0]);
+            av_buffer_unref(&frame->buf[0]);
+            av_frame_free(&frame);
             std::cerr << "Error av_frame_alloc" << std::endl;
             return false;
         }
@@ -826,9 +822,11 @@ bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
             // There will be no more output frames on this sink.
             // That could happen if a filter like 'trim' is used to
             // stop after a given time.
+            av_frame_free(&frame);
             av_frame_free(&filtered_frame);
             return false;
         } else if (err < 0) {
+            av_frame_free(&frame);
             av_frame_free(&filtered_frame);
             return false;
         }
@@ -845,6 +843,8 @@ bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
         av_packet_free(&pkt);
     }
 
+    av_free(frame->data[0]);
+    av_buffer_unref(&frame->buf[0]);
     av_frame_free(&frame);
     return true;
 }
@@ -934,6 +934,7 @@ bool FrameWriter::add_frame3(struct gbm_bo *bo, int64_t usec, bool y_invert)
         auto vaapi_frame = av_frame_alloc();
         if (!vaapi_frame) {
             std::cerr << "Failed to allocate frame!" << std::endl;
+            av_frame_unref(frame);
             return false;
         }
 
@@ -967,6 +968,7 @@ bool FrameWriter::add_frame3(struct gbm_bo *bo, int64_t usec, bool y_invert)
         av_frame_unref(frame);
         if (ret < 0)
         {
+            av_frame_unref(vaapi_frame);
             std::cerr << "Failed to map vaapi frame " << averr(ret) << std::endl;
             return false;
         }
