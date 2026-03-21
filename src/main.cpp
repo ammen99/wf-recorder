@@ -708,7 +708,7 @@ static InputFormat get_input_format(wf_buffer& buffer)
     }
 }
 
-int framerate;
+int framerate, idle_time;
 
 static void write_loop(FrameWriterParams params)
 {
@@ -738,7 +738,7 @@ static void write_loop(FrameWriterParams params)
         while ((buffers.encode().ready_encode() != true || elapsed < ms) && !exit_main_loop)
         {
             elapsed = get_current_msec() - encode_last_time;
-            std::this_thread::sleep_for(std::chrono::milliseconds(ms / 4));
+            std::this_thread::sleep_for(std::chrono::microseconds(idle_time));
         }
         encode_last_time = get_current_msec();
 
@@ -1249,7 +1249,7 @@ void request_next_frame(bool reallocate)
     while((buffers.capture().ready_capture() != true || elapsed < ms) && !exit_main_loop)
     {
         elapsed = get_current_msec() - capture_last_time;
-        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+        std::this_thread::sleep_for(std::chrono::microseconds(idle_time));
     }
 
     if (exit_main_loop)
@@ -1735,6 +1735,9 @@ int main(int argc, char *argv[])
         params.framerate = framerate = 60;
     }
 
+    idle_time = int(1000 * (30.0 / framerate));
+    std::cerr << "idle_time: " << idle_time << std::endl;
+
     capture_last_time = get_current_msec();
 
     while(!exit_main_loop)
@@ -1744,7 +1747,7 @@ int main(int argc, char *argv[])
 
         while (!buffer_copy_done && !exit_main_loop && wl_display_dispatch(display) != -1)
         {
-            std::this_thread::sleep_for(std::chrono::microseconds(500));
+            std::this_thread::sleep_for(std::chrono::microseconds(idle_time * 25));
         }
 
         if (exit_main_loop)
