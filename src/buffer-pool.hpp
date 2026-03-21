@@ -6,7 +6,7 @@
 #include <functional>
 #include <type_traits>
 
-#define MAX_FRAME_FAILURES 16
+#define MAX_FRAME_FAILURES 64
 #define INITIAL_BUFFERS_SIZE 2
 
 class buffer_pool_buf
