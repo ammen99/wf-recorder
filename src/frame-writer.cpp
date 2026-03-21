@@ -805,8 +805,11 @@ bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
         AVFrame *filtered_frame = av_frame_alloc();
 
         if (!filtered_frame) {
-            av_free(frame->data[0]);
-            av_buffer_unref(&frame->buf[0]);
+            if (frame->format == AV_PIX_FMT_DRM_PRIME)
+            {
+                av_free(frame->data[0]);
+                av_buffer_unref(&frame->buf[0]);
+            }
             av_frame_free(&frame);
             std::cerr << "Error av_frame_alloc" << std::endl;
             return false;
@@ -843,8 +846,11 @@ bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
         av_packet_free(&pkt);
     }
 
-    av_free(frame->data[0]);
-    av_buffer_unref(&frame->buf[0]);
+    if (frame->format == AV_PIX_FMT_DRM_PRIME)
+    {
+        av_free(frame->data[0]);
+        av_buffer_unref(&frame->buf[0]);
+    }
     av_frame_free(&frame);
     return true;
 }
