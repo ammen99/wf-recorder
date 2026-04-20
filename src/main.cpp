@@ -846,15 +846,15 @@ struct capture_region
     capture_region(int32_t _x, int32_t _y, int32_t _width, int32_t _height)
         : x(_x), y(_y), width(_width), height(_height) { }
 
-    void set_from_string(std::string geometry_string)
+    bool set_from_string(std::string geometry_string)
     {
         if (sscanf(geometry_string.c_str(), "%d,%d %dx%d", &x, &y, &width, &height) != 4)
         {
-            fprintf(stderr, "Bad geometry: %s, capturing whole output instead.\n",
+            fprintf(stderr, "Bad value of geometry: %s\nTo use the correct format see 'wf-recorder --help'.\n",
                 geometry_string.c_str());
-            x = y = width = height = 0;
-            return;
+            return false;
         }
+        return true;
     }
 
     bool is_selected()
@@ -1150,7 +1150,9 @@ int main(int argc, char *argv[])
                 break;
 
             case 'g':
-                selected_region.set_from_string(optarg);
+                if (!(selected_region.set_from_string(optarg)))
+                    return EXIT_FAILURE;
+
                 break;
 
             case 'c':
