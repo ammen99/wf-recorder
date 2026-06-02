@@ -238,6 +238,24 @@ static int backingfile(off_t size)
     return fd;
 }
 
+static void buffer_release_handler(void *data, wl_buffer *wl_buffer)
+{
+    auto buffer = (wf_buffer *) data;
+    wl_buffer_destroy(wl_buffer);
+    buffer->wl_buffer = nullptr;
+}
+
+static const wl_buffer_listener buffer_listener =
+{
+    .release = buffer_release_handler,
+};
+
+void setup_buffer_listener(wf_buffer *buffer)
+{
+    wl_buffer_add_listener(buffer->wl_buffer, &buffer_listener, buffer);
+}
+
+
 wl_display *display = NULL;
 std::thread writer_thread;
 void handle_graceful_termination(int)
@@ -280,6 +298,7 @@ static struct wl_buffer *create_shm_buffer(uint32_t fmt,
     close(fd);
     struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool, 0, width, height,
         stride, fmt);
+
     wl_shm_pool_destroy(pool);
 
     *data_out = data;
@@ -371,6 +390,7 @@ static void dmabuf_created(void *data, struct zwp_linux_buffer_params_v1 *,
 {
     auto buffer = (wf_buffer *) data;
     buffer->wl_buffer = wl_buffer;
+    setup_buffer_listener(buffer);
 }
 
 static void dmabuf_failed(void *, struct zwp_linux_buffer_params_v1 *) {
@@ -1278,6 +1298,8 @@ void request_next_frame(bool reallocate)
         free_shm_buffer(buffer);
         buffer.wl_buffer =
             create_shm_buffer(buffer.format, buffer.width, buffer.height, buffer.stride, &buffer.data);
+
+        setup_buffer_listener(&buffer);
 
         if (buffer.wl_buffer == NULL)
         {
