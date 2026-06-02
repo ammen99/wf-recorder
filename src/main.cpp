@@ -521,7 +521,7 @@ struct toplevel_data
     std::string identifier = "";
 };
 
-std::vector<toplevel_data> toplevels_list;
+std::vector<std::shared_ptr<toplevel_data>> toplevels_list;
 
 static void handle_toplevel_title(void *data,
     struct ext_foreign_toplevel_handle_v1 *,
@@ -579,18 +579,15 @@ void handle_toplevel(void *,
     struct ext_foreign_toplevel_list_v1 *,
     struct ext_foreign_toplevel_handle_v1 *toplevel)
 {
-    toplevel_data td;
-    td.toplevel = toplevel;
-    toplevels_list.push_back(td);
-    ext_foreign_toplevel_handle_v1_add_listener(toplevel, &toplevel_listener, &toplevels_list.back());
+    toplevels_list.push_back(std::make_shared<toplevel_data>());
+    auto td = toplevels_list.back().get();
+    td->toplevel = toplevel;
+    ext_foreign_toplevel_handle_v1_add_listener(toplevel, &toplevel_listener, td);
 }
 
 void handle_finished(void *,
     struct ext_foreign_toplevel_list_v1 *)
-{
-    std::cerr << "ext_foreign_toplevel_list finished." << std::endl;
-    exit(EXIT_SUCCESS);
-}
+{}
 
 static const struct ext_foreign_toplevel_list_v1_listener foreign_toplevel_list_listener = {
     .toplevel = handle_toplevel,
@@ -1671,7 +1668,7 @@ int main(int argc, char *argv[])
                 std::cerr << "Toplevel List:" << std::endl;
                 for (auto& td : toplevels_list)
                 {
-                    std::cerr << ++i << ": " << td.identifier << " " << td.app_id << " " << td.title << std::endl;
+                    std::cerr << ++i << ": " << td->identifier << " " << td->app_id << " " << td->title << std::endl;
                 }
                 std::cerr << "Enter selection: ";
                 uint32_t number = 0;
@@ -1691,7 +1688,7 @@ int main(int argc, char *argv[])
                     std::cerr << "Invalid selection \"" << number << "\", try again." << std::endl;
                     exit(EXIT_FAILURE);
                 }
-                selected_toplevel = toplevels_list[number - 1].toplevel;
+                selected_toplevel = toplevels_list[number - 1]->toplevel;
                 if (!selected_toplevel)
                 {
                     std::cerr << "!selected_toplevel" << std::endl;
