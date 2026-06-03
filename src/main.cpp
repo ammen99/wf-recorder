@@ -195,7 +195,7 @@ struct wf_buffer : public buffer_pool_buf
     struct wl_buffer *wl_buffer = nullptr;
     void *data = nullptr;
     size_t size = 0;
-    enum wl_shm_format format;
+    enum wl_shm_format format = WL_SHM_FORMAT_ARGB8888;
     int drm_format;
     int width, height, stride;
     bool y_invert;
@@ -456,7 +456,7 @@ static void frame_handle_linux_dmabuf(uint32_t width, uint32_t height, uint32_t 
         }
 
         buffer.width = gbm_bo_get_width(buffer.bo);
-        buffer.height = gbm_bo_get_height(buffer.bo);;
+        buffer.height = gbm_bo_get_height(buffer.bo);
         buffer.stride = gbm_bo_get_stride(buffer.bo);
         buffer.params = zwp_linux_dmabuf_v1_create_params(dmabuf);
 
@@ -1612,66 +1612,68 @@ int main(int argc, char *argv[])
     check_has_protos();
     load_output_info();
 
-    if (available_outputs.size() == 1)
+    if (!capture_toplevel)
     {
-        chosen_output = &available_outputs.front();
-        if (chosen_output->name != cmdline_output &&
-            cmdline_output != default_cmdline_output)
+        if (available_outputs.size() == 1)
         {
-            std::cerr << "Couldn't find requested output "
-                << cmdline_output << std::endl;
-            return EXIT_FAILURE;
-        }
-    } else
-    {
-        for (auto& wo : available_outputs)
-        {
-            if (wo.name == cmdline_output)
-                chosen_output = &wo;
-        }
-
-        if (chosen_output == NULL)
-        {
-            if (cmdline_output != default_cmdline_output)
+            chosen_output = &available_outputs.front();
+            if (chosen_output->name != cmdline_output &&
+                cmdline_output != default_cmdline_output)
             {
                 std::cerr << "Couldn't find requested output "
-                    << cmdline_output.c_str() << std::endl;
+                    << cmdline_output << std::endl;
                 return EXIT_FAILURE;
             }
-
-            if (selected_region.is_selected())
-            {
-                chosen_output = detect_output_from_region(selected_region);
-            }
-            else
-            {
-                chosen_output = choose_interactive();
-            }
-        }
-    }
-
-
-    if (chosen_output == nullptr)
-    {
-        fprintf(stderr, "Failed to select output, exiting\n");
-        return EXIT_FAILURE;
-    }
-
-    params.transform = chosen_output->transform;
-
-    if (selected_region.is_selected())
-    {
-        if (!selected_region.contained_in({chosen_output->x, chosen_output->y,
-            chosen_output->width, chosen_output->height}))
+        } else
         {
-            fprintf(stderr, "Invalid region to capture: must be completely "
-                "inside the output\n");
-            selected_region = capture_region{};
+            for (auto& wo : available_outputs)
+            {
+                if (wo.name == cmdline_output)
+                    chosen_output = &wo;
+            }
+
+            if (chosen_output == NULL)
+            {
+                if (cmdline_output != default_cmdline_output)
+                {
+                    std::cerr << "Couldn't find requested output "
+                        << cmdline_output.c_str() << std::endl;
+                    return EXIT_FAILURE;
+                }
+
+                if (selected_region.is_selected())
+                {
+                    chosen_output = detect_output_from_region(selected_region);
+                }
+                else
+                {
+                    chosen_output = choose_interactive();
+                }
+            }
         }
-    } else
-    {
-        selected_region = capture_region{chosen_output->x, chosen_output->y,
-            chosen_output->width, chosen_output->height};
+
+        if (chosen_output == nullptr)
+        {
+            fprintf(stderr, "Failed to select output, exiting\n");
+            return EXIT_FAILURE;
+        }
+
+        params.transform = chosen_output->transform;
+
+        if (selected_region.is_selected())
+        {
+            if (!selected_region.contained_in({chosen_output->x, chosen_output->y,
+                chosen_output->width, chosen_output->height}))
+            {
+                fprintf(stderr, "Invalid region to capture: must be completely "
+                    "inside the output\n");
+                selected_region = capture_region{};
+            }
+        } else
+        {
+            selected_region = capture_region{chosen_output->x, chosen_output->y,
+                chosen_output->width, chosen_output->height};
+        }
     }
 
     if (!copy_capture_source)
