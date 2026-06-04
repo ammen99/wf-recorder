@@ -390,7 +390,7 @@ static void dmabuf_created(void *data, struct zwp_linux_buffer_params_v1 *,
 {
     auto buffer = (wf_buffer *) data;
     buffer->wl_buffer = wl_buffer;
-    setup_buffer_listener(buffer);
+    //setup_buffer_listener(buffer);
 }
 
 static void dmabuf_failed(void *, struct zwp_linux_buffer_params_v1 *) {
