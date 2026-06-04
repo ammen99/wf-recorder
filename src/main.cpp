@@ -390,7 +390,7 @@ static void dmabuf_created(void *data, struct zwp_linux_buffer_params_v1 *,
 {
     auto buffer = (wf_buffer *) data;
     buffer->wl_buffer = wl_buffer;
-    //setup_buffer_listener(buffer);
+    setup_buffer_listener(buffer);
 }
 
 static void dmabuf_failed(void *, struct zwp_linux_buffer_params_v1 *) {
@@ -433,8 +433,12 @@ static void frame_handle_linux_dmabuf(uint32_t width, uint32_t height, uint32_t 
                 buffer.wl_buffer = nullptr;
             }
 
-            zwp_linux_buffer_params_v1_destroy(buffer.params);
             gbm_bo_destroy(buffer.bo);
+        }
+
+        if (buffer.params)
+        {
+            zwp_linux_buffer_params_v1_destroy(buffer.params);
         }
 
         auto w = width;
