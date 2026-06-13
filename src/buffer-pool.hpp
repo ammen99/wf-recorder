@@ -89,6 +89,8 @@ public:
         bufs[capture_idx]->released = false;
         bufs[capture_idx]->available = true;
         capture_idx = next;
+        bufs[capture_idx]->released = true;
+        bufs[capture_idx]->available = false;
         return *bufs[capture_idx];
     }
 

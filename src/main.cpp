@@ -238,24 +238,6 @@ static int backingfile(off_t size)
     return fd;
 }
 
-static void buffer_release_handler(void *data, wl_buffer *wl_buffer)
-{
-    auto buffer = (wf_buffer *) data;
-    wl_buffer_destroy(wl_buffer);
-    buffer->wl_buffer = nullptr;
-}
-
-static const wl_buffer_listener buffer_listener =
-{
-    .release = buffer_release_handler,
-};
-
-void setup_buffer_listener(wf_buffer *buffer)
-{
-    wl_buffer_add_listener(buffer->wl_buffer, &buffer_listener, buffer);
-}
-
-
 wl_display *display = NULL;
 std::thread writer_thread;
 void handle_graceful_termination(int)
@@ -368,7 +350,7 @@ static void frame_handle_failed(void *,
     uint32_t reason)
 {
     std::cerr << "Failed to copy frame because reason " << reason << ", retrying..." << std::endl;
-    request_next_frame(true);
+    request_next_frame(false);
     frame_failed_cnt++;
     if (frame_failed_cnt > MAX_FRAME_FAILURES)
     {
@@ -390,7 +372,6 @@ static void dmabuf_created(void *data, struct zwp_linux_buffer_params_v1 *,
 {
     auto buffer = (wf_buffer *) data;
     buffer->wl_buffer = wl_buffer;
-    setup_buffer_listener(buffer);
 }
 
 static void dmabuf_failed(void *, struct zwp_linux_buffer_params_v1 *) {
@@ -427,18 +408,21 @@ static void frame_handle_linux_dmabuf(uint32_t width, uint32_t height, uint32_t 
     buffer.drm_format = format;
 
     if (!buffer.wl_buffer || (old_format != format) || reallocate) {
-        if (buffer.bo) {
-            if (buffer.wl_buffer) {
-                wl_buffer_destroy(buffer.wl_buffer);
-                buffer.wl_buffer = nullptr;
-            }
-
+        if (buffer.bo)
+        {
             gbm_bo_destroy(buffer.bo);
+        }
+
+        if (buffer.wl_buffer)
+        {
+            wl_buffer_destroy(buffer.wl_buffer);
+            buffer.wl_buffer = nullptr;
         }
 
         if (buffer.params)
         {
             zwp_linux_buffer_params_v1_destroy(buffer.params);
+            buffer.params = nullptr;
         }
 
         auto w = width;
@@ -1278,21 +1262,10 @@ void request_next_frame(bool reallocate)
         return;
     }
 
-    capture_last_time = get_current_msec();
-
-    if (frame != NULL)
-    {
-        ext_image_copy_capture_frame_v1_destroy(frame);
-    }
-
     buffer.width = current_buffer_width;
     buffer.height = current_buffer_height;
     buffer.stride = buffer.width * 4;
     buffer.y_invert = 0;
-
-    frame = ext_image_copy_capture_session_v1_create_frame(recording_session);
-    buffer.frame = frame;
-    ext_image_copy_capture_frame_v1_add_listener(buffer.frame, &frame_listener, &buffer);
 
     if (!use_dmabuf && dirty)
     {
@@ -1302,8 +1275,6 @@ void request_next_frame(bool reallocate)
         free_shm_buffer(buffer);
         buffer.wl_buffer =
             create_shm_buffer(buffer.format, buffer.width, buffer.height, buffer.stride, &buffer.data);
-
-        setup_buffer_listener(&buffer);
 
         if (buffer.wl_buffer == NULL)
         {
@@ -1316,8 +1287,18 @@ void request_next_frame(bool reallocate)
         while (!buffer.wl_buffer && !exit_main_loop && wl_display_dispatch(display) != -1);
     }
 
+
+    if (frame != NULL)
+    {
+        ext_image_copy_capture_frame_v1_destroy(frame);
+    }
+
     if (buffer.wl_buffer)
     {
+
+        frame = ext_image_copy_capture_session_v1_create_frame(recording_session);
+        buffer.frame = frame;
+        ext_image_copy_capture_frame_v1_add_listener(buffer.frame, &frame_listener, &buffer);
         ext_image_copy_capture_frame_v1_attach_buffer(buffer.frame, buffer.wl_buffer);
 
         if (use_damage && !dirty)
@@ -1339,6 +1320,7 @@ void request_next_frame(bool reallocate)
         ext_image_copy_capture_frame_v1_capture(buffer.frame);
         last_damage_rects = damage_rects;
         damage_rects.clear();
+        capture_last_time = get_current_msec();
     }
 }
 
@@ -1781,7 +1763,7 @@ int main(int argc, char *argv[])
         }
 
         auto& buffer = buffers.capture();
-        //std::cout << "first buffer at " << timespec_to_usec(get_ct()) / 1.0e6<< std::endl;
+        buffer.base_usec = timespec_to_usec(buffer.presented);
 
         if (!spawned_thread)
         {
@@ -1792,7 +1774,6 @@ int main(int argc, char *argv[])
             spawned_thread = true;
         }
 
-        buffer.base_usec = timespec_to_usec(buffer.presented);
         buffers.next_capture();
     }
 
