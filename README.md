@@ -43,12 +43,14 @@ In its simplest form, run `wf-recorder` to start recording and use Ctrl+C to sto
 Use `-f <filename>` to specify the output file. In case of multiple outputs, you'll first be prompted to select the output you want to record. If you know the output name beforehand, you can use the `-o <output name>` option.
 To view all available output options, use the list flag `-L` or `--list-output`
 
+### Video cropping
 To select a specific part of the screen you can either use `-g <geometry>`, or use [slurp](https://github.com/emersion/slurp) for interactive selection of the screen area that will be recorded:
 
 ```
 wf-recorder -g "$(slurp)"
 ```
 
+### Audio recording
 You can record screen and sound simultaneously with
 
 ```
@@ -61,6 +63,7 @@ To specify a video codec, use the `-c <codec>` option. To modify codec parameter
 
 You can also specify an audio codec, using `-C <codec>`. Alternatively, the long form `--audio-codec` can be used. 
 
+### Supported video and audio codecs
 You can use the following command to check all available video codecs
 ```
 ffmpeg -hide_banner -encoders | grep -E '^ V' | grep -F '(codec' | cut -c 8- | sort
@@ -72,6 +75,7 @@ and the following for audio codecs
 ffmpeg -hide_banner -encoders | grep -E '^ A' | grep -F '(codec' | cut -c 8- | sort
 ```
 
+### Specifying the video muxer
 Use ffmpeg to get details about specific encoder, filter or muxer.
 
 To set a specific output format, use the `--muxer` option. For example, to output to a video4linux2 loopback you might use:
@@ -79,8 +83,12 @@ To set a specific output format, use the `--muxer` option. For example, to outpu
 wf-recorder --muxer=v4l2 --codec=rawvideo --file=/dev/video2
 ```
 
+### GPU-accelerated encoding with VAAPI
 To use GPU encoding, use a VAAPI codec (for ex. `h264_vaapi`) and specify a GPU device to use with the `-d` option:
 ```
 wf-recorder -f test-vaapi.mkv -c h264_vaapi -d /dev/dri/renderD128
 ```
 Some drivers report support for rgb0 data for vaapi input but really only support yuv planar formats. In this case, use the `-x yuv420p` or `--pixel-format yuv420p` option in addition to the vaapi options to convert the data to yuv planar data before sending it to the GPU.
+
+### More examples
+More examples [can be found here](doc/examples.md)
