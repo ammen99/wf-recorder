@@ -13,7 +13,51 @@
 
 #define HAVE_CH_LAYOUT (LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 28, 100))
 
+/* avcodec_get_supported_config() landed in lavc 61.13.100 (FFmpeg 7.1);
+ * AVCodec.pix_fmts / sample_fmts / ch_layouts were deprecated then and later
+ * removed (FFmpeg 8/9). Prefer the new API when available. */
+#define HAVE_AVCODEC_GET_SUPPORTED_CONFIG \
+    (LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100))
+
 static const AVRational US_RATIONAL{1,1000000} ;
+
+static const AVPixelFormat *get_codec_pix_fmts(const AVCodec *codec)
+{
+#if HAVE_AVCODEC_GET_SUPPORTED_CONFIG
+    const AVPixelFormat *fmts = nullptr;
+    avcodec_get_supported_config(nullptr, codec, AV_CODEC_CONFIG_PIX_FORMAT, 0,
+        (const void **)&fmts, nullptr);
+    return fmts;
+#else
+    return codec->pix_fmts;
+#endif
+}
+
+#if HAVE_CH_LAYOUT
+static const AVChannelLayout *get_codec_ch_layouts(const AVCodec *codec)
+{
+#if HAVE_AVCODEC_GET_SUPPORTED_CONFIG
+    const AVChannelLayout *layouts = nullptr;
+    avcodec_get_supported_config(nullptr, codec, AV_CODEC_CONFIG_CHANNEL_LAYOUT, 0,
+        (const void **)&layouts, nullptr);
+    return layouts;
+#else
+    return codec->ch_layouts;
+#endif
+}
+#endif
+
+static const AVSampleFormat *get_codec_sample_fmts(const AVCodec *codec)
+{
+#if HAVE_AVCODEC_GET_SUPPORTED_CONFIG
+    const AVSampleFormat *fmts = nullptr;
+    avcodec_get_supported_config(nullptr, codec, AV_CODEC_CONFIG_SAMPLE_FORMAT, 0,
+        (const void **)&fmts, nullptr);
+    return fmts;
+#else
+    return codec->sample_fmts;
+#endif
+}
 
 // av_register_all was deprecated in 58.9.100, removed in 59.0.100
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(59, 0, 100)
@@ -33,6 +77,10 @@ static FFmpegInitialize ffmpegInitialize;
 
 void FrameWriter::init_hw_accel()
 {
+    if (this->hw_device_context)
+    {
+        return;
+    }
     int ret = av_hwdevice_ctx_create(&this->hw_device_context,
         av_hwdevice_find_type_by_name("vaapi"), params.hw_device.c_str(), NULL, 0);
 
@@ -192,21 +240,22 @@ AVPixelFormat FrameWriter::handle_buffersink_pix_fmt(const AVCodec *codec)
     auto in_fmt = get_input_format();
 
     /* For codecs such as rawvideo no supported formats are listed */
-    if (!codec->pix_fmts)
+    const AVPixelFormat *codec_pix_fmts = get_codec_pix_fmts(codec);
+    if (!codec_pix_fmts)
         return in_fmt;
 
     /* If the codec supports getting the appropriate RGB format
      * directly, we want to use it since we don't have to convert data */
-    if (is_fmt_supported(in_fmt, codec->pix_fmts))
+    if (is_fmt_supported(in_fmt, codec_pix_fmts))
         return in_fmt;
 
     /* Choose the format supported by the codec which best approximates the
      * input fmt. */
     AVPixelFormat best_format = AV_PIX_FMT_NONE;
-    for (int i = 0; codec->pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
+    for (int i = 0; codec_pix_fmts[i] != AV_PIX_FMT_NONE; i++) {
         int loss = 0;
         best_format = av_find_best_pix_fmt_of_2(best_format,
-            codec->pix_fmts[i], in_fmt, false, &loss);
+            codec_pix_fmts[i], in_fmt, false, &loss);
     }
     return best_format;
 }
@@ -250,6 +299,18 @@ static std::string transpose_from_transform(int32_t transform)
     return "";
 }
 
+void FrameWriter::fini_video_filters()
+{
+    if (hw_frame_context)
+    {
+        av_buffer_unref(&hw_frame_context);
+    }
+    if (hw_frame_context_in)
+    {
+        av_buffer_unref(&hw_frame_context_in);
+    }
+}
+
 void FrameWriter::init_video_filters(const AVCodec *codec)
 {
     if (params.transform != 0) {
@@ -261,14 +322,6 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
         }
         else if (params.video_filter == "null"){
             params.video_filter = transpose_from_transform(params.transform);
-        }
-    }
-    if (params.framerate != 0){
-        if (params.video_filter != "null" && params.video_filter.find("fps") == std::string::npos) {
-            params.video_filter += ",fps=" + std::to_string(params.framerate);
-        }
-        else if (params.video_filter == "null"){
-            params.video_filter = "fps=" + std::to_string(params.framerate);
         }
     }
 
@@ -447,12 +500,12 @@ void FrameWriter::init_video_filters(const AVCodec *codec)
     avfilter_inout_free(&outputs);
 }
 
-void FrameWriter::init_video_stream()
+void FrameWriter::pre_init_video_stream()
 {
-    AVDictionary *options = NULL;
+    options = NULL;
     load_codec_options(&options);
 
-    const AVCodec* codec = avcodec_find_encoder_by_name(params.codec.c_str());
+    codec = avcodec_find_encoder_by_name(params.codec.c_str());
     if (!codec)
     {
         std::cerr << "Failed to find the given codec: " << params.codec << std::endl;
@@ -465,7 +518,16 @@ void FrameWriter::init_video_stream()
         std::cerr << "Failed to open stream" << std::endl;
         std::exit(-1);
     }
+}
 
+void FrameWriter::fini_video_stream()
+{
+    fini_video_filters();
+    avcodec_free_context(&videoCodecCtx);
+}
+
+void FrameWriter::init_video_stream()
+{
     videoCodecCtx = avcodec_alloc_context3(codec);
     videoCodecCtx->width      = params.width;
     videoCodecCtx->height     = params.height;
@@ -495,6 +557,9 @@ void FrameWriter::init_video_stream()
         videoCodecCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
+    av_dict_set_int(&options, "async_depth", 1, 0);
+    videoCodecCtx->thread_type = FF_THREAD_FRAME;
+
     int ret;
     char err[256];
     if ((ret = avcodec_open2(videoCodecCtx, codec, &options)) < 0)
@@ -503,7 +568,6 @@ void FrameWriter::init_video_stream()
         std::cerr << "avcodec_open2 failed: " << err << std::endl;
         std::exit(-1);
     }
-    av_dict_free(&options);
 
     if ((ret = avcodec_parameters_from_context(videoStream->codecpar, videoCodecCtx)) < 0) {
         av_strerror(ret, err, 256);
@@ -517,16 +581,17 @@ void FrameWriter::init_video_stream()
 static uint64_t get_codec_channel_layout(const AVCodec *codec)
 {
     int i = 0;
-    if (!codec->ch_layouts)
+    const AVChannelLayout *codec_ch_layouts = get_codec_ch_layouts(codec);
+    if (!codec_ch_layouts)
         return AV_CH_LAYOUT_STEREO;
     while (1) {
-        if (!av_channel_layout_check(&codec->ch_layouts[i]))
+        if (!av_channel_layout_check(&codec_ch_layouts[i]))
             break;
-        if (codec->ch_layouts[i].u.mask == AV_CH_LAYOUT_STEREO)
-            return codec->ch_layouts[i].u.mask;
+        if (codec_ch_layouts[i].u.mask == AV_CH_LAYOUT_STEREO)
+            return codec_ch_layouts[i].u.mask;
         i++;
     }
-    return codec->ch_layouts[0].u.mask;
+    return codec_ch_layouts[0].u.mask;
 }
 #else
 static uint64_t get_codec_channel_layout(const AVCodec *codec)
@@ -548,20 +613,24 @@ static uint64_t get_codec_channel_layout(const AVCodec *codec)
 static enum AVSampleFormat get_codec_auto_sample_fmt(const AVCodec *codec)
 {
     int i = 0;
-    if (!codec->sample_fmts)
+    const AVSampleFormat *codec_sample_fmts = get_codec_sample_fmts(codec);
+    if (!codec_sample_fmts)
         return av_get_sample_fmt(FALLBACK_AUDIO_SAMPLE_FMT);
     while (1) {
-        if (codec->sample_fmts[i] == -1)
+        if (codec_sample_fmts[i] == -1)
             break;
-        if (av_get_bytes_per_sample(codec->sample_fmts[i]) >= 2)
-            return codec->sample_fmts[i];
+        if (av_get_bytes_per_sample(codec_sample_fmts[i]) >= 2)
+            return codec_sample_fmts[i];
         i++;
     }
-    return codec->sample_fmts[0];
+    return codec_sample_fmts[0];
 }
 
 bool check_fmt_available(const AVCodec *codec, AVSampleFormat fmt){
-    for (const enum AVSampleFormat *sample_ptr = codec -> sample_fmts; *sample_ptr != -1; sample_ptr++)
+    const AVSampleFormat *codec_sample_fmts = get_codec_sample_fmts(codec);
+    if (!codec_sample_fmts)
+        return false;
+    for (const enum AVSampleFormat *sample_ptr = codec_sample_fmts; *sample_ptr != -1; sample_ptr++)
     {
         if (*sample_ptr == fmt)
         {
@@ -574,11 +643,12 @@ bool check_fmt_available(const AVCodec *codec, AVSampleFormat fmt){
 static enum AVSampleFormat convert_codec_sample_fmt(const AVCodec *codec, std::string requested_fmt)
 {
     static enum AVSampleFormat converted_fmt = av_get_sample_fmt(requested_fmt.c_str());
+    const AVSampleFormat *codec_sample_fmts = get_codec_sample_fmts(codec);
     if (converted_fmt == AV_SAMPLE_FMT_NONE)
     {
         std::cerr << "Failed to find the given sample format: " << requested_fmt << std::endl;
         std::exit(-1);
-    } else if (!codec->sample_fmts || check_fmt_available(codec, converted_fmt))
+    } else if (!codec_sample_fmts || check_fmt_available(codec, converted_fmt))
     {
         std::cerr << "Using sample format " << av_get_sample_fmt_name(converted_fmt) << " for audio codec " << codec->name << std::endl;
         return converted_fmt;
@@ -673,6 +743,7 @@ void FrameWriter::init_audio_stream()
 #endif
 void FrameWriter::init_codecs()
 {
+    pre_init_video_stream();
     init_video_stream();
 #ifdef HAVE_AUDIO
     if (params.enable_audio)
@@ -744,6 +815,7 @@ void FrameWriter::encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt)
 {
     /* send the frame to the encoder */
     int ret = avcodec_send_frame(enc_ctx, frame);
+
     if (ret < 0)
     {
         fprintf(stderr, "error sending a frame for encoding\n");
@@ -765,6 +837,7 @@ void FrameWriter::encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt)
 
         finish_frame(enc_ctx, *pkt);
     }
+    av_frame_free(&frame);
 }
 
 bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
@@ -783,6 +856,12 @@ bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
         AVFrame *filtered_frame = av_frame_alloc();
 
         if (!filtered_frame) {
+            if (frame->format == AV_PIX_FMT_DRM_PRIME)
+            {
+                av_free(frame->data[0]);
+                av_buffer_unref(&frame->buf[0]);
+            }
+            av_frame_free(&frame);
             std::cerr << "Error av_frame_alloc" << std::endl;
             return false;
         }
@@ -797,8 +876,11 @@ bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
             // There will be no more output frames on this sink.
             // That could happen if a filter like 'trim' is used to
             // stop after a given time.
+            av_frame_free(&frame);
+            av_frame_free(&filtered_frame);
             return false;
         } else if (err < 0) {
+            av_frame_free(&frame);
             av_frame_free(&filtered_frame);
             return false;
         }
@@ -815,12 +897,30 @@ bool FrameWriter::push_frame(AVFrame *frame, int64_t usec)
         av_packet_free(&pkt);
     }
 
+    if (frame->format == AV_PIX_FMT_DRM_PRIME)
+    {
+        av_free(frame->data[0]);
+        av_buffer_unref(&frame->buf[0]);
+    }
     av_frame_free(&frame);
     return true;
 }
 
-bool FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
+void FrameWriter::recreate_encoder()
 {
+    fini_video_stream();
+    init_video_stream();
+}
+
+bool FrameWriter::add_frame(int width, int height, const uint8_t* pixels, int64_t usec, bool y_invert)
+{
+    if (params.width != width || params.height != height)
+    {
+        params.width  = width;
+        params.height = height;
+        params.stride = width * 4;
+    }
+
     /* Calculate data after y-inversion */
     int stride[] = {int(params.stride)};
     const uint8_t *formatted_pixels = pixels;
@@ -847,6 +947,33 @@ bool FrameWriter::add_frame(const uint8_t* pixels, int64_t usec, bool y_invert)
 
 bool FrameWriter::add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert)
 {
+    int width = gbm_bo_get_width(bo);
+    int height = gbm_bo_get_height(bo);
+
+    if (params.width != width || params.height != height)
+    {
+        for (auto [vaapi_bo, vaapi_frame] : mapped_frames)
+        {
+            av_frame_free(&vaapi_frame);
+        }
+        mapped_frames.clear();
+
+        AVPacket *pkt = av_packet_alloc();
+        pkt->data = NULL;
+        pkt->size = 0;
+        encode(videoCodecCtx, NULL, pkt);
+        av_packet_free(&pkt);
+
+        params.width = width;
+        params.height = height;
+        recreate_encoder();
+    }
+
+    return add_frame3(bo, usec, y_invert);
+}
+
+bool FrameWriter::add_frame3(struct gbm_bo *bo, int64_t usec, bool y_invert)
+{
     if (y_invert)
     {
         std::cerr << "Y_INVERT not supported with dmabuf" << std::endl;
@@ -864,6 +991,7 @@ bool FrameWriter::add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert)
         auto vaapi_frame = av_frame_alloc();
         if (!vaapi_frame) {
             std::cerr << "Failed to allocate frame!" << std::endl;
+            av_frame_unref(frame);
             return false;
         }
 
@@ -897,6 +1025,7 @@ bool FrameWriter::add_frame(struct gbm_bo *bo, int64_t usec, bool y_invert)
         av_frame_unref(frame);
         if (ret < 0)
         {
+            av_frame_unref(vaapi_frame);
             std::cerr << "Failed to map vaapi frame " << averr(ret) << std::endl;
             return false;
         }
@@ -1012,6 +1141,7 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
     if (params.enable_audio)
         fmt_mutex.unlock();
 #endif
+
 }
 
 FrameWriter::~FrameWriter()
@@ -1034,7 +1164,8 @@ FrameWriter::~FrameWriter()
         avio_closep(&fmtCtx->pb);
 
     // Freeing all the allocated memory:
-    avcodec_free_context(&videoCodecCtx);
+    fini_video_stream();
+    av_dict_free(&options);
 #ifdef HAVE_AUDIO
     if (params.enable_audio)
         avcodec_free_context(&audioCodecCtx);

@@ -3,7 +3,11 @@
 #include <array>
 #include <mutex>
 #include <atomic>
+#include <functional>
 #include <type_traits>
+
+#define MAX_FRAME_FAILURES 64
+#define INITIAL_BUFFERS_SIZE 2
 
 class buffer_pool_buf
 {
@@ -37,14 +41,14 @@ public:
 
     ~buffer_pool()
     {
-        for (size_t i = 0; i < N; ++i) {
+        for (size_t i = 0; i < bufs_size; ++i) {
             delete bufs[i];
         }
     }
 
     size_t size() const
     {
-        return N;
+        return bufs_size;
     }
 
     const T* at(size_t i) const
@@ -69,21 +73,24 @@ public:
     T& next_capture()
     {
         std::lock_guard<std::mutex> lock(mutex);
+        int next = (capture_idx + 1) % bufs_size;
+        if (!bufs[next]->ready_capture())
+        {
+            bufs_size++;
+            if (bufs_size > MAX_FRAME_FAILURES)
+            {
+                std::cerr << "Too many buffers! (" << bufs_size << " > " << MAX_FRAME_FAILURES << ")" << std::endl;
+                exit(EXIT_FAILURE);
+            }
+            std::cerr << "bufs_size: " << bufs_size << std::endl;
+            bufs[bufs_size - 1] = new T;
+            next = (capture_idx + 1) % bufs_size;
+        }
         bufs[capture_idx]->released = false;
         bufs[capture_idx]->available = true;
-        size_t next = (capture_idx + 1) % bufs_size;
-        if (!bufs[next]->ready_capture() && bufs_size < N) {
-            bufs_size++;
-            next = (capture_idx + 1) % bufs_size;
-            for (size_t i = N - 1; i > next; --i) {
-                bufs[i] = bufs[i - 1];
-                if (encode_idx == i - 1) {
-                    encode_idx = i;
-                }
-            }
-            bufs[next] = new T;
-        }
         capture_idx = next;
+        bufs[capture_idx]->released = true;
+        bufs[capture_idx]->available = false;
         return *bufs[capture_idx];
     }
 
@@ -100,8 +107,8 @@ public:
 
 private:
     std::mutex mutex;
-    std::array<T*, N> bufs;
-    size_t bufs_size = 2;
-    size_t capture_idx = 0;
-    size_t encode_idx = 0;
+    std::array<T*, MAX_FRAME_FAILURES> bufs;
+    size_t bufs_size = INITIAL_BUFFERS_SIZE;
+    int capture_idx = 0; // head
+    int encode_idx = 0; // tail
 };
