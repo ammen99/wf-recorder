@@ -6,14 +6,16 @@
 #include <pulse/simple.h>
 #include <pulse/error.h>
 #include <thread>
+#include <atomic>
 
 class PulseReader : public AudioReader
 {
-    pa_simple *pa;
+    pa_simple *pa = nullptr;
+    pa_sample_spec sample_spec;
 
     bool loop();
     std::thread read_thread;
-    uint64_t monotonic_clock_start = 0;
+    std::atomic<uint64_t> monotonic_clock_start{0};
 
     public:
     ~PulseReader();

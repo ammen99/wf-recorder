@@ -142,6 +142,21 @@ executable('wf-recorder', project_sources,
         dependencies: dependencies,
         install: true)
 
+if conf_data.get('HAVE_PULSE')
+    pulse_timing_test = executable('pulse-timing-test',
+        ['tests/pulse-timing.cpp', 'src/pulse.cpp'],
+        include_directories: include_directories('.'),
+        dependencies: dependencies,
+        link_args: [
+            '-Wl,--wrap=pa_simple_new',
+            '-Wl,--wrap=pa_simple_read',
+            '-Wl,--wrap=pa_simple_get_latency',
+            '-Wl,--wrap=pa_simple_free',
+            '-Wl,--wrap=clock_gettime',
+        ])
+    test('pulse-timing', pulse_timing_test)
+endif
+
 summary = [
 	'',
 	'----------------',

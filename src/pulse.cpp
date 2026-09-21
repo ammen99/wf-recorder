@@ -11,11 +11,11 @@ bool PulseReader::init()
     std::memset(&map, 0, sizeof(map));
     pa_channel_map_init_stereo(&map);
 
-    pa_buffer_attr attr;
+    pa_buffer_attr attr = {};
     attr.maxlength = params.audio_frame_size * 4;
     attr.fragsize  = params.audio_frame_size * 4;
 
-    pa_sample_spec sample_spec =
+    sample_spec =
     {
         .format = PA_SAMPLE_FLOAT32LE,
         .rate = params.sample_rate,
@@ -26,16 +26,6 @@ bool PulseReader::init()
     std::cerr << "Using PulseAudio device: " << (params.audio_source ?: "default") << std::endl;
     pa = pa_simple_new(NULL, "wf-recorder3", PA_STREAM_RECORD, params.audio_source,
         "wf-recorder3", &sample_spec, &map, &attr, &perr);
-
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    this->monotonic_clock_start = ts.tv_sec * 1000000ll + ts.tv_nsec / 1000ll;
-
-    int error = 0;
-    uint64_t latency_audio = pa_simple_get_latency(pa, &error);
-    if (latency_audio != (pa_usec_t)-1) {
-        monotonic_clock_start -= latency_audio;
-    }
 
     if (!pa)
     {
@@ -60,6 +50,26 @@ bool PulseReader::loop()
         return false;
     }
 
+    if (!monotonic_clock_start.load())
+    {
+        // Anchor sample zero only after capture has actually started. The
+        // latency query can block waiting for timing data, so read the clock
+        // afterwards. Its latency excludes the samples we have just read.
+        pa_usec_t latency = pa_simple_get_latency(pa, &perr);
+        if (latency == (pa_usec_t)-1)
+        {
+            std::cerr << "Failed to get PulseAudio latency: "
+                << pa_strerror(perr) << "; audio timing may be inaccurate" << std::endl;
+            latency = 0;
+        }
+
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        uint64_t now = ts.tv_sec * 1000000ll + ts.tv_nsec / 1000ll;
+        monotonic_clock_start.store(now - latency -
+            pa_bytes_to_usec(buffer.size(), &sample_spec));
+    }
+
     frame_writer->add_audio(buffer.data());
     return !exit_main_loop;
 }
@@ -77,11 +87,13 @@ void PulseReader::start()
 
 PulseReader::~PulseReader()
 {
-    if (pa)
+    if (read_thread.joinable())
         read_thread.join();
+    if (pa)
+        pa_simple_free(pa);
 }
 
 uint64_t PulseReader::get_time_base() const
 {
-    return monotonic_clock_start;
+    return monotonic_clock_start.load();
 }
