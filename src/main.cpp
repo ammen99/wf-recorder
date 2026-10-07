@@ -1367,13 +1367,12 @@ int main(int argc, char *argv[])
                 "inside the output\n");
             selected_region = capture_region{};
         }
-    } else
-    {
-        selected_region = capture_region{chosen_output->x, chosen_output->y,
-            chosen_output->width, chosen_output->height};
     }
 
-    fprintf(stderr, "selected region %d,%d %dx%d\n", selected_region.x, selected_region.y, selected_region.width, selected_region.height);
+    const capture_region shown = selected_region.is_selected() ? selected_region :
+        capture_region{chosen_output->x, chosen_output->y,
+            chosen_output->width, chosen_output->height};
+    fprintf(stderr, "selected region %d,%d %dx%d\n", shown.x, shown.y, shown.width, shown.height);
 
     bool spawned_thread = false;
     std::thread writer_thread;
