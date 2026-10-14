@@ -986,6 +986,14 @@ void FrameWriter::finish_frame(AVCodecContext *enc_ctx, AVPacket& pkt)
     {
         av_packet_rescale_ts(&pkt, videoCodecCtx->time_base, videoStream->time_base);
         pkt.stream_index = videoStream->index;
+        if (pkt.dts != AV_NOPTS_VALUE)
+        {
+            if (pkt.dts <= last_video_dts)
+                pkt.dts = last_video_dts + 1;
+            if (pkt.pts != AV_NOPTS_VALUE && pkt.pts < pkt.dts)
+                pkt.pts = pkt.dts;
+            last_video_dts = pkt.dts;
+        }
     }
 #ifdef HAVE_AUDIO
     else

@@ -91,6 +91,7 @@ class FrameWriter
     AVStream* videoStream;
     AVCodecContext* videoCodecCtx;
     AVFormatContext* fmtCtx;
+    int64_t last_video_dts = AV_NOPTS_VALUE;
 
     AVFilterContext* videoFilterSourceCtx = NULL;
     AVFilterContext* videoFilterSinkCtx = NULL;
