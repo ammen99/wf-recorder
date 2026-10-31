@@ -209,8 +209,6 @@ struct damage_rect
     int x, y, w, h;
 };
 
-static std::vector<damage_rect> damage_rects, last_damage_rects;
-
 std::atomic<bool> exit_main_loop{false};
 
 buffer_pool<wf_buffer, INITIAL_BUFFERS_SIZE> buffers;
@@ -324,9 +322,8 @@ static void frame_handle_transform(void *,
 
 static void frame_handle_damage(void *,
     struct ext_image_copy_capture_frame_v1 *,
-    int32_t x, int32_t y, int32_t width, int32_t height)
+    int32_t, int32_t, int32_t, int32_t)
 {
-    damage_rects.push_back(damage_rect{x, y, width, height});
 }
 
 static void frame_handle_presentation_time(void *data,
@@ -1300,26 +1297,8 @@ void request_next_frame(bool reallocate)
         buffer.frame = frame;
         ext_image_copy_capture_frame_v1_add_listener(buffer.frame, &frame_listener, &buffer);
         ext_image_copy_capture_frame_v1_attach_buffer(buffer.frame, buffer.wl_buffer);
-
-        if (use_damage && !dirty)
-        {
-            for (auto rect : last_damage_rects)
-            {
-                ext_image_copy_capture_frame_v1_damage_buffer(buffer.frame, rect.x, rect.y, rect.w, rect.h);
-            }
-
-            for (auto rect : damage_rects)
-            {
-                ext_image_copy_capture_frame_v1_damage_buffer(buffer.frame, rect.x, rect.y, rect.w, rect.h);
-            }
-        } else
-        {
-            ext_image_copy_capture_frame_v1_damage_buffer(buffer.frame, 0, 0, buffer.width, buffer.height);
-        }
-
+        ext_image_copy_capture_frame_v1_damage_buffer(buffer.frame, 0, 0, buffer.width, buffer.height);
         ext_image_copy_capture_frame_v1_capture(buffer.frame);
-        last_damage_rects = damage_rects;
-        damage_rects.clear();
         capture_last_time = get_current_msec();
     }
 }

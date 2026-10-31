@@ -230,7 +230,7 @@ AVPixelFormat FrameWriter::handle_buffersink_pix_fmt(const AVCodec *codec)
 {
     /* If using the default codec and no pixel format is specified,
      * set the format to yuv420p for web friendly output by default */
-    if (params.codec == DEFAULT_CODEC && params.pix_fmt.empty())
+    if (params.codec.find("libx264") != std::string::npos && params.pix_fmt.empty())
         params.pix_fmt = "yuv420p";
 
     // Return with user chosen format
