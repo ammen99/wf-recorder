@@ -18,6 +18,13 @@ The following distributions are known to have packages:
 | NixOS / Nix  | Add `wf-recorder` to configuration or run any of: `nix-shell -p wf-recorder`, `nix shell nixpkgs#wfrecorder`, `nix run nixpkgs#wf-recorder` |
 | Void         | ```xbps-install -S wf-recorder``` |
 
+## Fedora Linux
+
+Fedora users can install from rpmfusion-free-updates. First [enable rpmfusion](https://rpmfusion.org/Configuration) and then
+```
+sudo dnf install wf-recorder
+```
+
 ## From Source
 ### Install Dependencies
 

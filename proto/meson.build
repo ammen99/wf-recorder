@@ -16,7 +16,9 @@ wayland_scanner_client = generator(
 client_protocols = [
     [wl_protocol_dir, 'unstable/xdg-output/xdg-output-unstable-v1.xml'],
     [wl_protocol_dir, 'unstable/linux-dmabuf/linux-dmabuf-unstable-v1.xml'],
-    'wlr-screencopy-unstable-v1.xml',
+    [wl_protocol_dir, 'staging/ext-foreign-toplevel-list/ext-foreign-toplevel-list-v1.xml'],
+    [wl_protocol_dir, 'staging/ext-image-capture-source/ext-image-capture-source-v1.xml'],
+    [wl_protocol_dir, 'staging/ext-image-copy-capture/ext-image-copy-capture-v1.xml'],
 ]
 
 wl_protos_client_src = []
