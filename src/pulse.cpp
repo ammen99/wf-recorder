@@ -24,11 +24,13 @@ bool PulseReader::init()
 
     int perr;
     std::cerr << "Using PulseAudio device: " << (params.audio_source ?: "default") << std::endl;
-    pa = pa_simple_new(NULL, "wf-recorder3", PA_STREAM_RECORD, params.audio_source,
-        "wf-recorder3", &sample_spec, &map, &attr, &perr);
-
+    // Read the clock before connecting: capture starts inside pa_simple_new,
+    // so a clock read after it returns calls sample zero later than it was,
+    // and the sound lands late by however long the connection took.
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
+    pa = pa_simple_new(NULL, "wf-recorder3", PA_STREAM_RECORD, params.audio_source,
+        "wf-recorder3", &sample_spec, &map, &attr, &perr);
     this->monotonic_clock_start = ts.tv_sec * 1000000ll + ts.tv_nsec / 1000ll;
 
     int error = 0;
