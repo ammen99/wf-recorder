@@ -50,6 +50,7 @@ static struct zxdg_output_manager_v1 *xdg_output_manager = NULL;
 static struct zwlr_screencopy_manager_v1 *screencopy_manager = NULL;
 static struct zwp_linux_dmabuf_v1 *dmabuf = NULL;
 void request_next_frame();
+static void copy_current_frame();
 
 struct wf_recorder_output
 {
@@ -201,6 +202,8 @@ std::atomic<bool> exit_main_loop{false};
 buffer_pool<wf_buffer, 16> buffers;
 
 bool buffer_copy_done = false;
+bool buffer_metadata_done = false;
+bool defer_frame_copy = false;
 
 static int backingfile(off_t size)
 {
@@ -278,7 +281,7 @@ static uint32_t wl_shm_to_drm_format(uint32_t format)
     }
 }
 
-static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, uint32_t format,
+static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *, uint32_t format,
     uint32_t width, uint32_t height, uint32_t stride)
 {
     if (use_dmabuf) {
@@ -308,12 +311,6 @@ static void frame_handle_buffer(void *, struct zwlr_screencopy_frame_v1 *frame, 
     if (buffer.wl_buffer == NULL) {
         fprintf(stderr, "failed to create buffer\n");
         exit(EXIT_FAILURE);
-    }
-
-    if (use_damage) {
-        zwlr_screencopy_frame_v1_copy_with_damage(frame, buffer.wl_buffer);
-    } else {
-        zwlr_screencopy_frame_v1_copy(frame, buffer.wl_buffer);
     }
 }
 
@@ -449,6 +446,11 @@ static void frame_handle_linux_dmabuf(void *, struct zwlr_screencopy_frame_v1 *f
 }
 
 static void frame_handle_buffer_done(void *, struct zwlr_screencopy_frame_v1 *) {
+    buffer_metadata_done = true;
+
+    if (!use_dmabuf && !defer_frame_copy) {
+        copy_current_frame();
+    }
 }
 
 static const struct zwlr_screencopy_frame_v1_listener frame_listener = {
@@ -528,7 +530,7 @@ static void handle_global(void*, struct wl_registry *registry,
     if (strcmp(interface, wl_output_interface.name) == 0)
     {
         auto output = (wl_output*)wl_registry_bind(registry, name, &wl_output_interface, 4);
-        wf_recorder_output wro;
+        wf_recorder_output wro{};
         wro.output = output;
         available_outputs.push_back(wro);
         wl_output_add_listener(output, &output_listener, &available_outputs.back());
@@ -625,6 +627,7 @@ static void write_loop(FrameWriterParams params)
 
 #ifdef HAVE_AUDIO
     std::unique_ptr<AudioReader> pr;
+    bool audio_initialized = false;
 #endif
 
     std::optional<uint64_t> first_frame_ts;
@@ -654,20 +657,21 @@ static void write_loop(FrameWriterParams params)
             params.height = buffer.height;
             params.stride = buffer.stride;
             frame_writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
+        }
 
 #ifdef HAVE_AUDIO
-            if (params.enable_audio)
+        if (params.enable_audio && !audio_initialized)
+        {
+            audio_initialized = true;
+            audioParams.audio_frame_size = frame_writer->get_audio_buffer_size();
+            audioParams.sample_rate = params.sample_rate;
+            pr = std::unique_ptr<AudioReader> (AudioReader::create(audioParams));
+            if (pr)
             {
-                audioParams.audio_frame_size = frame_writer->get_audio_buffer_size();
-                audioParams.sample_rate = params.sample_rate;
-                pr = std::unique_ptr<AudioReader> (AudioReader::create(audioParams));
-                if (pr)
-                {
-                    pr->start();
-                }
+                pr->start();
             }
-#endif
         }
+#endif
 
         bool drop = false;
         uint64_t sync_timestamp = 0;
@@ -1020,8 +1024,20 @@ capture_region selected_region{};
 wf_recorder_output *chosen_output = nullptr;
 zwlr_screencopy_frame_v1 *frame = NULL;
 
+static void copy_current_frame()
+{
+    auto& buffer = buffers.capture();
+    if (use_damage) {
+        zwlr_screencopy_frame_v1_copy_with_damage(frame, buffer.wl_buffer);
+    } else {
+        zwlr_screencopy_frame_v1_copy(frame, buffer.wl_buffer);
+    }
+}
+
 void request_next_frame()
 {
+    buffer_metadata_done = false;
+
     if (frame != NULL)
     {
         zwlr_screencopy_frame_v1_destroy(frame);
@@ -1391,10 +1407,19 @@ int main(int argc, char *argv[])
         }
 
         buffer_copy_done = false;
+        buffer_metadata_done = false;
+        defer_frame_copy = !spawned_thread && !use_dmabuf;
+
         request_next_frame();
 
-        while (!buffer_copy_done && !exit_main_loop && wl_display_dispatch(display) != -1) {
-            // This space is intentionally left blank
+        while (!buffer_metadata_done && defer_frame_copy &&
+                !exit_main_loop && wl_display_dispatch(display) != -1) {
+                // Wait for screencopy buffer metadata.
+        }
+
+        while (!buffer_copy_done && !defer_frame_copy &&
+            !exit_main_loop && wl_display_dispatch(display) != -1) {
+            // Wait for screencopy completion.
         }
 
         if (exit_main_loop) {
@@ -1406,11 +1431,33 @@ int main(int argc, char *argv[])
 
         if (!spawned_thread)
         {
+            params.format = get_input_format(buffer);
+            params.drm_format = buffer.drm_format;
+            params.width = buffer.width;
+            params.height = buffer.height;
+            params.stride = buffer.stride;
+            frame_writer = std::unique_ptr<FrameWriter> (new FrameWriter(params));
+
             writer_thread = std::thread([=] () {
                 write_loop(params);
             });
 
             spawned_thread = true;
+        }
+
+        if (defer_frame_copy)
+        {
+            defer_frame_copy = false;
+            copy_current_frame();
+
+            while (!buffer_copy_done && !exit_main_loop &&
+                wl_display_dispatch(display) != -1) {
+                // Wait for screencopy completion.
+            }
+
+            if (exit_main_loop) {
+                break;
+            }
         }
 
         buffer.base_usec = timespec_to_usec(buffer.presented);
